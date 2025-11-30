@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="COLOR" Id="{0849e819-9a66-4867-bd4f-79f7bebedf1e}">
+    <Declaration><![CDATA[TYPE COLOR :
+STRUCT
+	NULL									: UDINT := 16#00000000;
+	BLACK									: UDINT := 16#FF000000;	
+	YELLOW									: UDINT := 16#FFFFFF00;
+	RED										: UDINT := 16#FFFF0000;
+	BLUE									: UDINT := 16#FF0000FF;
+	GREEN									: UDINT := 16#FF008000;
+	GREY									: UDINT := 16#FF808080;
+	GREYDARK								: UDINT := 16#FFC0C0C0;
+	PINK									: UDINT := 16#FFFFC0CB;
+	ORANGE									: UDINT := 16#FFFFA500;
+	VIOLET									: UDINT := 16#FFEE82EE;
+	WHITE									: UDINT := 16#FFFFFFFF;																										
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,165 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="AxNcPTPwJobs" Id="{2e3b04d2-bedf-4868-849c-867e2c07d4c9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxNcPTPwJobs EXTENDS AxNcPTP (* See Tc2_MC2 *)
+VAR_OUTPUT CONSTANT
+	MIN_JOB													:	INT := 0;
+	MAX_JOB													:	INT := 5;
+	
+{attribute 'displaymode':='binary'}
+	OPTION_EN_CYCLIC_TARGET_CHECK							: 	BYTE := 2#0000_0001; //.0 = Cyclic target check	
+END_VAR
+VAR_INPUT
+	Job														:	ARRAY[MIN_JOB..MAX_JOB] OF AX_JOB;	                              
+END_VAR                           
+var_output                  	
+	JobId													:	INT := MIN_JOB;
+END_VAR
+VAR
+	i 														: 	INT;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Axis 																*)
+	(************************************************************************)
+
+	
+(********************************************************************************)
+(* Call AxNcBase																*)
+(********************************************************************************)
+	Super^();
+			
+(* Check start arr pos **********************************************************)
+	IF Options.0 AND Para.InitDone THEN	CheckTargetPos(); END_IF
+	
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="checkTargetPos" Id="{bc08eacf-ed93-4a2f-b806-06ca1b29afc8}">
+      <Declaration><![CDATA[METHOD PUBLIC checkTargetPos : INT //ID of last job which is in target / 0 if no job is in target
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CheckTargetPos				:= 0;
+FOR i := MIN_JOB TO MAX_JOB DO
+	IF Job[i].Fnc = 6 THEN
+		Job[i].InTarget := Status.NotMoving
+									AND(
+									NcToPlc.ModuloActPos >= Job[i].Target - para.TargetPosWindow
+									AND NcToPlc.ModuloActPos <= Job[i].Target + para.TargetPosWindow
+									OR
+									(MODABS(Job[i].Target,para.ModuloFactor) <= 0 + para.TargetPosWindow
+									OR MODABS(Job[i].Target,para.ModuloFactor) >= para.ModuloFactor - para.TargetPosWindow)
+									AND(
+									NcToPlc.ModuloActPos >= para.ModuloFactor - para.TargetPosWindow
+									OR NcToPlc.ModuloActPos <= 0 + para.TargetPosWindow));
+
+		Job[i].InPosWindow	:= NcToPlc.ModuloActPos >= Job[i].Target - para.PosRangeWindow
+									AND NcToPlc.ModuloActPos <= Job[i].Target + para.PosRangeWindow
+									OR
+									(MODABS(Job[i].Target,para.ModuloFactor) <= 0 + para.PosRangeWindow
+									OR MODABS(Job[i].Target,para.ModuloFactor) >= para.ModuloFactor - para.PosRangeWindow)
+									AND(
+									NcToPlc.ModuloActPos >= para.ModuloFactor - para.PosRangeWindow
+									OR NcToPlc.ModuloActPos <= 0 + para.PosRangeWindow);
+	ELSE
+		Job[i].InTarget := Status.NotMoving
+									AND NcToPlc.ActPos >= Job[i].Target - para.TargetPosWindow
+									AND NcToPlc.ActPos <= Job[i].Target + para.TargetPosWindow ;
+
+		Job[i].InPosWindow	:= NcToPlc.ActPos >= Job[i].Target - para.PosRangeWindow
+									AND NcToPlc.ActPos <= Job[i].Target + para.PosRangeWindow;
+	END_IF
+	
+	IF Job[i].InTarget 
+	THEN
+		CheckTargetPos		:= i;
+	END_IF
+END_FOR
+				]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optEnableCyclicCheckTargetPos" Id="{0769630a-8e2f-4d91-8efc-fed62c239e50}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableCyclicCheckTargetPos : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a32a0da0-bde9-4450-b1a7-7224abae6b1f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableCyclicCheckTargetPos := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0fe08aa3-ab4f-49b9-badb-37ae823160af}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableCyclicCheckTargetPos;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="startMotion" Id="{38dbea93-e937-43a4-a278-f6250869138b}">
+      <Declaration><![CDATA[METHOD PUBLIC startMotion : BOOL
+VAR_INPUT
+	Execute			:	BOOL;
+	JobID			:	int ;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.JobID		:= Jobid;
+
+IF JobID >= MIN_JOB AND JobId <= MAX_JOB
+THEN
+	CheckTargetPos();
+//	startName				:= Job[Jobid].name;
+	Motion.Fnc 				:= Job[Jobid].Fnc;
+	Motion.BufferMode 		:= Job[Jobid].BufferMode;
+	Motion.Direction 		:= Job[Jobid].Direction;
+	Motion.Target 			:= Job[Jobid].Target;
+	Motion.Velo 			:= Job[Jobid].Velo;
+	Admin.Override 			:= Job[Jobid].Override;
+	Motion.Acc		 		:= Job[Jobid].Acc;
+	Motion.Dec				:= Job[Jobid].Dec;
+	Motion.Jerk	 			:= Job[Jobid].Jerk;
+	MOtion.Execute			:= Execute;
+	StartMotion				:= TRUE;
+ELSE
+	StartMotion				:= FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="AxNcPTPwJobs">
+      <LineId Id="3" Count="1" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="194" Count="2" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcPTPwJobs.checkTargetPos">
+      <LineId Id="37" Count="0" />
+      <LineId Id="3" Count="28" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="38" Count="1" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="35" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcPTPwJobs.optEnableCyclicCheckTargetPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcPTPwJobs.optEnableCyclicCheckTargetPos.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcPTPwJobs.startMotion">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

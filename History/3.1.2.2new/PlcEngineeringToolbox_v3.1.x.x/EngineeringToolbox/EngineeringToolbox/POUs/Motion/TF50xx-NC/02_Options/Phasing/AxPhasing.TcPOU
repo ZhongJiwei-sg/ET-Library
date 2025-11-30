@@ -1,0 +1,359 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="AxPhasing" Id="{e0a6c44e-6f17-4836-9e0b-cf9b18f2c352}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Nc-axis phasing control 
+//based on Tc2_MC2 library
+FUNCTION_BLOCK AxPhasing EXTENDS AxFbBase
+VAR_OUTPUT CONSTANT
+	FNC_HALT_PHASING										:	INT := 0;
+	FNC_PHASING_ABSOULTE									:	INT := 1;
+	FNC_PHASING_RELATIVE									:	INT := 2;
+END_VAR               
+VAR_INPUT								
+	Fnc														:	INT (FNC_HALT_PHASING..FNC_PHASING_RELATIVE) := FNC_HALT_PHASING;
+	PhaseShift												:	LREAL := 0;
+	Velo													:	LREAL := 0;
+	Acc														:	LREAL := 0.0; // if Acc = 0, the NC-Value will be set                        								
+	Dec														:	LREAL := 0.0; // if Dec = 0, the NC-Value will be set
+	Jerk													:	LREAL := 0.0; // if Jerk = 0, the NC-Value will be set
+	BufferMode												:	MC_BufferMode := MC_Aborting;(* 	MC_Aborting,
+																									MC_Buffered,
+																									MC_BlendingLow,
+																									MC_BlendingPrevious,
+																									MC_BlendingNext,
+																									MC_BlendingHigh *)
+                            								                        								
+	Options 												: 	ST_PhasingOptions;
+	rMasterAxis												:	REFERENCE TO AXIS_REF := 0;
+END_VAR                     								
+VAR_IN_OUT                  								
+END_VAR                     									
+VAR_OUTPUT                  	
+	AbsolutePhaseShift										:	LREAL;
+	CoveredPhaseShift										:	LREAL;
+END_VAR
+VAR
+(* Zwischenspeicher **************************************************************************)
+	MemFnc													:	INT := -1;
+
+(* Trigger *)
+
+(* Instanzierung der MC Bausteine *******************************************************)
+	MC_HaltPhasing											:	MC_HaltPhasing;
+	MC_PhasingAbsolute										:	MC_PhasingAbsolute;
+	MC_PhasingRelative										:	MC_PhasingRelative;
+
+(* Dummy Speicher **********************************************************)
+(*	i,j		: INT := 0 ; *)
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(************************************************************************************)
+	(*																					*)
+	(*		B E C K H O F F   N E W   A U T O M A T I O N   T E C H N O L O G Y    		*)
+	(*																					*)
+	(*		Eiserstr.5	D-33415 Verl	Germany	phone:	+49-5246-0	www.Beckhoff.Com	*)
+    (*																					*)
+    (*		Bausteinbeschreibung	:	Gear axis function-block						*)
+	(*		TwinCAT-Version			:	3.x or higher		 							*)
+	(*		Version					:	V1.0 / 04/16									*)
+ 	(*		Autor					:	Thorsten Hemel									*)
+	(*																					*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc ;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Active												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		CmdAborted											:= FALSE;
+		ErrorText											:= '';
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_HALT_PHASING:
+		HaltPhasing(Execute);
+
+	FNC_PHASING_ABSOULTE:
+		PhasingAbsoulte(Execute);
+
+	FNC_PHASING_RELATIVE:
+		PhasingRelative(Execute);
+
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Active											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			CmdAborted										:= FALSE;
+			ErrorText										:= '';
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Active												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+		CmdAborted											:= FALSE;
+		ErrorText											:= CONCAT('invalid parameter value(s) Fnc no: ' , INT_TO_STRING(MemFnc));
+	END_CASE                            		
+                                            	
+
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="haltPhasing" Id="{6dd22d5e-6797-48d1-a8ef-a3d8fe883189}">
+      <Declaration><![CDATA[METHOD PUBLIC haltPhasing : BOOL //Return value = TRUE if busy
+//required parameter
+//rAxis
+//rMasterAxis1
+//RatioNumerator
+//RatioDenominator
+//Acc
+//Dec
+//Jerk
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MemFnc 														:= FNC_HALT_PHASING;
+THIS^.Execute												:= Execute;
+
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	Active													:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+ELSIF NOT __ISVALIDREF(rMasterAxis)
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rMasterAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	MC_HaltPhasing(
+		Execute				:= Execute, 
+		Master				:= rMasterAxis, 
+		Slave				:= rAxis, 
+		Deceleration		:= Dec, 
+		Jerk				:= Jerk, 
+		BufferMode			:= BufferMode, 
+		Options				:= Options, 
+		Done				=> Done, 
+		Busy				=> Busy, 
+		Active				=> Active, 
+		CommandAborted		=> CmdAborted, 
+		Error				=> Error, 
+		ErrorID				=> ErrorID);
+
+	IF Error THEN
+		LastErrorId											:= ErrorID;
+		ErrorText 											:= CONCAT('Error MC_HaltPhasing ID:' , UDINT_TO_STRING(ErrorId));
+	ELSE
+		ErrorText 											:= '';
+	END_IF
+
+	IF NOT Execute AND NOT Busy
+	THEN
+		MemFnc												:=  -1;
+	END_IF
+	
+	haltPhasing												:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="phasingAbsoulte" Id="{0f1d31b6-cfa8-43c0-8e81-b1a85f72cbc9}">
+      <Declaration><![CDATA[METHOD PUBLIC phasingAbsoulte : BOOL //Return value = TRUE if busy
+//required parameter
+//rAxis
+//rMasterAxis
+//PhaseShift
+//Acc
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MemFnc 														:= FNC_PHASING_ABSOULTE;
+THIS^.Execute												:= Execute;
+
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	Active													:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+ELSIF NOT __ISVALIDREF(rMasterAxis)
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rMasterAxis1 invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	MC_PhasingAbsolute(
+		Execute				:= Execute, 
+		Master				:= rMasterAxis, 
+		Slave				:= rAxis, 
+		PhaseShift			:= PhaseShift, 
+		Velocity			:= Velo, 
+		Acceleration		:= Acc, 
+		Deceleration		:= Dec, 
+		Jerk				:= Jerk, 
+		BufferMode			:= BufferMode, 
+		Options				:= Options, 
+		Done				=> Done, 
+		Busy				=> Busy, 
+		Active				=> Active, 
+		CommandAborted		=> CmdAborted, 
+		Error				=> Error, 
+		ErrorID				=> ErrorId, 
+		AbsolutePhaseShift	=> AbsolutePhaseShift);
+		
+
+	IF Error THEN
+		LastErrorId											:= ErrorID;
+		ErrorText 											:= CONCAT('Error MC_PhasingAbsolute ID:' , UDINT_TO_STRING(ErrorId));
+	ELSE
+		ErrorText 											:= '';
+	END_IF
+
+	IF NOT Execute AND NOT Busy
+	THEN
+		MemFnc												:=  -1;
+	END_IF
+	
+	phasingAbsoulte											:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="phasingRelative" Id="{2a775db4-bc0f-4de1-985e-34b3d4b28c6b}">
+      <Declaration><![CDATA[METHOD PUBLIC phasingRelative : BOOL//Return value = TRUE if busy
+//required parameter
+//rAxis
+//rMasterAxis
+//PhaseShift
+//Acc
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MemFnc														:= FNC_PHASING_RELATIVE;
+THIS^.Execute												:= Execute;
+	                										
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	Active													:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+ELSIF NOT __ISVALIDREF(rMasterAxis)
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rMasterAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;	
+END_IF
+	
+
+	MC_PhasingRelative( 
+		Execute				:= Execute,
+		Master				:= rMasterAxis, 
+		Slave				:= rAxis, 
+		PhaseShift			:= PhaseShift, 
+		Velocity			:= Velo, 
+		Acceleration		:= Acc, 
+		Deceleration		:= Dec, 
+		Jerk				:= Jerk, 
+		BufferMode			:= BufferMode, 
+		Options				:= Options, 
+		Done				=> Done, 
+		Busy				=> Busy, 
+		Active				=> Active, 
+		CommandAborted		=> CmdAborted, 
+		Error				=> Error, 
+		ErrorID				=> ErrorId, 
+		CoveredPhaseShift	=> CoveredPhaseShift);					
+
+	IF Error THEN
+		LastErrorId											:= ErrorID;
+		ErrorText 											:= CONCAT('Error MC_PhasingRelative ID:' , UDINT_TO_STRING(ErrorId));
+	ELSE
+		ErrorText 											:= '';
+	END_IF
+
+	IF NOT Execute AND NOT Busy
+	THEN
+		MemFnc												:=  -1;
+	END_IF
+	
+	phasingRelative												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="AxPhasing">
+      <LineId Id="3" Count="62" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPhasing.haltPhasing">
+      <LineId Id="3" Count="41" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="45" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPhasing.phasingAbsoulte">
+      <LineId Id="3" Count="46" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="50" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPhasing.phasingRelative">
+      <LineId Id="3" Count="46" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="50" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

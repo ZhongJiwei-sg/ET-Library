@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="ModbusSlaveCom" Id="{14dc25f6-a7fc-4724-9466-381033cdb946}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//communication struct between modbus master FB and Slave FB
+FUNCTION_BLOCK ModbusSlaveCom 
+VAR_OUTPUT CONSTANT
+	MIN_SLAVE_JOB			:	INT := 1;
+	MAX_SLAVE_JOB			:	INT := PARAM.MODBUS_MAX_SLAVE_JOB;
+	MIN_DATA				:	INT := 1;
+	MAX_DATA				:	INT := 120;
+END_VAR                 	
+VAR_INPUT               	
+	Enable					:	BOOL;
+	writeJobRequested		:	BOOL;
+	IpAddr 					:	T_IPv4Addr;	// use only for TCP and UDP or ''		// use only for TCP and UDP 
+	Port 					:	UDINT;			// use only for TCP
+	Address					:	BYTE;
+	NoOfJobs				:	INT;
+	Jobs					:	ARRAY[MIN_SLAVE_JOB..MAX_SLAVE_JOB] OF ModbusJob;
+	Data					:	ARRAY[MIN_DATA..MAX_DATA] OF WORD;
+	CurrentJobIdx			:	INT 	:= 1;
+	CountGood				:	DWORD 	:= 0;
+	CountBad				:	DWORD 	:= 0;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="deleteData" Id="{d5949675-3556-497a-89d6-df8903a93e3b}">
+      <Declaration><![CDATA[METHOD PUBLIC deleteData : booL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(Data),0,SIZEOF(Data));
+DeleteData := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ModbusSlaveCom">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusSlaveCom.deleteData">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

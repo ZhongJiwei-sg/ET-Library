@@ -1,0 +1,204 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="systemtimeCmp" Id="{08a6bc38-f95e-4eb4-8b21-bd4651646970}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+// This Funktionblock compares two Systemtime timestructs datatype with diffrent Options
+// Q := In1 = In2 		in dependence of chosen Options
+FUNCTION_BLOCK systemtimeCmp
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}                     	                   
+	OPTION_COMPARE_ALL										:	BYTE  := 2#1111_1111;	
+{attribute 'displaymode':='binary'}
+	OPTION_COMPARE_MS										:	BYTE  := 2#0000_0001;	// Milliseconds
+{attribute 'displaymode':='binary'}                                            
+	OPTION_COMPARE_S										:	BYTE  := 2#0000_0010;	// Seconds
+{attribute 'displaymode':='binary'}                                            
+	OPTION_COMPARE_MIN										:	BYTE  := 2#0000_0100;	// Minutes
+{attribute 'displaymode':='binary'}                     	                   
+	OPTION_COMPARE_H										:	BYTE  := 2#0000_1000;	// Hours
+{attribute 'displaymode':='binary'}                     	                   
+	OPTION_COMPARE_D										:	BYTE  := 2#0001_0000;	// Days
+{attribute 'displaymode':='binary'}                     	                   
+	OPTION_COMPARE_DOW										:	BYTE  := 2#0010_0000;	// DayOfWeek
+{attribute 'displaymode':='binary'}                     	                   
+	OPTION_COMPARE_M										:	BYTE  := 2#0100_0000;	// Months
+{attribute 'displaymode':='binary'}                     	                   
+	OPTION_COMPARE_Y										:	BYTE  := 2#1000_0000;	// Years
+END_VAR
+VAR_INPUT
+	In1														:	Timestruct;
+	In2														:	Timestruct;
+	{attribute 'displaymode':='binary'} 
+	Options													:	BYTE;		// .0 = ms 
+																			// .1 = s 
+																			// .2 = min 
+																			// .3 = h 
+																			// .4 = d 
+																			// .5 = dow 
+																			// .6 = M 
+																			// .7 = Y
+END_VAR
+VAR_OUTPUT
+	Q														:	BOOL;
+	Q_RT													:	BOOL;
+	Q_FT													:	BOOL;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[			
+(***********************************************************)
+IF NOT Q THEN
+	Q														:=  (Milliseconds(In1,In2) 	OR NOT Options.0)
+																AND (Seconds(In1,In2)		OR NOT Options.1)
+																AND (Minutes(In1,In2)		OR NOT Options.2)
+																AND (Hours(In1,In2)			OR NOT Options.3)
+																AND (Days(In1,In2)			OR NOT Options.4)
+																AND (DayOfWeek(In1,In2)		OR NOT Options.5)
+																AND (Months(In1,In2)		OR NOT Options.6)
+																AND (Years(In1,In2)			OR NOT Options.7);
+	Q_RT 													:= Q;
+	Q_FT 													:= FALSE;
+ELSE
+	Q														:=  (Milliseconds(In1,In2) 	OR NOT Options.0)
+																AND (Seconds(In1,In2)		OR NOT Options.1)
+																AND (Minutes(In1,In2)		OR NOT Options.2)
+																AND (Hours(In1,In2)			OR NOT Options.3)
+																AND (Days(In1,In2)			OR NOT Options.4)
+																AND (DayOfWeek(In1,In2)		OR NOT Options.5)
+																AND (Months(In1,In2)		OR NOT Options.6)
+																AND (Years(In1,In2)			OR NOT Options.7);
+	Q_RT 													:= FALSE;
+	Q_FT 													:= NOT Q;
+END_IF
+(***********************************************************)				]]></ST>
+    </Implementation>
+    <Method Name="dayOfWeek" Id="{a4efb7b0-8f44-4bfe-8492-261e58678f48}">
+      <Declaration><![CDATA[// returns true if In1.wDayOfWeek = In2.wDayOfWeek
+METHOD public dayOfWeek : BOOL
+VAR_INPUT
+	In1				: TIMESTRUCT;
+	In2				: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[DayOfWeek 			:= In1.wDayOfWeek = In2.wDayOfWeek;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="days" Id="{dc65efb7-3ae3-4ea4-aa58-14b4496aa955}">
+      <Declaration><![CDATA[// returns true if In1.wDay = In2.wDay
+METHOD PUBLIC days : BOOL
+VAR_INPUT
+	In1				: TIMESTRUCT;
+	In2				: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Days 				:= In1.wDay = In2.wDay;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="hours" Id="{e0099d26-2fa9-4851-a50d-fe9ae7d00193}">
+      <Declaration><![CDATA[// returns true if In1.wHour = In2.wHour
+METHOD public hours : BOOL
+VAR_INPUT
+	In1				: TIMESTRUCT;
+	In2				: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Hours 				:= In1.wHour = In2.wHour;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="milliseconds" Id="{dad24fbe-8842-49ab-83b1-fa814fa87d82}">
+      <Declaration><![CDATA[// returns true if In1.wMilliseconds = In2.wMilliseconds
+METHOD PUBLIC milliseconds : BOOL
+VAR_INPUT
+	In1				: TIMESTRUCT;
+	In2				: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Milliseconds 		:= In1.wMilliseconds = In1.wMilliseconds;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="minutes" Id="{0f639b03-7ad1-4906-8b90-79ae9eecb130}">
+      <Declaration><![CDATA[// returns true if In1.wMinute = In2.wMinute
+METHOD PUBLIC minutes : BOOL
+VAR_INPUT
+	In1				: TIMESTRUCT;
+	In2				: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Minutes 			:= In1.wMinute = In2.wMinute;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="months" Id="{a317a977-e169-4228-a46b-2ff1d1daf1fa}">
+      <Declaration><![CDATA[// returns true if In1.wMonth = In2.wMonth
+METHOD PUBLIC months : BOOL
+VAR_INPUT
+	In1				: TIMESTRUCT;
+	In2				: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Months				:= In1.wMonth = In2.wMonth;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seconds" Id="{636592fe-11a5-44a5-876b-1626a9054bf6}">
+      <Declaration><![CDATA[// returns true if In1.wSecond = In2.wSecond
+METHOD PUBLIC seconds : BOOL
+VAR_INPUT
+	In1				: TIMESTRUCT;
+	In2				: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Seconds 			:= In1.wSecond = In2.wSecond;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="years" Id="{c1c77a82-ce80-4761-9a2e-941c859a2ff7}">
+      <Declaration><![CDATA[// returns true if In1.wYear = In2.wYear
+METHOD public years : BOOL
+VAR_INPUT
+	In1			: TIMESTRUCT;
+	In2			: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Years 			:= In1.wYear = In2.wYear;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="systemtimeCmp">
+      <LineId Id="3" Count="24" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="systemtimeCmp.dayOfWeek">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="systemtimeCmp.days">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="systemtimeCmp.hours">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="systemtimeCmp.milliseconds">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="systemtimeCmp.minutes">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="systemtimeCmp.months">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="systemtimeCmp.seconds">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="systemtimeCmp.years">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

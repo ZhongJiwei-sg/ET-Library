@@ -1,0 +1,179 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="SlidingAverageExt" Id="{2ef1d382-9d6b-475a-83df-7a245b409d48}" SpecialFunc="None">
+    <Declaration><![CDATA[//LREAL Sliding average with dynamic allocation of memory according MaxNoofValues 
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK SlidingAverageExt 
+VAR_INPUT
+	In														: LREAL := 0.0;			//Actual value 
+	ResetTrig												: BOOL ;		//Reset average buffer
+	MaxNoOfValues											: DINT (0..10000) := 0;//Size of buffer (Array size) needs to get assigend in declaration
+	SampleTime												: TIME := T#0MS;
+END_VAR                 									
+VAR_OUTPUT              									
+	Q														: LREAL := 0.0;			//Average value
+	Derivative												: LREAL := 0.0;			//
+	ActIdx													: DINT := 1; 			//rotating count of buffer 
+END_VAR                 									
+VAR       
+	MaxIdx													: DINT := 0;      
+	MinIdx													: DINT := 1;        									
+	Count													: DINT := 0; // limited count 
+	pBuffer													: POINTER TO LREAL := 0;
+	pIdx													: POINTER TO LREAL := 0;
+	IdxOld													: DINT := 1;
+	ftotal													: LREAL;
+	fttotal													: LREAL;
+	tonSampleTimer											: ton;
+END_VAR                 	
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* be sure to have nIdx inside MinIdx..MaxIdx *)
+IF pBuffer = 0 AND MaxNoOfValues > 0
+THEN //Alocate buffer memory
+	pBuffer 												:= __NEW(LREAL,TO_UDINT(MaxNoOfValues)); 	
+	IF NOT PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+	THEN 
+		;
+	ELSIF MaxIdx = 0 
+	THEN
+		AdsLogHint('EngineeringToolbox | FB SlidingAverageExt | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(MaxNoOfValues * SIZEOF(LREAL)));	
+	ELSE //Allocation of additional memory space
+		AdsLogWarn('EngineeringToolbox | FB SlidingAverageExt | Value of "MaxNoOfValues" changed and one instance allocated additional %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(MaxNoOfValues * SIZEOF(LREAL)));
+	END_IF
+	MinIdx													:= 1;
+	MaxIdx													:= MaxNoOfValues;
+ELSIF MaxNoOfValues <> MaxIdx OR MaxNoOfValues = 0
+THEN
+	reset();
+	FB_exit(FALSE);
+	RETURN;
+END_IF
+
+IF ResetTrig THEN reset(); RETURN; END_IF
+
+IF(ActIdx>MaxIdx)
+THEN
+	ActIdx													:= MinIdx;
+END_IF                      								
+IF(ActIdx<MinIdx)           								
+THEN                        								
+	ActIdx													:= MaxIdx;
+END_IF                      								
+                            								
+IF(ActIdx>MaxIdx)           								
+THEN                        								
+	Q														:= IN; (* Puffer-Indices sind unsinnig *)
+ELSIF(pBuffer=0)            								
+THEN                        								
+	Q														:= IN; (* Puffer-Adresse ist unsinnig *)
+ELSE       
+	tonSampleTimer(IN := SampleTime > T#0MS, PT :=  SampleTime);
+	IF NOT tonSampleTimer.IN OR tonSampleTimer.Q    
+	THEN   			                                        
+		tonSampleTimer(IN := FALSE);	                 							
+		Count												:= MIN(Count, MaxIdx - MinIdx + 1);
+		IdxOld												:= ActIdx - Count;
+															
+		IF(IdxOld<MinIdx)      								
+		THEN                    							
+			IdxOld											:= IdxOld + MaxIdx - MinIdx + 1;
+		END_IF                  	                        
+									                        
+		IF(ActIdx=MinIdx)       	                        
+		THEN                    	                        
+			fttotal											:= 0.0;
+		END_IF                  							
+															
+		IF(Count<1)            								
+		THEN                    							
+			ftotal := Derivative 							:= 0.0;	(* first cycle *)
+		END_IF                  							
+															
+		pIdx												:= pBuffer + ((ActIdx - MinIdx) * SIZEOF(LREAL));
+									                        
+		IF(Count = (MaxIdx - MinIdx + 1))                   
+		THEN                                                
+			Derivative										:= (IN - pIdx^) / DINT_TO_LREAL(Count);
+			ftotal											:= ftotal-pIdx^;		(* buffer is filled at least once *)
+		END_IF                  							
+		pIdx^												:=IN;
+		fttotal												:=fttotal + IN;
+		ftotal												:=ftotal + IN;
+															
+		ActIdx												:=ActIdx + 1;
+									                        
+		IF(ActIdx > MaxIdx)                                 
+		THEN                                                
+			(* swapping *)                                  
+			ftotal											:= fttotal;
+			ActIdx											:= MinIdx;
+		END_IF                                              
+		                                                    
+		Count												:= MIN(Count + 1, MaxIdx - MinIdx + 1);
+															
+		Q													:=ftotal / DINT_TO_LREAL(Count);
+	End_If
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="FB_exit" Id="{f82a3980-79d1-4978-814c-af5222c22e1e}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL 
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode AND pBuffer <> 0
+THEN //Release memory in case the PLC stopps
+	__DELETE(pBuffer);
+	MaxIdx								:= 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{0d803a3a-c18e-4d09-a2d3-ee682080d49c}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q															:=0.0;
+Derivative													:=0.0;
+ActIdx														:=1;			(* rotating count *)
+Count														:=0;			(* limited count *)
+                        									
+                        									
+IdxOld														:=1;
+                        	
+ftotal														:=0.0;
+fttotal														:=0.0;
+
+
+IF pBuffer <> 0
+THEN
+	MEMSET(pBuffer, 0 , SIZEOF(pBuffer^));
+END_IF	
+
+reset														:= TRUE;
+	]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="SlidingAverageExt">
+      <LineId Id="159" Count="39" />
+      <LineId Id="265" Count="2" />
+      <LineId Id="264" Count="0" />
+      <LineId Id="199" Count="40" />
+      <LineId Id="268" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SlidingAverageExt.FB_exit">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SlidingAverageExt.reset">
+      <LineId Id="3" Count="15" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

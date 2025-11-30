@@ -1,0 +1,404 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="AxHoming" Id="{aa987ee3-6076-48df-96d5-ee9c5a21406f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Nc-axis homing control 
+//based on Tc2_MC2 library
+//Call cyclic to send calibration cam signal to NC even if homing is not running 
+FUNCTION_BLOCK AxHoming EXTENDS AxFbBase
+VAR_OUTPUT CONSTANT
+	FNC_HALT												:	INT := 0;
+	FNC_HOMING												:	INT := 1;
+	FNC_SETPOS												:	INT := 2;
+END_VAR                     								
+VAR_INPUT                   								
+	Fnc														:	INT (FNC_HALT..FNC_SETPOS):= FNC_HALT;
+	BufferMode												:	MC_BufferMode := MC_Aborting;(* 	MC_Aborting,
+																												MC_Buffered,
+																											MC_BlendingLow,
+																											MC_BlendingPrevious,
+																											MC_BlendingNext,
+																											MC_BlendingHigh *)
+	Mode													:	MC_HomingMode := MC_DefaultHoming; (*	MC_DefaultHoming 		default homing as defined in the SystemManager encoder parameters
+																						MC_Direct	 			static Homing forcing position from user reference  								
+																						MC_ForceCalibration	set the calibration flag without perfoming any motion OR changing the position
+																						MC_ResetCalibration	resets the calibration flag without perfoming any motion OR changing the position *)
+	AcceptBlockedDrive										:	BOOL := TRUE; 	(* AcceptBlockedDrive *)
+	CalibrationCam											:	BOOL := FALSE;
+	Pos														:	LREAL := DEFAULT_HOME_POSITION;
+	SetPosModeRel 											: 	BOOL := FALSE;	(* RELATIVE=True, ABSOLUTE=False (Default) *)
+	SetPosOptions 											: 	ST_SetPositionOptions;                            					
+END_VAR                     								
+VAR_IN_OUT                  	
+END_VAR                     	
+VAR_OUTPUT                  	
+END_VAR
+VAR
+(* Zwischenspeicher **************************************************************************)
+	MemFnc													:	INT := -1;
+	MemFncAct												:	INT := -1;
+	MCFctTxt												:	STRING(25);
+	BusyIntern												:	BOOL := FALSE;
+                            								
+(* Timer *)                 								
+                            								
+(* Trigger *)               	
+	rtExecuteMethod											:	R_TRIG;
+
+(* Instanzierung der MC Bausteine *******************************************************)
+	MC_Home													: 	MC_Home;
+	MC_Halt													: 	MC_Halt;
+	MC_SetPosition											:	MC_SetPosition;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Axis homing control																*)
+	(************************************************************************************)
+
+(* Cyclic ****************************************************************************************)
+	Cyclic();
+
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q AND NOT rtExecuteMethod.Q
+(*		AND MemFnc < 0 neue Fnc immer zulassen weil alter gleichzeitig zurueckgesetzt werden *)
+	THEN
+		MemFnc 												:= Fnc ;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Active												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		CmdAborted											:= FALSE;
+		ErrorText											:= '';
+	END_IF
+	
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_HALT												:	Halt(Execute);
+	FNC_HOMING												:	Homing(Execute);
+	FNC_SETPOS												:	SetPos(Execute);
+	-1:                                     				
+		IF NOT rtExecute.CLK                   				
+		THEN                                				
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			Active											:= FALSE;
+			CmdAborted										:= FALSE;
+			ErrorText										:= '';
+		END_IF
+	ELSE
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Active												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+		CmdAborted											:= FALSE;
+		ErrorText											:= CONCAT('invalid parameter value(s) Fnc no: ' , INT_TO_STRING(MemFnc));
+	END_CASE
+
+(*************************************************************************************************)
+
+
+]]></ST>
+    </Implementation>
+    <Method Name="_MCIntern" Id="{f0fae325-6d16-46e9-a311-cc7016864e6d}">
+      <Declaration><![CDATA[METHOD PRIVATE _MCIntern : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* Internal MC Action														*)
+	(***************************************************************)
+
+(* Check Pointer **********************************************************************)
+IF NOT __ISVALIDREF(rAxis) THEN
+	Done													:= FALSE;
+	Busy													:= NOT Error;
+	Active													:= FALSE;
+	CmdAborted												:= FALSE;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+(* flag Execute ***********************************************************************)
+	rtExecuteMethod(CLK := Execute OR rtExecute.Q);
+	IF rtExecuteMethod.Q
+	THEN
+		MC_Home.Execute										:= FALSE;
+		MC_Halt.Execute										:=	FALSE;
+		MC_SetPosition.Execute								:= FALSE;
+		BusyIntern											:= FALSE;
+		MemFncAct 											:= MemFnc;
+	END_IF
+
+(* ctrl programm ******************************************************************************)
+	CASE MemFncAct OF
+	FNC_HALT:
+		MC_Halt.Execute										:=	Execute; (* Execute if axis is not locked *)
+		MC_Halt.BufferMode									:= MC_Aborting (* BufferMode *);
+		MC_Halt.Deceleration 								:= 0.0;
+		MC_Halt.Jerk 										:= 0.0;
+
+	FNC_HOMING:
+		IF (Execute OR MC_Halt.Busy) (* new cmd or stop last cmd busy *)
+			AND NOT rAxis.NcToPlc.StateDWord.2  (* NotMoving *)
+			AND NOT MC_Home.Busy and not Mc_Home.Done
+			AND NOT rAxis.NcToPlc.StateDWord.5 (* Protected *) (* not if axis coupled or in NCI group *)
+			AND NOT MC_Halt.Error AND NOT MC_Halt.CommandAborted
+		THEN
+			MC_Halt.Execute									:=	TRUE;
+			MC_Halt.BufferMode								:= MC_Aborting;
+			BusyIntern										:= TRUE;
+		ELSE
+			MC_Home.Execute									:= Execute OR MC_Halt.Execute AND BusyIntern;
+			MC_Home.Position								:= Pos;
+			MC_Home.HomingMode								:= Mode;
+			MC_Home.BufferMode								:= MC_Aborting;
+			MC_Home.Options.ClearPositionLag				:= TRUE;
+			MC_Halt.Execute									:=	FALSE;
+			BusyIntern										:= FALSE;
+		END_IF
+
+	FNC_SETPOS:
+		MC_SetPosition.Execute								:= Execute;
+		MC_SetPosition.Position								:= Pos;
+		MC_SetPosition.Mode									:= SetPosModeRel;
+		MC_SetPosition.Options								:= SetPosOptions;
+
+	ELSE
+		Error												:= TRUE;
+		ErrorId												:= E_AdsErr.DEVICE_INVALIDPARM;
+		ErrorText											:= CONCAT('invalid parameter value(s) - Fnc no ', INT_TO_STRING(MemFncAct)) ;
+	END_CASE
+
+(******************************************************************************)
+(* Work MC Blocks 																				*)
+(******************************************************************************)
+
+	(* Halt/Stop *)
+	MC_Halt(Axis:= rAxis);
+
+	(* Referenzieren *)
+	MC_Home(Axis:= rAxis, bCalibrationCam := CalibrationCam);
+
+	(* Set Position *)
+	MC_SetPosition(Axis	:= rAxis);
+
+(******************************************************************************)
+(* Ctrl Status 																					*)
+(******************************************************************************)
+	IF MemFncAct = FNC_HALT
+	THEN
+		MCFctTxt											:= 'MC_HALT';
+		Done 												:= MC_Halt.Done;
+		Busy 												:= MC_Halt.Busy;
+		Active 												:= MC_Halt.Active;
+		CmdAborted 	 										:= MC_Halt.CommandAborted;
+		Error												:=	MC_Halt.Error;
+		ErrorId												:= MC_Halt.ErrorId;
+		ErrorText											:= SEL(Error , '' ,  CONCAT('Error MC_HALT id: ',  UDINT_TO_STRING(Errorid)));
+
+	ELSIF BusyIntern
+	THEN
+		MCFctTxt											:= CONCAT('BUSY INTERN at Fnc no: ', INT_TO_STRING(MemFncAct));
+		Busy												:= BusyIntern;
+		Done 												:= FALSE;
+		Active 												:= FALSE;
+		CmdAborted 											:= FALSE;
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ErrorText											:= '';
+
+	ELSIF MemFncAct = FNC_HOMING
+	THEN
+		MCFctTxt											:= 'MC_Home';
+		Done 												:= MC_Home.Done;
+		Busy 												:= MC_Home.Busy;
+		Active 												:= MC_Home.Active;
+		CmdAborted 	 										:= MC_Home.CommandAborted;
+		Error												:=	MC_Home.Error;
+		ErrorId												:= MC_Home.ErrorId;
+		ErrorText											:= SEL(Error , '' ,  CONCAT('Error MC_Home id: ',  UDINT_TO_STRING(Errorid)));
+
+	ELSIF MemFncAct = FNC_SETPOS
+	THEN
+		MCFctTxt											:= 'MC_SetPosition';
+		Done 												:= MC_SetPosition.Done;
+		Busy 												:= MC_SetPosition.Busy;
+		Active 												:= Busy;
+		CmdAborted 	 										:= FALSE;
+		Error												:=	MC_SetPosition.Error;
+		ErrorId												:= MC_SetPosition.ErrorId;
+		ErrorText											:= SEL(Error , '' ,  CONCAT('Error MC_SetPosition id: ',  UDINT_TO_STRING(Errorid)));
+
+	ELSE
+		MCFctTxt											:= SEL(BusyIntern, 'NoAction' , 'Busy intern');
+		Busy												:= BusyIntern;
+		Done 												:= FALSE;
+		Active 												:= FALSE;
+		CmdAborted 											:= FALSE;
+		IF Error THEN LastErrorId := ErrorId; END_IF
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ErrorText											:= '';
+	END_IF
+
+
+(* End funcktion *********************************************************************************)
+	IF 	NOT rtExecuteMethod.CLK 
+		AND NOT Busy 
+		AND NOT Error 
+		AND NOT Done 
+		AND NOT Active 
+		AND NOT CmdAborted
+	THEN
+		IF MC_SetPosition.Busy
+			OR MC_Halt.Busy
+			OR MC_Home.Busy
+		THEN (* Ablauffehler , es darf kein Baustein an dieser Stelle Busy sein *)
+			MemFnc											:= -2;
+		ELSE                								
+			MemFnc											:= -1;
+		END_IF
+	END_IF
+
+(* Return value ***********************************************************************************)
+	_MCIntern												:= TRUE;
+	
+(**************************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="cyclic" Id="{9f8bb27c-6f3e-4282-8252-bf69d0b65efd}">
+      <Declaration><![CDATA[METHOD PRIVATE cyclic : BOOL
+//required parameter
+//rAxis
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Done													:= FALSE;
+	Busy													:= NOT Error;
+	Active													:= FALSE;
+	CmdAborted												:= FALSE;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	RETURN;
+END_IF
+
+(* accept setvalue-barrier (e.g. hardware limit switch) ********************************)
+	rAxis.PlcToNc.AxisModeDWord.8 							:= AcceptBlockedDrive;
+
+(* Send Calibration Cam cylic to the nc ************************************************)
+	rAxis.PlcToNc.ControlDWord.5							:= CalibrationCam;
+
+(***************************************************************************************)
+	cyclic													:= TRUE;
+	
+(***************************************************************************************)
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="halt" Id="{1a33fc1c-c72c-4ced-a918-b9302b7ac96d}">
+      <Declaration><![CDATA[METHOD PUBLIC halt : BOOL //Return value = TRUE if busy
+//required parameter
+//rAxis
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MemFnc				 										:= FNC_HALT;
+THIS^.Execute												:= Execute;
+_MCIntern();            									
+halt 														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="homing" Id="{d1233d8e-2e7c-4e4d-b077-e31dd9bdb8d9}">
+      <Declaration><![CDATA[METHOD PUBLIC homing : BOOL //Return value = TRUE if busy
+//required parameter
+//rAxis
+//Pos
+//HomingMode
+//BufferMode
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MemFnc 														:= FNC_HOMING;
+THIS^.Execute												:= Execute;
+_MCIntern();            									
+Homing														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setPos" Id="{38a42554-e978-45de-a42b-c53fe7a52bb1}">
+      <Declaration><![CDATA[METHOD PUBLIC setPos : BOOL //Return value = TRUE if busy
+//required parameter
+//rAxis
+//Pos
+//SetPosModeRel
+//SetPosOptions
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MemFnc														:= FNC_SETPOS;
+THIS^.Execute												:= Execute;
+_MCIntern();            									
+SetPos														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxHoming">
+      <LineId Id="3" Count="49" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxHoming._MCIntern">
+      <LineId Id="3" Count="160" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxHoming.cyclic">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxHoming.halt">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxHoming.homing">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxHoming.setPos">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

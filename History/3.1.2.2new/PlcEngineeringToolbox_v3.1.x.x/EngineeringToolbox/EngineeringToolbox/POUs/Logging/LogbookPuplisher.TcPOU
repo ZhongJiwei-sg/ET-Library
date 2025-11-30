@@ -1,0 +1,120 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="LogbookPuplisher" Id="{af408e8f-5354-4f8e-b4e8-c54d108d105b}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+//The LogbookPuplisher checks the used logbook for new entrys and those to his subscribers
+FUNCTION_BLOCK LogbookPuplisher
+VAR CONSTANT 
+	MIN_SUBSCRIBERS											:	INT := 1;
+	MAX_SUBSCRIBERS											:	INT := PARAM.LOGBOOK_PUPLISHER_MAX_SUB;	
+END_VAR                     								
+VAR_INPUT                   								
+	Enable													: 	BOOL; //Enable logbook server
+	ipLogbookSubscribers									: 	ARRAY[MIN_SUBSCRIBERS..MAX_SUBSCRIBERS] OF I_LogbookSubscriber;
+END_VAR                     								
+VAR_IN_OUT                  								
+	SystemTime												: 	TIMESTRUCT; //System time - written to the logbook timestamp if it is not updated externally
+	Book													: 	Logbook; //Logbook instance
+END_VAR                     								
+VAR_OUTPUT                
+	LastEntry												: 	LogbookData;	  								
+	Busy													: 	BOOL; //New message occured
+END_VAR                     								
+VAR            
+//local ************************************************************************************
+
+//trigger *********************************************************************************
+
+//timer ***********************************************************************************
+
+//instances ***********************************************************************************             								
+
+//Dummys ****************************************************************************************
+	i,j														: INT;
+	k														: UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Logbook server								*)
+	(************************************************)
+
+(* Check new Entrys ***************************************************)
+Busy														:= FALSE;
+Book.Timestamp												:= SystemTime; //Update Logbook timestamp
+IF Enable 
+THEN
+	FOR i := Book.MIN_DATA TO Book.CntAddedMessages
+	DO //Add new messages to subrscruber as long as they are not busy or until all new messages are read
+		IF NOT subscriberBusy AND_THEN Book.getOldestMsg(LastEntry)
+		THEN
+			Busy											:= TRUE;
+			IF LastEntry.Timestamp.wDay = 0
+			THEN //Add timestamp to Entry if empty
+				LastEntry.Timestamp							:= SystemTime;
+			END_IF
+			
+			FOR j := MIN_SUBSCRIBERS TO MAX_SUBSCRIBERS
+			DO
+				IF ipLogbookSubscribers[j] <> 0
+				THEN
+					ipLogbookSubscribers[j].addNewMessage(LastEntry);
+				ELSE
+					EXIT;
+				END_IF
+			END_FOR
+		ELSE
+			EXIT;
+		END_IF
+	END_FOR
+END_IF
+(**************************************************************************)
+
+
+
+]]></ST>
+    </Implementation>
+    <Property Name="subscriberBusy" Id="{abeccdd0-dac1-4012-834f-d74631440cb4}">
+      <Declaration><![CDATA[PROPERTY PRIVATE subscriberBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{70925320-3768-4d8b-b925-b4e7d34ec61f}">
+        <Declaration><![CDATA[VAR
+	 i : INT;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SubscriberBusy									:= FALSE;
+FOR i := MIN_SUBSCRIBERS TO MAX_SUBSCRIBERS
+DO
+	IF ipLogbookSubscribers[i] <> 0
+	THEN
+		IF ipLogbookSubscribers[i].IsBusy
+		THEN
+			SubscriberBusy						:= TRUE;
+			EXIT;
+		END_IF
+	ELSE
+		EXIT;
+	END_IF
+END_FOR]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="LogbookPuplisher">
+      <LineId Id="3" Count="6" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="12" Count="6" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="19" Count="8" />
+      <LineId Id="69" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="29" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookPuplisher.subscriberBusy.Get">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

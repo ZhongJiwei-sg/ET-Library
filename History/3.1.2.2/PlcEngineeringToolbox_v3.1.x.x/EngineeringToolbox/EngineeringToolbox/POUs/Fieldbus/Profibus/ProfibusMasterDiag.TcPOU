@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="ProfibusMasterDiag" Id="{a2fbe835-f073-42d4-a905-5d5621596a71}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK ProfibusMasterDiag
+VAR_INPUT                               					
+	Enable													:	BOOL := FALSE;		//FB will be processed as long as enable is TRUE 	
+	ResetTrig													:	BOOL := FALSE;		//Resets error with rising edge 
+	SourceId												:	UDINT := 103020; 	//default
+END_VAR                                 	
+VAR_OUTPUT                              	
+	IO														:	ProfiBusMasterIO;
+END_VAR
+VAR
+(* trigger ********************************************************)
+		
+(* events *********************************************************)
+	EventMasterError										:	EventHandling;
+	EventNoteError											:	ARRAY[1..PARAM.PROFIBUS_MASTER_DEV_IO_MAX_SLAVES] OF EventHandling;
+(* function-block *************************************************)
+	
+(* dummy **********************************************************)	
+	i														:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* ProfiBus master diagnosis for EL6731 and slaves	V2.0	*)
+	(************************************************************)
+
+(* Work IO ***********************************************)
+	IO();
+
+(* Master error ******************************************************)
+	EventMasterError(
+		Flag			:= IO.Error <> 0 AND Enable,
+		ConfirmTrig		:= ResetTrig OR NOT Enable,
+		MsgId			:= 1,
+		SourceId		:= SourceId,
+		eClass			:= ,
+		Text1			:= ,
+		Text2			:= USINT_TO_STRING(IO.Error),
+		pText3			:= ADR(IO.Name),
+		State			=> );
+		
+(* Slave note error **************************************)
+	FOR i := IO.MIN_SLAVES TO IO.MAX_SLAVES DO		
+		EventNoteError[i](
+			Flag		:= IO.SlaveDpStates[i] <> 0 AND Enable,
+			ConfirmTrig := ResetTrig OR NOT Enable,
+			MsgId		:= TO_UINT(i + 1),
+			Text1		:= TO_STRING(i),
+			Text2		:= TO_STRING(IO.SlaveDpStates[i]),
+			pText3		:= ADR(IO.Name),
+			SourceId	:= );
+		
+ 	END_FOR
+	
+
+		
+(*********************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="ProfibusMasterDiag">
+      <LineId Id="76" Count="32" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

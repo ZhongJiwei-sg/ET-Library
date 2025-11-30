@@ -1,0 +1,310 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="UDPSendRecCtrl" Id="{d6d49e76-50ac-41b7-915f-dfddcad9d747}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Send or receive data via TCP connection 
+//based on TF6310, required lib: Tc2_TcpIp - see Beckhoff Infosys for more information
+FUNCTION_BLOCK UDPSendRecCtrl Extends FbBase
+VAR_OUTPUT CONSTANT
+	FNC_RECEIVE												:	INT := 0;
+	FNC_SEND												:	INT := 1;
+END_VAR             										
+VAR_INPUT           										
+	Fnc														:	INT (FNC_RECEIVE..FNC_SEND) := FNC_RECEIVE;
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 2#0000_0000; // Options Bit .0 = Do NOT restart receive intern / Receive intern nicht neustarten
+	SrvNetId												: 	T_AmsNetId := ''; 	// server ams net id
+	RemoteHost 												: 	T_IPv4Addr; // Target ip adress - only for send data *)
+	RemotePort												: 	UDINT; 	// target port - only for send data *)
+	Timeout													: 	TIME := DEFAULT_ADS_TIMEOUT; //ADS timeout
+	hSocket													:	T_HSOCKET; 	// Socket handle provided by Server/Handle
+	pData													:	POINTER TO BYTE; 	//Pointer do send/res data field 
+	cbData													:	UDINT; 	// Size of send/rec data field 
+	EnableDebugMode											:	BOOL;	// Write debug information into twincat logger
+END_VAR
+VAR_OUTPUT
+	RecBytes 												:  UDINT;  	// Count of received bytes
+	WinsockErrorId											:	E_WinsockError; //Winsocket error enum - see TF6310 documentation for further information
+	RecRemoteHost 											:  STRING(15); 	// Remote host IP
+	RecRemotePort											:  UDINT; 	// Remote host port
+END_VAR                 									
+VAR                     	
+(* cache ************************************************************)
+	MemFnc													:	INT := -1;
+
+(* function-block instances ***************************************************************)
+	SocketSend												:	FB_SocketUdpSendTo;
+	SocketReceive											:	FB_SocketUdpReceiveFrom;
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= SEL(Fnc = FNC_SEND, FNC_RECEIVE , FNC_SEND) ;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_SEND:
+		SEND( Execute := Execute);
+
+	FNC_RECEIVE:
+		Receive( Execute := Execute);
+			
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+	END_CASE                                	
+                                            	
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Property Name="optDoNotRestartReceiveCylic" Id="{4bb144fe-2a09-4ba4-a668-f90925699584}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optDoNotRestartReceiveCylic : BOOL]]></Declaration>
+      <Get Name="Get" Id="{15ee788e-7456-4b0b-894e-be769eb95797}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optDoNotRestartReceiveCylic := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e53661a8-8ee1-4d82-9268-3a97339f46d2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optDoNotRestartReceiveCylic;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="receive" Id="{44da5432-05a0-4992-b403-dd69de0bb51d}">
+      <Declaration><![CDATA[METHOD PUBLIC receive : BOOL	//Return value = TRUE if busy
+//required parameter
+//hSocket
+//pData
+//cbData
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_RECEIVE;
+	THIS^.Execute											:= Execute;
+	
+IF pData = 0 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketReceive.bExecute 								:= TRUE;
+	ELSIF NOT SocketReceive.bBusy       					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketReceive.bExecute 								:= FALSE;
+	END_IF
+
+	SocketReceive(
+		sSrvNetId	:= SrvNetId,
+		hSocket		:= hSocket,
+		cbLen		:= cbData,
+		pDest		:= pData,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> ,
+		nRecBytes	=> );
+
+	IF NOT SocketReceive.bBusy
+		AND NOT SocketReceive.bError
+		AND SocketReceive.bExecute
+	THEN
+		IF EnableDebugMode
+			AND SocketReceive.nRecBytes > 0
+			AND NOT Done
+		THEN
+			hSocket.remoteAddr.sAddr						:= SocketReceive.sRemoteHost;
+			hSocket.remoteAddr.nPort						:= SocketReceive.nRemotePort;
+			ADSLOGDINT(	ADSLOG_MSGTYPE_ERROR OR ADSLOG_MSGTYPE_LOG, CONCAT('%d Bytes received / ', HSOCKET_TO_STRING(hSocket)) , UDINT_TO_DINT(SocketReceive.nRecBytes));
+		END_IF
+		Done												:= SocketReceive.nRecBytes > 0 OR Options.0; (* Done melden nach jedenm Lesezyklus, egal ob Daten empfangen wurden *)
+		IF NOT Done
+		THEN (* Nur Done melden wenn auch was empfangen wurde *)
+			SocketReceive(bExecute := FALSE);
+			SocketReceive(bExecute := TRUE, bBusy => Busy);
+		END_IF
+		RecBytes											:= SEL(Done , 0 ,SocketReceive.nRecBytes);
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF                              	
+
+	IF NOT Busy
+	THEN
+		IF SocketReceive.bExecute
+		THEN
+			Error											:=	SocketReceive.bError;
+			IF SocketReceive.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketReceive.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketReceive.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF                  						
+		END_IF                      	
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketReceive(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	//Method return
+	Receive													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="send" Id="{fbf63567-4240-46e9-bd9b-06f4ac3ba71c}">
+      <Declaration><![CDATA[METHOD PUBLIC send : BOOL 	//Return value = TRUE if busy
+//required parameter
+//hSocket
+//pData
+//cbData
+//RemoteHost
+//RemotePort
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_SEND;
+	THIS^.Execute											:= Execute;
+	                                    					
+IF pData = 0 THEN                       					
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		SocketSend.bExecute 								:= TRUE;
+	ELSIF NOT SocketSend.bBusy          					
+	THEN                                					
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		SocketSend.bExecute 								:= FALSE;
+	END_IF                              	
+	
+	SocketSend(
+		sSrvNetId	:= SrvNetId,
+		hSocket		:= hSocket,
+		sRemoteHost	:= RemoteHost,
+		nRemotePort	:= RemotePort,
+		cbLen		:= cbData,
+		pSrc		:= pData,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	IF NOT SocketSend.bBusy
+		AND NOT SocketSend.bError
+		AND SocketSend.bExecute
+	THEN
+		IF NOT Done
+			AND EnableDebugMode
+		THEN
+			hSocket.remoteAddr.sAddr						:= SocketSend.sRemoteHost;
+			hSocket.remoteAddr.nPort						:= SocketSend.nRemotePort;
+			ADSLOGDINT(	ADSLOG_MSGTYPE_ERROR OR ADSLOG_MSGTYPE_LOG, CONCAT('%d Bytes sended / ', HSOCKET_TO_STRING(hSocket)) , UDINT_TO_DINT(cbData));
+		END_IF
+		Done												:= TRUE;
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF                              	
+                                        	
+	IF NOT Busy
+	THEN
+		IF SocketSend.bExecute
+		THEN
+			Error											:=	SocketSend.bError;
+			IF SocketSend.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketSend.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketSend.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF                  	
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketSend(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	//Method return
+	Send													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="UDPSendRecCtrl">
+      <LineId Id="120" Count="37" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="UDPSendRecCtrl.optDoNotRestartReceiveCylic.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="UDPSendRecCtrl.optDoNotRestartReceiveCylic.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="UDPSendRecCtrl.receive">
+      <LineId Id="3" Count="66" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="71" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="UDPSendRecCtrl.send">
+      <LineId Id="3" Count="59" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="64" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

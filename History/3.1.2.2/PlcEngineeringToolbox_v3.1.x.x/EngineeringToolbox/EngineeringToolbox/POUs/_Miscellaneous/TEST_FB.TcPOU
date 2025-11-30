@@ -1,0 +1,163 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="TEST_FB" Id="{12cef4f3-3b21-4d81-a9a5-8d11d12861ab}" SpecialFunc="None">
+    <Declaration><![CDATA[//Should be called after new FBs to test signal flow and behavior of PlcOpen related variables 
+FUNCTION_BLOCK Test_FB
+VAR_OUTPUT CONSTANT
+	NO_ERR 													:	INT := 0;
+ 	OK														:	INT := 1;
+	ERR_BUSY 												:	INT := 2;
+	ERR_DONE 												:	INT := 3;	
+	ERR_ERR 												:	INT := 4;
+	ERR_DONE_ERROR											:	INT := 5;
+	ERR_NO_SIGNAL											:	INT := 6;
+END_VAR             										
+VAR_INPUT           										
+	Reset													:	BOOL;	//The function block will be reset with a rising edge 
+	Execute													:	BOOL;	//Link with Execute of the Fb to be tested
+	Busy													:	BOOL;	//link with Busy Output of FB to be tested
+	Error													:	BOOL;	//link with Error Output of FB to be tested
+	Done													:	BOOL;	//link with Done Output of FB to be tested
+END_VAR
+VAR_OUTPUT
+	ErrorId			:	INT := 0;	//Error identification 
+END_VAR
+VAR
+	state			:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF Reset
+THEN
+	state 													:= 0;
+	ErrorId 												:= NO_ERR;
+ELSE
+
+	CASE state OF
+	0:
+		IF Execute
+		THEN
+			Errorid 										:= NO_ERR;
+			IF Busy     									
+			THEN        									
+				state 										:= 10;
+			ELSIF Error 									
+			THEN        									
+				state 										:= 20;
+			ELSE        									
+				state										:= state * -1;
+				ErrorId 									:= ERR_BUSY;
+			END_IF
+		END_IF
+
+	10:
+		IF NOT Busy
+		THEN
+			IF Done
+				AND Error
+			THEN
+				state										:= state * -1;
+				ErrorId 									:= ERR_DONE_ERROR;
+			ELSIF Done
+			THEN
+				IF Execute
+				THEN
+					state 									:= 11;
+				ELSE      									
+					state 									:= 12;
+				END_IF
+			ELSIF Error
+			THEN
+				IF Execute
+				THEN
+					state 									:= 21;
+				ELSE      									
+					state 									:= 22;
+				END_IF
+			ELSE
+				state										:= state * -1;
+				ErrorId 									:= ERR_NO_SIGNAL;
+			END_IF
+		END_IF
+
+	11: (* Done muss wegsein wenn Execute nicht mehr da *)
+		IF NOT Execute
+		THEN
+			IF NOT Done
+			THEN
+				state										:= 99;
+			ELSE                							
+				state										:= state * -1;
+				ErrorId 									:= ERR_DONE;
+			END_IF
+		END_IF
+
+	12: (* Done muss wegsein weil nur ein Zyklus *)
+		IF NOT Done
+		THEN
+			state 											:= 99;
+		ELSE
+			state											:= state * -1;
+			ErrorId 										:= ERR_DONE;
+		END_IF
+
+
+	20: (* Error Ohne Busy *)
+		IF NOT Execute
+		THEN
+			IF Done
+			THEN
+				state										:= state * -1;
+				ErrorId 									:= ERR_DONE;
+			ELSIF Busy          							
+			THEN                							
+				state										:= state * -1;
+				ErrorId 									:= ERR_BUSY;
+			ELSE                	
+				state										:= 99;
+			END_IF
+		END_IF
+
+	21: (* Error muss wegsein wenn Execute nicht mehr da *)
+		IF NOT Execute
+		THEN
+			IF NOT Error
+			THEN
+				state									:= 99;
+			ELSE                						
+				state									:= state * -1;
+				ErrorId 								:= ERR_ERR;
+			END_IF
+		END_IF
+
+
+	22: (* Error muss wegsein weil nur ein Zyklus *)
+		IF NOT Error
+		THEN
+			state 										:= 99;
+		ELSE                							
+			state										:= state * -1;
+			ErrorId 									:= ERR_DONE;
+		END_IF              							
+                            							
+                            	
+	99:                     	
+		ErrorId											:= OK;
+		state											:= 0;
+
+	ELSE
+		;
+	END_CASE
+
+
+END_IF
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="TEST_FB">
+      <LineId Id="3" Count="3" />
+      <LineId Id="8" Count="121" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

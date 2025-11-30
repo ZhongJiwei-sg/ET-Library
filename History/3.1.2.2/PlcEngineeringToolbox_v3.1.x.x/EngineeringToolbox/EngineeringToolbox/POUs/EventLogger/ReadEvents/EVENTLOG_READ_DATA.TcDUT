@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <DUT Name="EVENTLOG_READ_DATA" Id="{849ac8f5-f6ef-4503-8bc4-ead08d5342f8}">
+    <Declaration><![CDATA[TYPE EVENTLOG_READ_DATA :
+STRUCT
+	eClass			: E_TcEventClass;	//See Beckhoff documentation for more information
+	Computer		: STRING(80);		//Computer name of event source
+	Timestamp		: T_DCTIME64;		//Timestamp in 64bit DC time format 
+	TimestampDT		: DT;				//Timestamp in DATE_AND_TIME format 
+	SourceId		: DWORD;			//Event Source ID
+	id				: DWORD;			//Event number	
+	State			: DWORD;			//Event state 
+	Flags			: DWORD;			(*  TCEVENTFLAG_REQ=0x0001,
+											TCEVENTFLAG_REQMUSTCON=0x0002,
+											TCEVENTFLAG_CON=0x0004,
+											TCEVENTFLAG_RESET=0x0008,
+											TCEVENTFLAG_PRIOCLASS=0x0010,
+											TCEVENTFLAG_FMTSELF=0x0020,
+											TCEVENTFLAG_LOG=0x0040,
+											TCEVENTFLAG_MSGBOX=0x0080,
+											TCEVENTFLAG_SRCID=0x0100,
+											TCEVENTFLAG_SELFRESET=0x0200,
+											TCEVENTFLAG_TCID=0x0400,
+											TCEVENTFLAG_SIGNAL=0x0800,
+											TCEVENTFLAG_ADS=0x8000 *)
+	Source			: WSTRING(40);		//Source name	
+	MsgText			: WSTRING(255);		//Event message text in Unicode
+	MegLen			: DWORD;			//Length of event message
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

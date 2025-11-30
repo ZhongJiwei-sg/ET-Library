@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0061" Id="{88415f36-f698-4129-bffd-62ccb2a8f022}">
+    <Declaration><![CDATA[TYPE AX5000_P_0061 :
+STRUCT
+	Motor_temperature_sensor_type:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,161 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EP9224_0037" Id="{7908c97a-9f18-431e-afac-135f06084f44}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK EP9224_0037
+VAR_OUTPUT CONSTANT
+	MIN_CHANNEL												:	INT := 1;
+	MAX_CHANNEL												:	INT := 4;
+END_VAR
+VAR_INPUT
+	EnableControlViaFieldbus					AT  %Q* 	: 	BOOL := TRUE;	// FB will be processed ads long as enable is TRUE
+	ResetTrig									AT  %Q* 	: 	BOOL := FALSE;	// The box will be reseted with a rising edge 
+	
+	Channel													:	ARRAY[MIN_CHANNEL..MAX_CHANNEL] OF EP9224_0037_CHANNEL;
+END_VAR     								
+VAR_OUTPUT  
+	CurrentUs									AT	%I*		:	INT;	// Actual Current Us
+	CurrentUp									AT	%I*		:	INT;	// Actual Current Up
+	VoltageUs									AT 	%I*		:	INT;	// Actual Voltage Us
+	VoltageUp									AT 	%I*		:	INT;	// Actual Voltage Up
+	Temperature									AT 	%I*		:	INT;	// Actual Temperature
+	
+	TempWarning												: 	BOOL;	// TRUE when temperature warning occurs
+	TempError												: 	BOOL;	// TRUE when temperature error occurs
+	UsWarning												: 	BOOL;	// TRUE when system voltage warning occurs
+	UsError													: 	BOOL;	// TRUE when system voltage error occurs
+	UpWarning												: 	BOOL;	// TRUE when peripheral voltage warning occurs
+	UpError													: 	BOOL;	// TRUE when peripheral voltage error occurs
+	GlobalError												: 	BOOL;	// TRUE when global error occurs
+	SumCurrentWarning										:	BOOL;	// TRUE when Sum Current Warning occurs
+	SumCurrentError											:	BOOL;	// True when Sum Current Error occurs
+	ResetInput												: 	BOOL;	// Resets box with a rising edge
+	TxPDOState												: 	BOOL;	
+	TxPDOToggle												: 	BOOL;	
+END_VAR     								
+VAR
+{attribute 'displaymode':='binary'}
+	status										AT 	%I*		: 	WORD;	// Statusword
+	i														:	INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FOR i := MIN_CHANNEL TO MAX_CHANNEL
+DO
+	Channel[i]();
+END_FOR
+
+	TempWarning			     									:= status.0;
+	TempError			        								:= status.1;
+	UsWarning			       								   	:= status.2;		         	     			 			
+	UsError				           								:= status.3;
+	UpWarning			             							:= status.4;
+	UpError				           								:= status.5;
+	GlobalError			    									:= status.6;
+	SumCurrentWarning											:= status.7;
+	SumCurrentError		     									:= status.8;
+	ResetInput			     									:= status.9;
+	TxPDOState			     									:= status.10;
+	TxPDOToggle													:= status.11;]]></ST>
+    </Implementation>
+    <Property Name="channelErrorUp" Id="{2e364340-4046-41f9-ac57-64bc5f4cf749}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY channelErrorUp : INT]]></Declaration>
+      <Get Name="Get" Id="{b32ddfcd-d39a-4c89-a4a8-c502b6ae8022}">
+        <Declaration><![CDATA[VAR
+	i	:	int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ChannelErrorUp				:= 0;
+FOR i := MIN_CHANNEL TO MAX_CHANNEL do
+	IF Channel[i].ErrorUp
+	THEN
+		ChannelErrorUp			:= i;
+		EXIT;
+	END_IF	
+END_FOR]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="channelErrorUs" Id="{b6465220-b0ad-4fa8-bb98-dd8ad5e292eb}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY channelErrorUs : INT]]></Declaration>
+      <Get Name="Get" Id="{2b30e4bf-5a92-4da8-9b34-7d47a62a3e73}">
+        <Declaration><![CDATA[VAR
+		i	:	int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ChannelErrorUs				:= 0;
+FOR i := MIN_CHANNEL TO MAX_CHANNEL do
+	IF Channel[i].ErrorUs
+	THEN
+		ChannelErrorUs			:= i;
+		EXIT;
+	END_IF	
+END_FOR]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="channelWarningUp" Id="{b1da381e-9c03-47d7-b16b-214831d0cef4}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY channelWarningUp : INT]]></Declaration>
+      <Get Name="Get" Id="{357d8bab-403e-434c-819d-deac31da33c9}">
+        <Declaration><![CDATA[VAR
+		i	:	int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ChannelWarningUp					:= 0;
+FOR i := MIN_CHANNEL TO MAX_CHANNEL do
+	IF Channel[i].WarningUp
+	THEN
+		ChannelWarningUp			:= i;
+		EXIT;
+	END_IF	
+END_FOR]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="channelWarningUs" Id="{4795ddca-ec1f-4537-a96e-d20e54fa0015}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY channelWarningUs : INT]]></Declaration>
+      <Get Name="Get" Id="{fab319c5-3117-4c88-898a-5e2ff30d3999}">
+        <Declaration><![CDATA[VAR
+		i	:	int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ChannelWarningUs					:= 0;
+FOR i := MIN_CHANNEL TO MAX_CHANNEL do
+	IF Channel[i].WarningUs
+	THEN
+		ChannelWarningUs			:= i;
+		EXIT;
+	END_IF	
+END_FOR]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="EP9224_0037">
+      <LineId Id="182" Count="15" />
+      <LineId Id="50" Count="0" />
+    </LineIds>
+    <LineIds Name="EP9224_0037.channelErrorUp.Get">
+      <LineId Id="5" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EP9224_0037.channelErrorUs.Get">
+      <LineId Id="5" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EP9224_0037.channelWarningUp.Get">
+      <LineId Id="5" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EP9224_0037.channelWarningUs.Get">
+      <LineId Id="5" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

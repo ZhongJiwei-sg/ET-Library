@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="LWORD_TO_LREAL_EX" Id="{8c4de39d-b18c-4794-b6be-b771226e8a41}" SpecialFunc="None">
+    <Declaration><![CDATA[// Converts a 64bit double variable with swapped words into a TwinCAT conform LREAL value after checking whether the result will be a valid number
+// Use PLWORD_TO_LWORD in case the source variable is e..g a byte array -> LRealVar := LWORD_TO_LREAL_EX(In := PLWORD_TO_LWORD(ADR(ModBusCom.Data[1]));
+FUNCTION LWORD_TO_LREAL_EX : LREAL
+VAR_INPUT
+	In						: LWORD;
+END_VAR
+VAR
+	Dummy					: U_64BIT_DATATYPE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	Dummy._LWORD			:= In;
+	Dummy._LWORD			:= SWAP_WORDS_OF_LWORD(Dummy._LWORD);
+	
+	IF	IsFinite(F_LREAL(dummy._LREAL)) THEN
+		LWORD_TO_LREAL_EX 	:= dummy._LREAL;
+	ELSE
+		LWORD_TO_LREAL_EX	:= 0.0;
+	END_IF
+	]]></ST>
+    </Implementation>
+    <LineIds Name="LWORD_TO_LREAL_EX">
+      <LineId Id="32" Count="2" />
+      <LineId Id="36" Count="3" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

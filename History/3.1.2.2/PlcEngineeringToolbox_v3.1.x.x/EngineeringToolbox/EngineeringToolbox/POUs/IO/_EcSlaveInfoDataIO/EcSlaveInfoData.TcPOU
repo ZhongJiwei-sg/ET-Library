@@ -1,0 +1,47 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="EcSlaveInfoData" Id="{abde7282-e04f-42c5-8dbe-db29c91a0248}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EcSlaveInfoData implements I_EcSlaveInfoData
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	WcState											AT  %I*		:	BOOL;			//TRUE=Invalid - TRUE an invalid working counter and FALSE a valid working counter 
+	InputToggle										AT  %I*		:	BOOL;			//variable toggles in every successful cycle	
+	{attribute 'displaymode':='hex'}  
+	InfoDataState									AT  %I*		: 	UINT;			(* current EtherCAT device state:
+																						EC_DEVICE_STATE_MASK		:BYTE 	:=16#0F;
+																						EC_DEVICE_STATE_INIT		:BYTE 	:=16#01;
+																						EC_DEVICE_STATE_PREOP		:BYTE 	:=16#02;
+																						EC_DEVICE_STATE_BOOTSTRAP	:BYTE 	:=16#03;
+																						EC_DEVICE_STATE_SAFEOP		:BYTE 	:=16#04;
+																						EC_DEVICE_STATE_OP			:BYTE 	:=16#08;
+																						EC_DEVICE_STATE_ERROR		:BYTE 	:=16#10;
+																						EC_DEVICE_STATE_INVALID_VPRS :BYTE 	:=16#20;
+																						EC_DEVICE_STATE_INITCMD_ERROR:BYTE 	:=16#40; *)
+	AdsAddr											AT  %I*		:	AMSADDR; 		//Slave device AdsAddr structure(ID and port number)
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Property Name="rInfoData" Id="{e69e7ae9-95ed-4260-8d4f-aebfc81bd379}">
+      <Declaration><![CDATA[PROPERTY PUBLIC rInfoData : reference to EcSlaveInfoData]]></Declaration>
+      <Get Name="Get" Id="{9c1529c7-eb6f-47ad-87a2-7e3936964c78}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rInfoData := THis^; ]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="EcSlaveInfoData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlaveInfoData.rInfoData.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

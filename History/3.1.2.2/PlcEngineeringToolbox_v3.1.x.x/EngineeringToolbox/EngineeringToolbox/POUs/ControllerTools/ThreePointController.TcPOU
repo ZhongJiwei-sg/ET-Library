@@ -1,0 +1,235 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="ThreePointController" Id="{1174902b-9b25-49c0-a500-a6a621bca156}" SpecialFunc="None">
+    <Declaration><![CDATA[//Three point controller with lreal output
+//The On-Values must be greater then the Off-Values. The difference is equivalent to the hysteresis-value
+FUNCTION_BLOCK ThreePointController 
+VAR_INPUT
+	Enable													: BOOL := TRUE;		//Enable controller	
+	SetValue												: LREAL := 0.0;		//Setpoint value
+	ActValue												: LREAL := 0.0;		//Actual value
+	
+	Sync													: BOOL := FALSE; 	//Synchronization flag for bumpless initialisation		
+	SyncValue												: LREAL := 0.0; 	//Syncronization value for bumpless init.			
+	MinOutput												: LREAL := 0.0; 	//Controller minimum analog output			
+	MaxOutput												: LREAL := 100.0;	//Controller maximum analog output (Limitation is switched off at 0.0) 			
+
+	FeedPlus												: BOOL := TRUE;		//Release for controller plus 
+	FeedMinus												: BOOL := TRUE;		//Release for controller minus 
+	                                						
+	ManualOn												: BOOL := FALSE;	//Manual mode on - set analog output to ManualValue
+	ManualValue												: LREAL	:= 0.0;		//Analog output in manual mode
+	ManualPlus												: BOOL := FALSE;	//Manual control of digital plus output	
+	ManualMinus												: BOOL := FALSE;	//Manual control of digital minus output	
+                                    						
+	Stepwide												: LREAL := 1.0; 	//Stepwidth analog output
+	Breaktime												: TIME := T#500MS; 	//Breaktime after a change of output
+	DriveTime												: TIME := T#500MS; 	//Drivetime for digital outputs  
+	                                					
+	PlusOn													: LREAL := 5.0;		//Derivate hysteresis to increase the controller output (need to be greater than PlusOff , Plus or Minus pair need to be less the zero)  
+	PlusOff													: LREAL := 3.0;		//Derivate hysteresis to switch off the controller output (need to be smaller than PlusOn , Plus or Minus pair need to be less the zero  
+	MinusOff												: LREAL := -3.0;	//Derivate hysteresis to switch the controller output (need to be greater smaller than MinusOn , Plus or Minus pair need to be less the zero) 
+	MinusOn													: LREAL := -5.0;	//Derivate hysteresis to decrease the controller output (need to be greater than MinusOff , Plus or Minus pair need to be less the zero)
+END_VAR                             						
+VAR_OUTPUT	   
+	Q														: LREAL; 			//Analog controller output
+	Q_Plus													: BOOL;				//Digital controller output
+	Q_Minus													: BOOL;				//Digital controller output
+	Deviation												: LREAL;			//deviation between actual value and setpoint (Deviation = SetValue - ActValue)
+	DeadZone												: LREAL;			//Active dead zone based on PlusOn/Off and MinusOn/Off values
+	BreakTimeRunning										: BOOL;				//Controller is on hold - Break time running 
+	DriveTimeRunning										: BOOL;				//Controller is active 
+	Error													: BOOL;             //Error occured       						
+END_VAR                             						
+VAR 
+//local variables *********************************************************          
+	state													: INT;     
+	MemPlus													: BOOL;
+	MemMinus												: BOOL;
+	Cooling													: BOOL;      
+
+//Trigger ****************************************************************           						
+	rtSync													: r_trig;	
+	
+//timer ******************************************************************
+	tonBreakTime											:	ton;
+	tonDriveTime											:	ton;
+
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* 3 point bang-bang controller 	 							*)
+(****************************************************************)
+
+IF ABS(MinusOn) <= ABS(MinusOff) //On offset must be greater then off
+	OR ABS(PlusOn) <= ABS(PlusOff) //Off offsetr must be smallet then on
+	OR NOT(MinusOn > 0.0 XOR PlusOn > 0.0)//Only one offset needs to be greater then 0.0
+	OR NOT(PlusOff > 0.0 XOR MinusOff > 0.0)//Only one offset needs to be greater then 0.0
+	OR MinOutput > MaxOutput AND MaxOutput <> 0.0
+THEN
+	reset();
+	Error													:= Enable;
+ELSE                                            			
+	rtSync(CLK := Sync);                        			
+	IF rtSync.Q                                 			
+	THEN                                        			
+		Synchronize(SyncValue); 
+	END_IF                                      			
+	                                            			
+	Error													:= FALSE;
+	DeadZone												:= ABS(PlusOff) + ABS(MinusOff);
+	Deviation												:= SetValue - ActValue; 
+	Cooling													:= PlusOn < 0.0 AND MinusOn > 0.0;
+		  
+	//Control sequecne                                      			
+	CASE state OF                               			
+	0:                                          			
+		//Check wheter controller needs to start 
+		IF ManualON                             			
+		THEN                                    			
+			MemMinus := MemPlus								:= FALSE;
+			Q												:= ManualValue;
+		ELSIF NOT Enable                        			
+		THEN                                    			
+			reset();
+		ELSIF(Q < MaxOutput OR MaxOutput = 0.0)       
+			AND FeedPlus    			
+			AND(                                			
+			Deviation > PlusOn AND NOT Cooling     			
+			OR  Deviation < PlusOn AND Cooling)     			
+		THEN // greatest Plusitive deviatoin      			
+			MemPlus											:= TRUE;
+			MemMinus										:= FALSE;
+		ELSIF(Q > MinOutput OR MaxOutput = 0.0)    
+			AND FeedMinus      			
+			AND(                                			
+			Deviation < MinusOn AND NOT Cooling      	
+			OR Deviation > MinusOn AND Cooling)      			
+		THEN // greatest Minusative deviation     			
+			MemMinus										:= TRUE;
+			MemPlus											:= FALSE;
+			
+		ELSE
+			MemPlus											:= MemPlus AND ABS(Deviation) >= ABS(PlusOff) ;
+			MemMinus										:= MemMinus AND ABS(Deviation) >= ABS(MinusOff);
+		END_IF              			
+		                       
+		//Continue to run controller up or down as long as memory is still active                  			
+		IF MemMinus	                            			
+		THEN                                    			
+			Q												:= MAX(Q - Stepwide, MinOutput);
+			state											:= 1;
+		ELSIF MemPlus                            			
+		THEN                                    			
+			Q												:= MIN(Q + Stepwide, MaxOutput);
+			state											:= 1;
+		ELSE                                    			
+			Q												:= LIMIT(MinOutput, Q, MaxOutput);
+		END_IF		
+			
+	1: //start drive time 
+		tonDriveTime(IN := FALSE); tonBreakTime(IN := FALSE);
+		IF DriveTime > T#0MS
+		THEN
+			tonDriveTime(IN := TRUE, PT := DriveTime);
+			state											:= 2;
+		ELSIF BreakTime > T#0MS
+		THEN
+			tonBreakTime(IN := TRUE, PT := BreakTime);	
+			state											:= 3;	
+		ELSE
+			state											:= 0;			
+		END_IF
+				                    			
+	2:  //run drive time                                       			
+		tonDriveTime();
+		IF ManualOn
+		THEN
+           state											:= 0;    			
+		ELSIF tonDriveTime.Q                			
+		THEN
+			IF BreakTime > T#0MS
+			THEN
+				tonBreakTime(IN := TRUE, PT := BreakTime);
+				state										:= 3;
+			ELSE
+				state										:= 0;				
+			END_IF				             	
+		END_IF     
+                    
+	3: //run break time 
+		tonBreakTime();
+		IF ManualOn OR tonBreakTime.Q  
+		THEN
+           state											:= 0;    			
+		END_IF	
+	END_CASE                                    			
+	
+	//status
+	DriveTimeRunning										:= state = 2;
+	BreakTimeRunning										:= state = 3;
+                                            			                      			                                                		
+	//setting ouputs
+	Q_Minus 												:= FeedMinus AND Enable
+																AND(
+																MemMinus AND DriveTimeRunning 
+																OR ManualOn AND ManualMinus) ;
+										
+	Q_Plus				 									:= FeedPlus AND Enable
+																AND(
+																MemPlus AND DriveTimeRunning
+																OR ManualOn AND ManualPlus) ;
+																						
+END_IF
+
+
+	
+	]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{b35a204c-af39-4975-91db-0d99708d05cf}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : booL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q												:= MinOutput;
+MemMinus := MemPlus								:= FALSE;
+state											:= 0;
+
+Q_Plus											:= FALSE;
+Q_Minus											:= FALSE;
+Error											:= FALSE;
+Deviation										:= 0.0;
+DeadZone										:= 0.0;
+BreakTimeRunning								:= FALSE;
+DrivetimeRunning								:= FALSE;
+
+reset										:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="synchronize" Id="{10886209-463e-467f-8e8b-c23a0a1bbbb4}">
+      <Declaration><![CDATA[METHOD PUBLIC synchronize : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	IN											:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q								:= LIMIT(MinOutput,IN,MaxOutput);
+Synchronize						:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ThreePointController">
+      <LineId Id="184" Count="125" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ThreePointController.reset">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ThreePointController.synchronize">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

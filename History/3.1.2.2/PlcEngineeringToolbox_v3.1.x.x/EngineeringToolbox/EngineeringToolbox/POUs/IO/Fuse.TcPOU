@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="Fuse" Id="{fd1a64bf-a7b3-466f-994a-08205f8ad944}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Fuse/Circuit breaker 
+FUNCTION_BLOCK Fuse
+VAR_INPUT
+	Force													:	BOOL := FALSE;	//simulates Input
+	Invert													:	BOOL := FALSE; 	//inverts the Hardware Input
+	ResetTrig												:	BOOL := TRUE;	//Resets error with rising edge 
+END_VAR     								
+VAR_OUTPUT  								
+	Q														:	BOOL;			//output
+	Event													:	BOOL;			//TRUE when state is abnormal and error is not reset 
+	In											AT  %I* 	: 	BOOL := TRUE;	//Hardware Input
+END_VAR     								
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* signallocked Input-FB (MSS,Sicherung)				*)
+(********************************************************)
+
+(************************************)
+IF NOT (In OR Force) XOR Invert
+THEN
+	Event													:= TRUE;
+	Q														:= Invert;
+ELSIF Event                         						
+THEN                                						
+	Event 													:= NOT ResetTrig;
+ELSE                                						
+	Q														:= Not Invert;
+END_IF
+
+(************************************)
+]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{3abffe50-f044-4ccf-bca3-70ed5355765c}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Event := FALSE;
+reset := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Fuse">
+      <LineId Id="47" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fuse.reset">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

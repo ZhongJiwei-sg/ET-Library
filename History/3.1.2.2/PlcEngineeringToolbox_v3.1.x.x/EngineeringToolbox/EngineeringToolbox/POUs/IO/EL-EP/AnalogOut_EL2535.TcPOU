@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AnalogOut_EL2535" Id="{aca08393-a9c7-4de5-b6d8-5e739d8aca09}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK AnalogOut_EL2535 EXTENDS AnalogOut
+VAR_INPUT
+	Reset										AT  %Q*		:	BOOL;	
+END_VAR   
+VAR_IN_OUT
+END_VAR              									                              	            	
+VAR_OUTPUT                              	            	
+	Input										AT  %I* 	: 	BOOL; 	//Hardware Input 
+	ReadyToEnable								AT  %I* 	: 	BOOL; 	
+	Warning										AT  %I* 	: 	BOOL; 	
+	Error										AT  %I* 	: 	BOOL; 	
+	TxPDOToggle									AT  %I* 	: 	BOOL; 	
+            
+	InfoData1									AT  %I* 	: 	INT; //Actual current
+	InfoData2									AT  %I* 	: 	INT; //Duty cycle/Voltage
+END_VAR                                 	
+VAR                                     	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Set PWM Output of EL25xx																					*)
+(************************************************************************************************************)
+	SUPER^();
+
+(********************************************************************************************************)
+]]></ST>
+    </Implementation>
+    <LineIds Name="AnalogOut_EL2535">
+      <LineId Id="128" Count="1" />
+      <LineId Id="466" Count="1" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

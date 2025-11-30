@@ -1,0 +1,3085 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>-->
+    <FileVersion>1.0.0.0</FileVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{8e0fc79c-ba34-49f5-bd2b-25b078fb04f5}</ProjectGuid>
+    <SubObjectsSortedByName>True</SubObjectsSortedByName>
+    <Name>EngineeringToolbox</Name>
+    <ProgramVersion>3.1.4022.7</ProgramVersion>
+    <Application>{75ea0ea9-0fa3-4f90-b6a7-4e5b37cf8826}</Application>
+    <TypeSystem>{6351759d-c2ca-4710-8c6c-eddcf1d1d927}</TypeSystem>
+    <Implicit_Task_Info>{c6799ab5-9f57-4a6f-ad69-eaf3c8aa97ee}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{367f7fd9-9aed-4af7-92c6-0b9225e1a736}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{7948cd54-4b7b-47cd-afaf-23aceda9c908}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{bc84946c-93e7-431f-a8f1-34ecb4f712f3}</LibraryReferences>
+    <Company>Beckhoff Electronics Mfg</Company>
+    <Released>true</Released>
+    <Title>EngineeringToolbox</Title>
+    <DefaultNamespace>ET</DefaultNamespace>
+    <Placeholder>ET</Placeholder>
+    <Author>Daniel Schlingmann</Author>
+    <Description>Engineering Toolbox Library
+
+The library is provided "as-is" for TwinCAT3.1 by the Beckhoff Industry Management for Electronics Manufacturing.
+Please check the function "DisclaimerStatement : WSTRING[1500]" in additon to the following disclaimer:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</Description>
+    <CombineIds>false</CombineIds>
+    <DeploymentEvents>
+      <Events xmlns="">
+        <Event>
+          <CommandType>Copy</CommandType>
+          <DeploymentType>ActivateConfiguration</DeploymentType>
+          <Command1 />
+          <Command2 />
+        </Event>
+      </Events>
+    </DeploymentEvents>
+    <ProjectVersion>3.1.2.2</ProjectVersion>
+    <CompilerVersion>
+    </CompilerVersion>
+    <!--    <OutputType>Exe</OutputType>
+    <RootNamespace>MyApplication</RootNamespace>
+    <AssemblyName>MyApplication</AssemblyName>-->
+  </PropertyGroup>
+  <ItemGroup>
+    <Folder Include="GVLs" />
+    <Folder Include="POUs" />
+    <Folder Include="POUs\BoundsCheck" />
+    <Folder Include="POUs\Connectivity" />
+    <Folder Include="POUs\Connectivity\ADS" />
+    <Folder Include="POUs\Connectivity\TF625x-Modbus" />
+    <Folder Include="POUs\Connectivity\TF625x-Modbus\Master" />
+    <Folder Include="POUs\Connectivity\TF625x-Modbus\Master\TF6250-ModbusTcpServer" />
+    <Folder Include="POUs\Connectivity\TF625x-Modbus\Master\TF6250-ModbusTcpServer\TCP" />
+    <Folder Include="POUs\Connectivity\TF625x-Modbus\Master\TF6250-ModbusTcpServer\UDP" />
+    <Folder Include="POUs\Connectivity\TF625x-Modbus\Master\TF6255-ModbusRtu" />
+    <Folder Include="POUs\Connectivity\TF625x-Modbus\Master\_Components" />
+    <Folder Include="POUs\Connectivity\TF625x-Modbus\Slave" />
+    <Folder Include="POUs\Connectivity\TF6310-TcpServer" />
+    <Folder Include="POUs\Connectivity\TF6310-TcpServer\DeviceCom" />
+    <Folder Include="POUs\Connectivity\TF6310-TcpServer\TcpBasic" />
+    <Folder Include="POUs\Connectivity\TF6310-TcpServer\UdpBasic" />
+    <Folder Include="POUs\Connectivity\TF6340-SerialCom" />
+    <Folder Include="POUs\Connectivity\TF6340-SerialCom\ComPortDeviceCom" />
+    <Folder Include="POUs\Connectivity\TF6340-SerialCom\ComPortBasic" />
+    <Folder Include="POUs\ControllerTools" />
+    <Folder Include="POUs\DataBuffer\Fifo" />
+    <Folder Include="POUs\DataBuffer\Ringbuffer" />
+    <Folder Include="POUs\EventLogger" />
+    <Folder Include="POUs\EventLogger\ReadEvents" />
+    <Folder Include="POUs\EventLogger\TriggerEvents" />
+    <Folder Include="POUs\Fieldbus" />
+    <Folder Include="POUs\Fieldbus\CANopen" />
+    <Folder Include="POUs\Fieldbus\EtherCAT" />
+    <Folder Include="POUs\Fieldbus\EtherCAT\_Components" />
+    <Folder Include="POUs\Fieldbus\EAP" />
+    <Folder Include="POUs\Fieldbus\Profibus" />
+    <Folder Include="POUs\Fieldbus\Profinet" />
+    <Folder Include="POUs\FileHandling" />
+    <Folder Include="POUs\FileHandling\Basic" />
+    <Folder Include="POUs\FileHandling\TF6421-XmlServer" />
+    <Folder Include="POUs\IO" />
+    <Folder Include="POUs\IO\Analog" />
+    <Folder Include="POUs\IO\Cylinder" />
+    <Folder Include="POUs\IO\Drives" />
+    <Folder Include="POUs\IO\Drives\CoE" />
+    <Folder Include="POUs\IO\Drives\CoE\EL72xx" />
+    <Folder Include="POUs\IO\Drives\DC" />
+    <Folder Include="POUs\IO\Drives\DC\Ey73xx" />
+    <Folder Include="POUs\IO\Drives\SoE" />
+    <Folder Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs" />
+    <Folder Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P" />
+    <Folder Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S" />
+    <Folder Include="POUs\IO\Drives\Stepper" />
+    <Folder Include="POUs\IO\EL-EP" />
+    <Folder Include="POUs\IO\EL-EP\EL3403" />
+    <Folder Include="POUs\IO\EL-EP\EP92xxPwrBox" />
+    <Folder Include="POUs\IO\EL-EP\EL9x" />
+    <Folder Include="POUs\IO\FreqConv" />
+    <Folder Include="POUs\IO\FreqConv\EtherCAT" />
+    <Folder Include="POUs\IO\FreqConv\EtherCAT\DS402" />
+    <Folder Include="POUs\IO\Motors" />
+    <Folder Include="POUs\IO\_EcSlaveInfoDataIO" />
+    <Folder Include="POUs\IO\_EcSlaveFWUpdater" />
+    <Folder Include="POUs\IO\[underDev]">
+      <ExcludeFromBuild>true</ExcludeFromBuild>
+    </Folder>
+    <Folder Include="POUs\IO\_ItfActuators" />
+    <Folder Include="POUs\IpcDiag" />
+    <Folder Include="POUs\IpcDiag\MDP" />
+    <Folder Include="POUs\IpcDiag\MDP\InfoModuls" />
+    <Folder Include="POUs\Logging" />
+    <Folder Include="POUs\Motion\TF511x-KIN\03_DUTs\Positions" />
+    <Folder Include="POUs\Motion\TF511x-KIN\03_DUTs\Trafo" />
+    <Folder Include="POUs\_Miscellaneous" />
+    <Folder Include="POUs\_Miscellaneous\Conversions" />
+    <Folder Include="POUs\Safety" />
+    <Folder Include="POUs\Safety\Diag" />
+    <Folder Include="POUs\Statemodel" />
+    <Folder Include="POUs\Statemodel\UnitTemplate" />
+    <Folder Include="POUs\Statemodel\control" />
+    <Folder Include="POUs\Motion" />
+    <Folder Include="POUs\Motion\TF50xx-NC\01_Main" />
+    <Folder Include="POUs\Motion\TF5100-NCI" />
+    <Folder Include="POUs\Motion\TF5100-NCI\01_Main" />
+    <Folder Include="POUs\Motion\TF5100-NCI\02_Options" />
+    <Folder Include="POUs\Motion\TF5100-NCI\02_Options\Error" />
+    <Folder Include="POUs\Motion\TF5100-NCI\02_Options\MFunctions" />
+    <Folder Include="POUs\Motion\TF5100-NCI\02_Options\PlcItp" />
+    <Folder Include="POUs\Motion\TF5100-NCI\02_Options\RParameter" />
+    <Folder Include="POUs\Motion\TF511x-KIN" />
+    <Folder Include="POUs\Motion\TF511x-KIN\03_DUTs" />
+    <Folder Include="POUs\Motion\TF511x-KIN\01_Main" />
+    <Folder Include="POUs\Motion\TF511x-KIN\02_Options" />
+    <Folder Include="POUs\Motion\TF50xx-NC" />
+    <Folder Include="POUs\Motion\TF50xx-NC\00_Base" />
+    <Folder Include="POUs\Motion\TF50xx-NC\02_Options" />
+    <Folder Include="POUs\Motion\TF50xx-NC\02_Options\Coupling" />
+    <Folder Include="POUs\Motion\TF50xx-NC\02_Options\Error" />
+    <Folder Include="POUs\Motion\TF50xx-NC\02_Options\Motion" />
+    <Folder Include="POUs\Motion\TF50xx-NC\02_Options\Parameter" />
+    <Folder Include="POUs\Motion\TF50xx-NC\02_Options\Phasing" />
+    <Folder Include="POUs\Motion\TF50xx-NC\02_Options\TouchProbe" />
+    <Folder Include="POUs\Motion\TF50xx-NC\03_Utilities" />
+    <Folder Include="POUs\DataBuffer" />
+    <Folder Include="POUs\StringHelper" />
+    <Folder Include="POUs\StringHelper\ExtendedString" />
+    <Folder Include="POUs\System" />
+    <Folder Include="POUs\TimeHelper" />
+    <Folder Include="POUs\TimeHelper\Conversions" />
+    <Folder Include="POUs\_Miscellaneous\64BitFunctions" />
+    <Folder Include="Version" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="GVLs\Gvl.TcGVL">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+      <LinkAlways>true</LinkAlways>
+    </Compile>
+    <Compile Include="GVLs\PARAM.TcGVL">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\BoundsCheck\boundsError.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\BoundsCheck\boundsOK.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\BoundsCheck\checkBounds.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+      <ExcludeFromBuild>True</ExcludeFromBuild>
+    </Compile>
+    <Compile Include="POUs\BoundsCheck\CheckBoundsInfo.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\ADS\AdsDataExchange.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\Ipv4Addr_TO_UDINT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6310-TcpServer\DeviceCom\TCPDeviceCom_SendRecBytes.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6310-TcpServer\DeviceCom\TCPDeviceCom_SendRecString.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6340-SerialCom\ComPortDeviceCom\ComPortDeviceCom_BufferHandle.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6340-SerialCom\ComPortDeviceCom\ComPortDeviceCom_SendRecBytes.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6340-SerialCom\ComPortDeviceCom\ComPortDeviceCom_SendRecString.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6340-SerialCom\ComPortBasic\ComPortBackground.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6340-SerialCom\ComPortBasic\ComPortSendRec.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6340-SerialCom\ComPortDeviceCom\ComPortEL6x22BEasyConnect.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\U_DEVICE_COM_CACHE.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\U_IPv4Addr.TcDUT">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\isValidIPv4Addr.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF625x-Modbus\Master\TF6250-ModbusTcpServer\TCP\ModbusTcpMaster.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF625x-Modbus\Master\TF6250-ModbusTcpServer\UDP\ModbusUdpMaster.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF625x-Modbus\Master\TF6255-ModbusRtu\ModbusRtuMaster22B.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF625x-Modbus\Master\TF6255-ModbusRtu\ModbusRtuMaster5B.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF625x-Modbus\Master\TF6255-ModbusRtu\ModbusRtuMasterPC.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF625x-Modbus\Master\_Components\ModbusJob.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF625x-Modbus\Master\_Components\ModbusSlaveCom.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF625x-Modbus\Slave\ModbusSlaveBase.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6310-TcpServer\TcpBasic\TCPSendRecCtrl.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6310-TcpServer\TcpBasic\TCPConnectionCtrl.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6310-TcpServer\TcpBasic\TCPSocketCtrl.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6310-TcpServer\UdpBasic\UDPSendRecCtrl.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6310-TcpServer\UdpBasic\UDPServerCtrl.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Connectivity\TF6310-TcpServer\UdpBasic\UDPSocketCtrl.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\ControllerTools\AverageFilter.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\ControllerTools\PIDController.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\ControllerTools\PT1Filter.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\ControllerTools\signum.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\ControllerTools\SlewRateLimitter.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\ControllerTools\SlidingAverageExt.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\ControllerTools\SlidingAverage.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\ControllerTools\ThreePointController.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\DoubleBuffer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Fifo\Fifo.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Fifo\FifoExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Fifo\FifoLRealSimple.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Fifo\FifoBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Quicksort.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Ringbuffer\RingbufferBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Ringbuffer\Ringbuffer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Ringbuffer\RingbufferCharSimple.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Ringbuffer\RingbufferExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Ringbuffer\RingbufferByteSimple.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Ringbuffer\RingbufferLRealSimple.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\EventsWriteToLogbook.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\EVENT_HANDLING_CONFIG.TcDUT">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\EventLogger\getEventClassPriority.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\getEventClassText.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\ReadEvents\EventlogRead.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\ReadEvents\EVENTLOG_READ_DATA.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\ReadEvents\EVENTLOG_READ_HANDLEINFO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\ReadEvents\EVENTLOG_READ_STREAM.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\ReadEvents\EVENTLOG_READ_STREAM_DATA_RAW.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\ReadEvents\EVENTLOG_READ_STREAM_DATA_RAW_EX.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogger\SOURCE_ID.TcDUT">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\EventLogger\TriggerEvents\EventHandling.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\EventLogger\TriggerEvents\EventHandlingGrp10.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\EventLogger\TriggerEvents\EventHandlingGrp25.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\EventLogger\TriggerEvents\EventHandlingGrp50.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\EventLogger\TriggerEvents\EventHandlingGrpCustomized.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\EventLogger\TriggerEvents\EventHandlingConfirmIsReq.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\EventLogger\TriggerEvents\EventHandlingStatisticInfo.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\CANopen\CANopenMasterDiag.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\CANopen\CANopenMasterIO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EAP\EAP_PUB_SUB_IO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EAP\EAP_DEVICE_IO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EAP\EAP_PUB_VAR.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EAP\EAP_SUB_VAR.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\EcCoEReadNewestDiagMsg.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\EcDiagBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\EcDiagBase_wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\_Components\EcMasterIO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\_Components\EcMasterSupervisor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\_Components\EcSlavesDiag.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\_Components\EcSlaveSupervisor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\_Components\EC_MASTER_DEVICE_STATE.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\EtherCAT\_Components\EC_SLAVE_DIAG_INFO_DATA.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\Profibus\ProfibusMasterDiag.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\Profibus\ProfibusMasterIO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\Profinet\ProfinetControllerIO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\Profinet\ProfinetControllerIO_wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Fieldbus\Profinet\ProfinetDeviceIO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\FileHandling\Basic\FileHandling.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\FileHandling\Basic\ReadDirSimple.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\FileHandling\Basic\ReadDirSimpleExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\FileHandling\TF6421-XmlServer\XmlReadWrite.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\FileHandling\TF6421-XmlServer\XmlReadWriteWithBackupFile.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IO\Analog\AnalogIn.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Analog\AnalogIn32.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Analog\AnalogInELMBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Analog\AnalogInELMSingleSampleDINT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Analog\AnalogInELMSingleSampleREAL.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Analog\AnalogInREAL.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Analog\AnalogOut.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\BlowOffSensors.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Button.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\ButtonExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Cylinder\Cylinder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Cylinder\CylinderExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Cylinder\CylinderType4.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Cylinder\I_Cylinder.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\AxDriveBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\AxDriveGetRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\CoE\AxDriveCoE.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\CoE\AxDriveCoE_wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\CoE\CiA_DS402Controlword.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\CoE\CiA_DS402Statusword.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\CoE\eCiA_DS402_CONTROL_CMD.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\CoE\eCiA_DS402_STATUS_STATE.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\CoE\EL72xx\AxDriveCoE_EL72xxParam.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\CoE\EL72xx\CiA_DS402StatuswordEx7xxx.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\DC\Ey73xx\AxDriveDC.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\DC\Ey73xx\AxDriveDC_wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\I_AxDriveBase.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\AxDriveSoE_Ax5000CommutationCalib.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0001.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0002.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0003.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0004.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0009.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0010.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0020.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0021.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0040.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0050.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0051.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0052.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0053.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0054.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0055.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0056.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0057.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0058.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0059.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0060.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0061.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0062.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0063.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0064.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0065.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0066.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0067.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0068.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0069.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0070.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0071.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0072.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0073.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0074.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0075.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0076.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0077.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0078.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0088.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0089.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0090.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0091.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0092.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0093.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0096.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0097.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0098_beckhoff.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0098_beckhoff_electrical_data.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0099.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0100.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0101.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0102.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0103.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0104.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0105.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0106.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0107.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0108.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0109.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0110.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0111.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0112.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0113.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0114.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0115.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0116.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0117.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0118.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0119.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0125.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0126.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0127.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0128.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0150.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0151.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0152.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0153.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0154.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0155.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0158.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0159.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0160.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0161.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0162.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0163.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0165.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0166.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0167.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0168.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0169.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0170.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0171.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0180.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0181.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0182.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0183.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0184.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0185.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0188.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0189.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0192.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0193.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0196.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0198.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0199.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0200.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0201.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0202.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0203.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0204.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0205.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0206.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0207.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0208.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0209.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0210.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0211.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0212.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0213.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0214.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0215.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0216.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0217.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0218.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0219.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0220.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0221.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0250.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0251.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0252.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0253.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0254.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0255.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0256.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0270.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0271.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0272.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0273.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0274.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0275.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0276.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0277.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0278.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0300.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0301.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0302.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0303.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0304.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0305.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0306.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0307.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0308.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0309.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0310.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0311.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0312.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0313.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0314.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0315.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0316.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0317.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0320.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0321.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0322.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0323.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0324.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0325.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0326.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0350.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0351.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0352.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0353.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0354.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0356.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0360.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0361.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0400.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0401.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0402.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0451.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0452.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0453.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0454.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0455.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0456.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0457.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0458.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0459.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0460.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0461.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0462.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0463.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0464.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0502.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0503.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0504.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0505.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0511.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0512.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0513.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0514.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0515.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0516.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0517.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0518.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0552.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0553.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0554.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0555.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0556.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0557.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0558.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0601.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0602.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0610.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0611.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0800.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0801.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0802.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0804.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0805.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0806.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0810.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0811.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0850.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0851.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0900.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0901.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0902.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0904.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0905.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0906.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_0912.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1000.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1001.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1002.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1003.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1004.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1005.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1006.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1007.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1008.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1009.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1010.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1011.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1012.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1020.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1021.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_1022.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_2000.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_2001.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\P\AX5000_P_2002.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0001.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0002.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0007.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0011.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0012.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0013.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0015.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0016.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0017.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0018.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0024.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0029.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0030.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0031.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0032.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0033.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0034.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0035.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0036.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0037.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0040.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0043.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0044.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0045.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0046.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0047.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0048.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0051.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0053.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0055.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0076.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0079.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0080.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0081.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0082.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0083.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0084.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0085.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0086.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0091.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0092.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0095.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0099.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0100.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0101.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0103.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0104.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0106.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0107.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0109.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0110.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0111.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0112.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0113.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0119.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0120.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0124.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0126.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0130.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0131.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0134.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0135.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0136.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0137.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0143.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0149.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0159.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0160.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0161.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0162.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0163.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0169.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0170.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0179.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0185.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0186.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0187.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0188.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0189.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0196.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0200.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0201.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0203.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0204.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0206.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0207.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0216.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0217.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0219.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0254.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0256.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0257.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0267.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0273.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0274.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0292.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0295.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0296.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0347.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0348.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0372.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0374.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0375.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0380.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0381.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0383.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0384.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0390.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0403.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0405.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0409.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0410.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0429.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0432.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0435.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax5000ParamSTRUCTs\S\AX5000_S_0436.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\AxDriveSoE_Ax5000CalcPower.TcPOU">
+      <SubType>Code</SubType>
+      <ExcludeFromBuild>false</ExcludeFromBuild>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\AxDriveSoE_Ax5000SwitchParamSet.TcPOU">
+      <SubType>Code</SubType>
+      <ExcludeFromBuild>false</ExcludeFromBuild>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\Ax580x.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\AxDriveSoE_Ax5000.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\AxDriveSoE_Ax5000Param.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\AxDriveSoE_Ax5000wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\SoE\AxDriveSoE_Rexroth.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\Stepper\AxDriveStepper.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\Stepper\AxDriveStepperParam.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Drives\Stepper\AxDriveStepper_wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\AnalogOut_EL2535.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL1262_Base.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL3681.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL9x\EL9501.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL9x\EL9576.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL9x\EL95xxPowerTerminal.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL9x\ELSystemTerminal.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_EcSlaveFWUpdater\EcSlaveDevFWUpdater.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_EcSlaveInfoDataIO\EcSlaveInfoData.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_EcSlaveInfoDataIO\EcSlaveInfoDataExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_EcSlaveInfoDataIO\I_EcSlaveInfoData.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL1904.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL3403\EL3403.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL3403\EL3403Logic.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL69xx.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EL3356.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\Eyx9xx.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EP92xxPwrBox\EP9214.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EP92xxPwrBox\EP9214_CHANNEL.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EP92xxPwrBox\EP9224_0037.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\EP92xxPwrBox\EP9224_0037_CHANNEL.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\EL-EP\ZB8610.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\FreqConv\EtherCAT\DS402\EcFcDS402_ComBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\FreqConv\IOFcCom.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Fuse.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\InOut.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\InOutExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Input.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Motors\IOMotor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Motors\IOMotor2Dir.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Motors\IOMotorStarDelta.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\Output.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\[underDev]\Cylinder_wUnitItf.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorBase.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorEnableDisable.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorFwdRev.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorFwdBwd.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorLeftRight.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorOnOff.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorOpenClose.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorPosNeg.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorStartStop.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorUpDown.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IO\_ItfActuators\I_ActuatorWorkBase.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\InfoModuls\MDP_CPU.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\InfoModuls\MDP_Fan.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\InfoModuls\MDP_Mainboard.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\InfoModuls\MDP_RaidSimple.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\InfoModuls\MDP_ReadModulList.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\InfoModuls\MDP_SiliconDrives.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\InfoModuls\MDP_UPS.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\MDP_Info.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\MDP_IpcDiag.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\MDP\MDP_IpcDiag_wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\IpcDiag\UPSStatus.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Logging\DataFileLogger.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Logging\DataUdpLogger.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Logging\I_LogbookSubscriber.TcIO">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\I_Logbook.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Logging\Logbook.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\LogbookData.TcDUT">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\LogbookPuplisher.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\LogbookSubEventLog.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\LogbookSubSendMail.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\adsLogError.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\adsLogHint.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\adsLogWarn.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Logging\LogbookSubSysLog.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Logging\LogbookSubWriteFile.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Logging\Logbook_wEventClass.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Logging\adsLogwTcEventClass.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\00_Base\I_AxNcPTP.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Parameter\AxPara.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Parameter\AxParaCtrl.TcPOU">
+      <SubType>Code</SubType>
+      <ExcludeFromBuild>false</ExcludeFromBuild>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\AxAutoWriteSoftLimit.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\CoordinateTransformation2D.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\AxNcPTPwJobs.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\NciChannel_wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Positions\KIN_POSITIONS.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Positions\KIN_POSITIONS_ACS_DUT.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Positions\KIN_POSITIONS_MCS_DUT.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Positions\U_KIN_POSITIONS.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Trafo\KIN_CALCTRAFO_AXPOS_PARAM.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Trafo\KIN_STATE_OBSERVER_OID_PARAM.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Trafo\KIN_STATICTRAFO_PARAM.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Trafo\KIN_TOOLTRAFO_PARAM.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\03_DUTs\Trafo\UCS.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\VALUE_3D.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\VALUE_3D_DUT.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\VALUE_6D.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\VALUE_6D_DUT.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\Diag\SafetyLogicAndIOTerminalDiag.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\cutStrNumberToSeperator.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\replaceUmlauts.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\System\SystemInfo.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\System\SystemInfo64.TcPOU">
+      <SubType>Code</SubType>
+      <ExcludeFromBuild>true</ExcludeFromBuild>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\PartsPerTime.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\64BitFunctions\CLEARBIT64.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\64BitFunctions\CSETBIT64.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\64BitFunctions\GETBIT64.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\64BitFunctions\SETBIT64.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\nextIdx.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\TC_VN_COLORS.TcDUT">
+      <SubType>Code</SubType>
+      <ExcludeFromBuild>true</ExcludeFromBuild>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\ADSERROR_TO_HRESULT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\DWORD_TO_REAL_EX.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\HRESULT_TO_ADSERROR.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\REAL_TO_FMLREAL.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\LWORD_TO_LREAL_EX.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\SWAP_BYTES_OF_WORDS.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\SWAP_WORDS_OF_DWORD.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\SWAP_WORDS_OF_LWORD.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\FbBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\CAM.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\CAM3D.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\COLOR.TcDUT">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\ADSERROR_TO_WIN32ERROR.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\ADSERROR_TO_WSERROR.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\C_TO_F.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\DEGREES_TO_RPM.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\F_TO_C.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\GF_TO_N.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\TO_FMLREAL.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\MMIN_TO_MMS.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\MMS_TO_MMIN.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\N_TO_GF.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\Conversions\RPM_TO_DEGREES.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\ERROR_HDL.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\FbBaseExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\FbBaseOutputs.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\getNoOfBits.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\LCID.TcDUT">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\eLCID.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\LOGx.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\OEECalculation.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\polynomial.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\RF_TRIG.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\scale.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\SEQUENCE_HDL.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\setNoOfBits.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\TEST_FB.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\TOGGLE.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\U_32BIT_DATATYPE.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\U_64BIT_DATATYPE.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_Miscellaneous\WIN.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Safety\Diag\SafetyIODeviceDiagRead.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\Diag\SafetyIODeviceDiag_wEvents.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\Diag\SafetyIOsDiag.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\Diag\SafetyLogicTerminalDiag.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\Diag\SafetyPlcTerminalDiag.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\SafetyCircuit.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\SafetyGroupIO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\SafetyPlcBackupRestore.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Safety\SAFETY_CIRCUIT_STATUS.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Statemodel\control\I_StatemodelBase.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Statemodel\control\I_Statemodel.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Statemodel\control\Statemodel.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Statemodel\eMODE.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Statemodel\eSTATE.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Statemodel\UnitTemplate\I_Statemodel_Unit.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Statemodel\UnitTemplate\Statemodel_Unit.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\00_Base\AxFbBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\00_Base\AxRWParaBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\00_Base\I_AxNcBase.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\01_Main\AxAdmin.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\01_Main\AxHoming.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\01_Main\AxMotion.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Motion\AxSuperposition.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\AxCalcPosBias.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\AxResonanceAvoidance.TcPOU">
+      <SubType>Code</SubType>
+      <ExcludeFromBuild>true</ExcludeFromBuild>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\AxSoftSyncDistance.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\AxStatemodel.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\AxNcBaseExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\AxNcPtpGear.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\AxNcBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\01_Main\NciAdmin.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\01_Main\NciGrp.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\01_Main\NciItp.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\01_Main\NciMotion.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\01_Main\NCI_REF.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\02_Options\Error\NciChnEventHandling.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\02_Options\Error\NciEventHandling.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\02_Options\MFunctions\NciMFnc.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\02_Options\PlcItp\NciCreateItpTable.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\02_Options\PlcItp\NciCreateItpTableEntryTemplate.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\02_Options\RParameter\NCiReadWriteRParam.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF5100-NCI\NciChannel.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\01_Main\KinAdmin.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\01_Main\KIN_REF.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\02_Options\KinLockUnlockTrafoParam.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\02_Options\KinWriteToolTrafoParam.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\02_Options\KinWriteUCSTrafoParam.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF511x-KIN\KinChannel.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Coupling\AxCamming.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Coupling\AxFlyingSaw.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Coupling\AxGear.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Error\AxNcEventHandling.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Error\AxEventHandling.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Motion\AxMoveSinus.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Motion\AxHomingOnBlock.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\Phasing\AxPhasing.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\02_Options\TouchProbe\AxTouchProbe.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\AxAutoFct.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\AX_JOB.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\03_Utilities\getOvrVelo.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\Motion\TF50xx-NC\AxNcPTP.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\StringHelper\cutStrToSeperator.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\cutWStrToSeperator.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\DWORD_TO_BINSTR_EXT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\DWORD_TO_HEXSTR_EXT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\getCntCharInStr.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\getCntCharInWStr.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\isWStringNumeric.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\HEXSTR_TO_DWORD.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\HEXSTR_TO_LWORD.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\INSERT_EXT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\LWORD_TO_BINSTR_EXT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\LWORD_TO_HEXSTR_EXT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\readStrToSeperator.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\replaceInString.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\ExtendedString\ExtString.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\ExtendedString\ExtWString.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\ExtendedString\T_EXT_STRING.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\ExtendedString\T_EXT_WSTRING.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\getFilledString.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\StringHelper\isStringNumeric.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\StringHelper\readWStrToSeperator.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\StringHelper\replaceInWString.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\U_MAX_STRING.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\U_MAX_WSTRING.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\WINSERT_EXT.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\System\SystemPulses.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\System\TaskInfo.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\FILETIME_TO_DATE.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\LREAL_TO_TIME_SEC.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\FILETIME_TO_TOD.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\SYSTEMTIME_TO_TIME.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\SYSTEMTIME_TO_TIME_EX.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\SYSTEMTIME_TO_TOD.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\SYSTEMTIME_TO_DATE.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\TIME_TO_FMRLREAL.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Conversions\TIME_TO_SYSTEMTIME.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\createTOD.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\getDateAndTimeDelta.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\getTonCountdown.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\LivebitCheck.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Ontime.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\OntimeExt.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\OntimeSimple.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\Pulse.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\SensorTimeoutCheck.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\systemtimeInCam.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\systemtimeCmp.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\systemtimeInWin.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\TimeSwitch.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\TONRecord.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\TONTOF.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="POUs\TimeHelper\VeloLinearMeasurement.TcPOU">
+      <SubType>Code</SubType>
+      <ObjectProtection>00000000-0000-0000-0000-000000000000</ObjectProtection>
+    </Compile>
+    <Compile Include="Version\disclaimerStatement.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Version\Global_Version.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <PlaceholderReference Include="Tc2_Drive">
+      <DefaultResolution>Tc2_Drive, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_Drive</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_EtherCAT">
+      <DefaultResolution>Tc2_EtherCAT, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_EtherCAT</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_IoFunctions">
+      <DefaultResolution>Tc2_IoFunctions, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_IoFunctions</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_Math">
+      <DefaultResolution>Tc2_Math, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_Math</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_MC2">
+      <DefaultResolution>Tc2_MC2, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_MC2</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_MC2_Camming">
+      <DefaultResolution>Tc2_MC2_Camming, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_MC2_Camming</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_MC2_Drive">
+      <DefaultResolution>Tc2_MC2_Drive, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_MC2_Drive</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_MC2_FlyingSaw">
+      <DefaultResolution>Tc2_MC2_FlyingSaw, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_MC2_FlyingSaw</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_MDP">
+      <DefaultResolution>Tc2_MDP, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_MDP</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_ModbusRTU">
+      <DefaultResolution>Tc2_ModbusRTU, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_ModbusRTU</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_ModbusSrv">
+      <DefaultResolution>Tc2_ModbusSrv, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_ModbusSrv</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_NC">
+      <DefaultResolution>Tc2_NC, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_NC</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_NCI">
+      <DefaultResolution>Tc2_NCI, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_NCI</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_NcKinematicTransformation">
+      <DefaultResolution>Tc2_NcKinematicTransformation, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_NcKinematicTransformation</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_PlcInterpolation">
+      <DefaultResolution>Tc2_PlcInterpolation, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_PlcInterpolation</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_SerialCom">
+      <DefaultResolution>Tc2_SerialCom, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_SerialCom</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_Smtp">
+      <DefaultResolution>Tc2_Smtp, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_Smtp</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_Standard">
+      <DefaultResolution>Tc2_Standard, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_Standard</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_SUPS">
+      <DefaultResolution>Tc2_SUPS, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_SUPS</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_System">
+      <DefaultResolution>Tc2_System, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_System</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_TcpIp">
+      <DefaultResolution>Tc2_TcpIp, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_TcpIp</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_Utilities">
+      <DefaultResolution>Tc2_Utilities, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_Utilities</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_XmlDataSrv">
+      <DefaultResolution>Tc2_XmlDataSrv, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_XmlDataSrv</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc3_Module">
+      <DefaultResolution>Tc3_Module, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc3_Module</Namespace>
+    </PlaceholderReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="EngineeringToolbox.tmc">
+      <SubType>Content</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <SubObject Include="AnalogIn.Error" />
+    <SubObject Include="AnalogIn.Error.Get" />
+    <SubObject Include="AnalogIn.Limit_1" />
+    <SubObject Include="AnalogIn.Limit_1.Get" />
+    <SubObject Include="AnalogIn.Limit_2" />
+    <SubObject Include="AnalogIn.Limit_2.Get" />
+    <SubObject Include="AnalogIn.Overrange" />
+    <SubObject Include="AnalogIn.Overrange.Get" />
+    <SubObject Include="AnalogIn.SyncError" />
+    <SubObject Include="AnalogIn.SyncError.Get" />
+    <SubObject Include="AnalogIn.TxPDOState" />
+    <SubObject Include="AnalogIn.TxPDOState.Get" />
+    <SubObject Include="AnalogIn.TxPDOToggle" />
+    <SubObject Include="AnalogIn.TxPDOToggle.Get" />
+    <SubObject Include="AnalogIn.Underrange" />
+    <SubObject Include="AnalogIn.Underrange.Get" />
+    <SubObject Include="AnalogIn32.Error" />
+    <SubObject Include="AnalogIn32.Error.Get" />
+    <SubObject Include="AnalogIn32.Limit_1" />
+    <SubObject Include="AnalogIn32.Limit_1.Get" />
+    <SubObject Include="AnalogIn32.Limit_2" />
+    <SubObject Include="AnalogIn32.Limit_2.Get" />
+    <SubObject Include="AnalogIn32.optEnable24BitResolution" />
+    <SubObject Include="AnalogIn32.optEnable24BitResolution.Get" />
+    <SubObject Include="AnalogIn32.optEnable24BitResolution.Set" />
+    <SubObject Include="AnalogIn32.optEnableScaleExtRangeMode" />
+    <SubObject Include="AnalogIn32.optEnableScaleExtRangeMode.Get" />
+    <SubObject Include="AnalogIn32.optEnableScaleExtRangeMode.Set" />
+    <SubObject Include="AnalogIn32.optEnableScaleSignedValue" />
+    <SubObject Include="AnalogIn32.optEnableScaleSignedValue.Get" />
+    <SubObject Include="AnalogIn32.optEnableScaleSignedValue.Set" />
+    <SubObject Include="AnalogIn32.optShiftValueBy8Bits" />
+    <SubObject Include="AnalogIn32.optShiftValueBy8Bits.Get" />
+    <SubObject Include="AnalogIn32.optShiftValueBy8Bits.Set" />
+    <SubObject Include="AnalogIn32.Overrange" />
+    <SubObject Include="AnalogIn32.Overrange.Get" />
+    <SubObject Include="AnalogIn32.SyncError" />
+    <SubObject Include="AnalogIn32.SyncError.Get" />
+    <SubObject Include="AnalogIn32.TxPDOState" />
+    <SubObject Include="AnalogIn32.TxPDOState.Get" />
+    <SubObject Include="AnalogIn32.TxPDOToggle" />
+    <SubObject Include="AnalogIn32.TxPDOToggle.Get" />
+    <SubObject Include="AnalogIn32.Underrange" />
+    <SubObject Include="AnalogIn32.Underrange.Get" />
+    <SubObject Include="AnalogInREAL.Error" />
+    <SubObject Include="AnalogInREAL.Error.Get" />
+    <SubObject Include="AnalogInREAL.Limit_1" />
+    <SubObject Include="AnalogInREAL.Limit_1.Get" />
+    <SubObject Include="AnalogInREAL.Limit_2" />
+    <SubObject Include="AnalogInREAL.Limit_2.Get" />
+    <SubObject Include="AnalogInREAL.optEnableScaleExtRangeMode" />
+    <SubObject Include="AnalogInREAL.optEnableScaleExtRangeMode.Get" />
+    <SubObject Include="AnalogInREAL.optEnableScaleExtRangeMode.Set" />
+    <SubObject Include="AnalogInREAL.Overrange" />
+    <SubObject Include="AnalogInREAL.Overrange.Get" />
+    <SubObject Include="AnalogInREAL.TareActive" />
+    <SubObject Include="AnalogInREAL.TareActive.Get" />
+    <SubObject Include="AnalogInREAL.TxPDOState" />
+    <SubObject Include="AnalogInREAL.TxPDOState.Get" />
+    <SubObject Include="AnalogInREAL.TxPDOToggle" />
+    <SubObject Include="AnalogInREAL.TxPDOToggle.Get" />
+    <SubObject Include="AnalogInREAL.Underrange" />
+    <SubObject Include="AnalogInREAL.Underrange.Get" />
+    <SubObject Include="AxDriveSoE_Ax5000CalcPower.get_P_WORD" />
+    <SubObject Include="AxDriveSoE_Ax5000CalcPower.get_S_WORD" />
+    <SubObject Include="AxDriveSoE_Ax5000SwitchParamSet.setNewParam" />
+    <SubObject Include="AxPara.deviceAddrIsValid" />
+    <SubObject Include="AxPara.deviceAddrIsValid.Get" />
+    <SubObject Include="AxPara.getValue" />
+    <SubObject Include="AxPara.seqRead" />
+    <SubObject Include="AxPara.seqWrite" />
+    <SubObject Include="AxPara.setValue" />
+    <SubObject Include="EL150x.WriteConfigDoubleChMode" />
+    <SubObject Include="EL150x.WriteConfigSingleChMode" />
+    <SubObject Include="EL151x.WriteConfigDoubleChMode" />
+    <SubObject Include="EL151x.WriteConfigSingleChMode" />
+    <SubObject Include="EL3681.autorangeIsDisabled" />
+    <SubObject Include="EL3681.autorangeIsDisabled.Get" />
+    <SubObject Include="EL3681.calibrationInProgress" />
+    <SubObject Include="EL3681.calibrationInProgress.Get" />
+    <SubObject Include="EL3681.dataInvalid" />
+    <SubObject Include="EL3681.dataInvalid.Get" />
+    <SubObject Include="EL3681.disableAutorange" />
+    <SubObject Include="EL3681.disableAutorange.Get" />
+    <SubObject Include="EL3681.disableAutorange.Set" />
+    <SubObject Include="EL3681.inError" />
+    <SubObject Include="EL3681.inError.Get" />
+    <SubObject Include="EL3681.inExtendedRange" />
+    <SubObject Include="EL3681.inExtendedRange.Get" />
+    <SubObject Include="EL3681.overrange" />
+    <SubObject Include="EL3681.overrange.Get" />
+    <SubObject Include="EL3681.rangeInvalid" />
+    <SubObject Include="EL3681.rangeInvalid.Get" />
+    <SubObject Include="EL3681.setControlMode" />
+    <SubObject Include="EL3681.setControlMode.Get" />
+    <SubObject Include="EL3681.setControlMode.Set" />
+    <SubObject Include="EL3681.setControlRange" />
+    <SubObject Include="EL3681.setControlRange.Get" />
+    <SubObject Include="EL3681.setControlRange.Set" />
+    <SubObject Include="EL3681.startCalibration" />
+    <SubObject Include="EL3681.startCalibration.Get" />
+    <SubObject Include="EL3681.startCalibration.Set" />
+    <SubObject Include="EL3681.underrange" />
+    <SubObject Include="EL3681.underrange.Get" />
+    <SubObject Include="MDP_IpcDiag_wEvents._callEvents" />
+    <SubObject Include="ModbusSlaveBase.run" />
+    <SubObject Include="NciAdmin.reset" />
+    <SubObject Include="NciAdmin.singleBlockModeChange" />
+    <SubObject Include="NciAdmin.SingleBlockModeChange" />
+    <SubObject Include="NciAdmin.singleBlockTrigNext" />
+    <SubObject Include="NciChannel.noAction" />
+    <SubObject Include="NciCreateItpTable.addCircleCIP" />
+    <SubObject Include="NciCreateItpTable.addDwellTime" />
+    <SubObject Include="NciCreateItpTable.addEndOfTable" />
+    <SubObject Include="NciCreateItpTable.addMFuncFast" />
+    <SubObject Include="NciCreateItpTable.addMFuncFastList" />
+    <SubObject Include="NciCreateItpTable.addMFuncHsk" />
+    <SubObject Include="NciCreateItpTable.addMFuncResetAllFast" />
+    <SubObject Include="NciCreateItpTable.reset" />
+    <SubObject Include="NciCreateItpTable.setAxisDynamics" />
+    <SubObject Include="NciCreateItpTable.setBaseFrame" />
+    <SubObject Include="NciCreateItpTable.setCirclePlane" />
+    <SubObject Include="NciCreateItpTable.setCoordinateSystem" />
+    <SubObject Include="NciCreateItpTable.setDynOverride" />
+    <SubObject Include="NciCreateItpTable.setGeoBezier3" />
+    <SubObject Include="NciCreateItpTable.setGeoBezier5" />
+    <SubObject Include="NciCreateItpTable.setGeoLine" />
+    <SubObject Include="NciCreateItpTable.setGeoStart" />
+    <SubObject Include="NciCreateItpTable.setHParam" />
+    <SubObject Include="NciCreateItpTable.setPathDynamics" />
+    <SubObject Include="NciCreateItpTable.setSParam" />
+    <SubObject Include="NciCreateItpTable.setTangFollowingDesc" />
+    <SubObject Include="NciCreateItpTable.setTParam" />
+    <SubObject Include="NciCreateItpTable.setVertexSmoothing" />
+    <SubObject Include="NciGrp.addAxis" />
+    <SubObject Include="NciGrp.build" />
+    <SubObject Include="NciGrp.reconfig" />
+    <SubObject Include="NciGrp.reconfigAxis" />
+    <SubObject Include="NciItp.feedTbl" />
+    <SubObject Include="NciItp.loadPrg" />
+    <SubObject Include="NciItp.reset" />
+    <SubObject Include="NciItp.startPrg" />
+    <SubObject Include="NciItp.stopPrg" />
+    <SubObject Include="NciMFnc.confirm" />
+    <SubObject Include="NciMFnc.resetFastMFunc" />
+    <SubObject Include="NciMotion.disableFeederBackup" />
+    <SubObject Include="NciMotion.enableFeederBackup" />
+    <SubObject Include="NciMotion.eStop" />
+    <SubObject Include="NciMotion.retraceBwd" />
+    <SubObject Include="NciMotion.retraceFwd" />
+    <SubObject Include="NciMotion.stepOn" />
+    <SubObject Include="NCiReadWriteRParam.read" />
+    <SubObject Include="NCiReadWriteRParam.write" />
+    <SubObject Include="NCI_REF.readStatus" />
+    <SubObject Include="NCI_REF.ReadStatus" />
+    <SubObject Include="PartsPerTime.addNewPart" />
+    <SubObject Include="PartsPerTime.reset" />
+    <SubObject Include="PIDController.reset" />
+    <SubObject Include="PIDController.synchronize" />
+  </ItemGroup>
+  <ItemGroup>
+    <LibraryReference Include="Tc2_BackupRestoreEL6900,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc2_BackupRestoreEL6900</Namespace>
+    </LibraryReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PlaceholderResolution Include="Tc2_Drive">
+      <Resolution>Tc2_Drive, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_EtherCAT">
+      <Resolution>Tc2_EtherCAT, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_IoFunctions">
+      <Resolution>Tc2_IoFunctions, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_Math">
+      <Resolution>Tc2_Math, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_MC2">
+      <Resolution>Tc2_MC2, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_MC2_Camming">
+      <Resolution>Tc2_MC2_Camming, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_MC2_Drive">
+      <Resolution>Tc2_MC2_Drive, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_MC2_FlyingSaw">
+      <Resolution>Tc2_MC2_FlyingSaw, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_MDP">
+      <Resolution>Tc2_MDP, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_ModbusRTU">
+      <Resolution>Tc2_ModbusRTU, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_ModbusSrv">
+      <Resolution>Tc2_ModbusSrv, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_NC">
+      <Resolution>Tc2_NC, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_NCI">
+      <Resolution>Tc2_NCI, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_NcKinematicTransformation">
+      <Resolution>Tc2_NcKinematicTransformation, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_PlcInterpolation">
+      <Resolution>Tc2_PlcInterpolation, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_SerialCom">
+      <Resolution>Tc2_SerialCom, 3.3.6.0 (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_Smtp">
+      <Resolution>Tc2_Smtp, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_Standard">
+      <Resolution>Tc2_Standard, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_SUPS">
+      <Resolution>Tc2_SUPS, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_System">
+      <Resolution>Tc2_System, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_TcpIp">
+      <Resolution>Tc2_TcpIp, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_Utilities">
+      <Resolution>Tc2_Utilities, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_XmlDataSrv">
+      <Resolution>Tc2_XmlDataSrv, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc3_Module">
+      <Resolution>Tc3_Module, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+  </ItemGroup>
+  <ProjectExtensions>
+    <PlcProjectOptions>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="OptionKey">
+      <v n="Name">"&lt;ProjectRoot&gt;"</v>
+      <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
+        <v>{FE9F63D4-9E34-43ce-9322-D46747A00F33}</v>
+        <o>
+          <v n="Name">"{FE9F63D4-9E34-43ce-9322-D46747A00F33}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String">
+            <v>SourceDownloadContent</v>
+            <v>1</v>
+            <v>SourceDownloadContent2</v>
+            <a cet="Guid">
+              <v>b0b53f83-af78-49aa-8133-0063f476bd7c</v>
+            </a>
+          </d>
+        </o>
+        <v>{8F99A816-E488-41E4-9FA3-846536012284}</v>
+        <o>
+          <v n="Name">"{8F99A816-E488-41E4-9FA3-846536012284}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" />
+        </o>
+        <v>{29BD8D0C-3586-4548-BB48-497B9A01693F}</v>
+        <o>
+          <v n="Name">"{29BD8D0C-3586-4548-BB48-497B9A01693F}"</v>
+          <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
+            <v>Rules</v>
+            <o>
+              <v n="Name">"Rules"</v>
+              <d n="SubKeys" t="Hashtable" />
+              <d n="Values" t="Hashtable" />
+            </o>
+          </d>
+          <d n="Values" t="Hashtable" />
+        </o>
+        <v>{40450F57-0AA3-4216-96F3-5444ECB29763}</v>
+        <o>
+          <v n="Name">"{40450F57-0AA3-4216-96F3-5444ECB29763}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="String">
+            <v>ActiveVisuProfile</v>
+            <v>IR0whWr8bwfwBwAAiD2qpQAAAABVAgAA37x72QAAAAABAAAAAAAAAAEaUwB5AHMAdABlAG0ALgBTAHQAcgBpAG4AZwACTHsAZgA5ADUAYgBiADQAMgA2AC0ANQA1ADIANAAtADQAYgA0ADUALQA5ADQAMAAwAC0AZgBiADAAZgAyAGUANwA3AGUANQAxAGIAfQADCE4AYQBtAGUABDBUAHcAaQBuAEMAQQBUACAAMwAuADEAIABCAHUAaQBsAGQAIAA0ADAAMgA0AC4ANwAFFlAAcgBvAGYAaQBsAGUARABhAHQAYQAGTHsAMQA2AGUANQA1AGIANgAwAC0ANwAwADQAMwAtADQAYQA2ADMALQBiADYANQBiAC0ANgAxADQANwAxADMAOAA3ADgAZAA0ADIAfQAHEkwAaQBiAHIAYQByAGkAZQBzAAhMewAzAGIAZgBkADUANAA1ADkALQBiADAANwBmAC0ANABkADYAZQAtAGEAZQAxAGEALQBhADgAMwAzADUANgBhADUANQAxADQAMgB9AAlMewA5AGMAOQA1ADgAOQA2ADgALQAyAGMAOAA1AC0ANAAxAGIAYgAtADgAOAA3ADEALQA4ADkANQBmAGYAMQBmAGUAZABlADEAYQB9AAoOVgBlAHIAcwBpAG8AbgALBmkAbgB0AAwKVQBzAGEAZwBlAA0KVABpAHQAbABlAA4aVgBpAHMAdQBFAGwAZQBtAE0AZQB0AGUAcgAPDkMAbwBtAHAAYQBuAHkAEAxTAHkAcwB0AGUAbQARElYAaQBzAHUARQBsAGUAbQBzABIwVgBpAHMAdQBFAGwAZQBtAHMAUwBwAGUAYwBpAGEAbABDAG8AbgB0AHIAbwBsAHMAEyhWAGkAcwB1AEUAbABlAG0AcwBXAGkAbgBDAG8AbgB0AHIAbwBsAHMAFCRWAGkAcwB1AEUAbABlAG0AVABlAHgAdABFAGQAaQB0AG8AcgAVIlYAaQBzAHUATgBhAHQAaQB2AGUAQwBvAG4AdAByAG8AbAAWFHYAaQBzAHUAaQBuAHAAdQB0AHMAFwxzAHkAcwB0AGUAbQAYGFYAaQBzAHUARQBsAGUAbQBCAGEAcwBlABkmRABlAHYAUABsAGEAYwBlAGgAbwBsAGQAZQByAHMAVQBzAGUAZAAaCGIAbwBvAGwAGyJQAGwAdQBnAGkAbgBDAG8AbgBzAHQAcgBhAGkAbgB0AHMAHEx7ADQAMwBkADUAMgBiAGMAZQAtADkANAAyAGMALQA0ADQAZAA3AC0AOQBlADkANAAtADEAYgBmAGQAZgAzADEAMABlADYAMwBjAH0AHRxBAHQATABlAGEAcwB0AFYAZQByAHMAaQBvAG4AHhRQAGwAdQBnAGkAbgBHAHUAaQBkAB8WUwB5AHMAdABlAG0ALgBHAHUAaQBkACBIYQBmAGMAZAA1ADQANAA2AC0ANAA5ADEANAAtADQAZgBlADcALQBiAGIANwA4AC0AOQBiAGYAZgBlAGIANwAwAGYAZAAxADcAIRRVAHAAZABhAHQAZQBJAG4AZgBvACJMewBiADAAMwAzADYANgBhADgALQBiADUAYwAwAC0ANABiADkAYQAtAGEAMAAwAGUALQBlAGIAOAA2ADAAMQAxADEAMAA0AGMAMwB9ACMOVQBwAGQAYQB0AGUAcwAkTHsAMQA4ADYAOABmAGYAYwA5AC0AZQA0AGYAYwAtADQANQAzADIALQBhAGMAMAA2AC0AMQBlADMAOQBiAGIANQA1ADcAYgA2ADkAfQAlTHsAYQA1AGIAZAA0ADgAYwAzAC0AMABkADEANwAtADQAMQBiADUALQBiADEANgA0AC0ANQBmAGMANgBhAGQAMgBiADkANgBiADcAfQAmFk8AYgBqAGUAYwB0AHMAVAB5AHAAZQAnVFUAcABkAGEAdABlAEwAYQBuAGcAdQBhAGcAZQBNAG8AZABlAGwARgBvAHIAQwBvAG4AdgBlAHIAdABpAGIAbABlAEwAaQBiAHIAYQByAGkAZQBzACgQTABpAGIAVABpAHQAbABlACkUTABpAGIAQwBvAG0AcABhAG4AeQAqHlUAcABkAGEAdABlAFAAcgBvAHYAaQBkAGUAcgBzACs4UwB5AHMAdABlAG0ALgBDAG8AbABsAGUAYwB0AGkAbwBuAHMALgBIAGEAcwBoAHQAYQBiAGwAZQAsEnYAaQBzAHUAZQBsAGUAbQBzAC1INgBjAGIAMQBjAGQAZQAxAC0AZAA1AGQAYwAtADQAYQAzAGIALQA5ADAANQA0AC0AMgAxAGYAYQA3ADUANgBhADMAZgBhADQALihJAG4AdABlAHIAZgBhAGMAZQBWAGUAcgBzAGkAbwBuAEkAbgBmAG8AL0x7AGMANgAxADEAZQA0ADAAMAAtADcAZgBiADkALQA0AGMAMwA1AC0AYgA5AGEAYwAtADQAZQAzADEANABiADUAOQA5ADYANAAzAH0AMBhNAGEAagBvAHIAVgBlAHIAcwBpAG8AbgAxGE0AaQBuAG8AcgBWAGUAcgBzAGkAbwBuADIMTABlAGcAYQBjAHkAMzBMAGEAbgBnAHUAYQBnAGUATQBvAGQAZQBsAFYAZQByAHMAaQBvAG4ASQBuAGYAbwA0MEwAbwBhAGQATABpAGIAcgBhAHIAaQBlAHMASQBuAHQAbwBQAHIAbwBqAGUAYwB0ADUaQwBvAG0AcABhAHQAaQBiAGkAbABpAHQAeQDQAAIaA9ADAS0E0AUGGgfQBwgaAUUHCQjQAAkaBEUKCwQDAAAABQAAAA0AAAAAAAAA0AwLrQIAAADQDQEtDtAPAS0Q0AAJGgRFCgsEAwAAAAUAAAANAAAAKAAAANAMC60BAAAA0A0BLRHQDwEtENAACRoERQoLBAMAAAAFAAAADQAAAAAAAADQDAutAgAAANANAS0S0A8BLRDQAAkaBEUKCwQDAAAABQAAAA0AAAAUAAAA0AwLrQIAAADQDQEtE9APAS0Q0AAJGgRFCgsEAwAAAAUAAAANAAAAAAAAANAMC60CAAAA0A0BLRTQDwEtENAACRoERQoLBAMAAAAFAAAADQAAAAAAAADQDAutAgAAANANAS0V0A8BLRDQAAkaBEUKCwQDAAAABQAAAA0AAAAAAAAA0AwLrQIAAADQDQEtFtAPAS0X0AAJGgRFCgsEAwAAAAUAAAANAAAAKAAAANAMC60EAAAA0A0BLRjQDwEtENAZGq0BRRscAdAAHBoCRR0LBAMAAAAFAAAADQAAAAAAAADQHh8tINAhIhoCRSMkAtAAJRoFRQoLBAMAAAADAAAAAAAAAAoAAADQJgutAAAAANADAS0n0CgBLRHQKQEtENAAJRoFRQoLBAMAAAADAAAAAAAAAAoAAADQJgutAQAAANADAS0n0CgBLRHQKQEtEJoqKwFFAAEC0AABLSzQAAEtF9AAHy0t0C4vGgPQMAutAQAAANAxC60XAAAA0DIarQDQMy8aA9AwC60CAAAA0DELrQMAAADQMhqtANA0Gq0A0DUarQA=</v>
+          </d>
+        </o>
+        <v>{A3BBA713-63D7-4de6-BEC2-E3BAAD8789F8}</v>
+        <o>
+          <v n="Name">"{A3BBA713-63D7-4de6-BEC2-E3BAAD8789F8}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" />
+        </o>
+        <v>{C70B7845-2722-4a9b-A0EA-88C877A4B36F}</v>
+        <o>
+          <v n="Name">"{C70B7845-2722-4a9b-A0EA-88C877A4B36F}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String">
+            <v>MaxAuthenticationTrials</v>
+            <v>3</v>
+            <v>UserList</v>
+            <o t="UserList">
+              <a n="Users" cet="User">
+                <o>
+                  <v n="Id">{d30f38fb-61f6-4781-9dba-e2b624366659}</v>
+                  <v n="Name">"Owner"</v>
+                  <v n="FullName">""</v>
+                  <v n="Description">""</v>
+                  <v n="Active">true</v>
+                </o>
+              </a>
+            </o>
+            <v>MaxTimeOfInactivity</v>
+            <v>10</v>
+            <v>EnableMaxTimeOfInactivity</v>
+            <v>true</v>
+            <v>GroupList</v>
+            <o t="GroupList">
+              <a n="Groups" cet="Group">
+                <o>
+                  <v n="Id">{d678e7b5-032c-43b9-a256-24ae2e52ef59}</v>
+                  <v n="Name">"Owner"</v>
+                  <v n="Description">""</v>
+                  <v n="IsEveryoneGroup">false</v>
+                  <v n="IsOwnerGroup">true</v>
+                  <l n="UserMembers" t="ArrayList" cet="Guid">
+                    <v>d30f38fb-61f6-4781-9dba-e2b624366659</v>
+                  </l>
+                  <l n="GroupMembers" t="ArrayList" />
+                </o>
+                <o>
+                  <v n="Id">{f03aba62-fdce-4115-9915-7fbe7c189813}</v>
+                  <v n="Name">"Everyone"</v>
+                  <v n="Description">""</v>
+                  <v n="IsEveryoneGroup">true</v>
+                  <v n="IsOwnerGroup">false</v>
+                  <l n="UserMembers" t="ArrayList" cet="Guid">
+                    <v>d30f38fb-61f6-4781-9dba-e2b624366659</v>
+                  </l>
+                  <l n="GroupMembers" t="ArrayList" />
+                </o>
+              </a>
+            </o>
+            <v>UserAuthentication</v>
+            <o t="UserAuthentication">
+              <d n="UserToPasswordHash" t="Hashtable" ckt="Guid" cvt="String">
+                <v>d30f38fb-61f6-4781-9dba-e2b624366659</v>
+                <v>d41d8cd98f00b204e9800998ecf8427e</v>
+              </d>
+            </o>
+            <v>EnableMaxAuthenticationTrials</v>
+            <v>true</v>
+          </d>
+        </o>
+        <v>{192FAD59-8248-4824-A8DE-9177C94C195A}</v>
+        <o>
+          <v n="Name">"{192FAD59-8248-4824-A8DE-9177C94C195A}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" />
+        </o>
+        <v>{535658C0-5AF5-460d-99A4-BFFB984A829A}</v>
+        <o>
+          <v n="Name">"{535658C0-5AF5-460d-99A4-BFFB984A829A}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="NewestVersionConstraintToSave">
+            <v>VersionConstraint</v>
+            <o />
+          </d>
+        </o>
+        <v>{F66C7017-BDD8-4114-926C-81D6D687E35F}</v>
+        <o>
+          <v n="Name">"{F66C7017-BDD8-4114-926C-81D6D687E35F}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" />
+        </o>
+        <v>{246001F4-279D-43AC-B241-948EB31120E1}</v>
+        <o>
+          <v n="Name">"{246001F4-279D-43AC-B241-948EB31120E1}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String">
+            <v>GlobalVisuImageFilePath</v>
+            <v>"%APPLICATIONPATH%\;.\"</v>
+            <v>UnicodeStrings</v>
+            <v>false</v>
+          </d>
+        </o>
+      </d>
+      <d n="Values" t="Hashtable" />
+    </o>
+        </Data>
+        <TypeList>
+          <Type n="ArrayList">System.Collections.ArrayList</Type>
+          <Type n="Boolean">System.Boolean</Type>
+          <Type n="Group">{daecd4be-1e2b-4335-a125-4a1ac83ea49f}</Type>
+          <Type n="GroupList">{bf4dffda-f055-446d-9d7a-5f126720896b}</Type>
+          <Type n="Guid">System.Guid</Type>
+          <Type n="Guid[]">System.Guid[]</Type>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="Int32">System.Int32</Type>
+          <Type n="NewestVersionConstraintToSave">{af9bafe2-ba31-4b15-a2b9-48a0f2cd09fb}</Type>
+          <Type n="OptionKey">{54dd0eac-a6d8-46f2-8c27-2f43c7e49861}</Type>
+          <Type n="String">System.String</Type>
+          <Type n="User">{cd83029e-13b0-491e-9e4b-921adda0d86b}</Type>
+          <Type n="UserAuthentication">{3635a671-97f5-41bb-9e29-0ebb9795975c}</Type>
+          <Type n="UserList">{9fe6b547-6bc8-4f11-b589-b517860c5891}</Type>
+        </TypeList>
+      </XmlArchive>
+    </PlcProjectOptions>
+  </ProjectExtensions>
+  <!-- 
+   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\Debug\</OutputPath>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\Release\</OutputPath>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+-->
+</Project>

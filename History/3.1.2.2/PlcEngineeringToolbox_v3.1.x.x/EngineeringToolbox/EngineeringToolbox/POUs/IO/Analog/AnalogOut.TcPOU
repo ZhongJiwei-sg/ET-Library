@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AnalogOut" Id="{b2229012-40b9-4d3f-b387-9da162465fb5}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Provides an INT output varibale (Q	AT  %Q* : 	INT) to writed a scaled lreal value to an anallog output (terminal)
+FUNCTION_BLOCK AnalogOut
+VAR_INPUT
+	SetValue												: 	LREAL 	:= 0.0;	
+	MinValue												: 	LREAL 	:= 0.0;
+	MaxValue												: 	LREAL 	:= 0.0;	
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE 	:= 2#0000_0000; (* .0 = FALSE scale output to 0 - 32767 / TRUE = scale output from -32768 to +32767 *)
+END_VAR             							
+VAR_OUTPUT          							
+	Q												AT  %Q* : 	INT; (* Hardware Output *)
+END_VAR             							
+VAR                 							
+	x														:	LREAL;
+END_VAR                 						]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Analogvalue output	 													    *)
+(* resolution  							/ 0V = 0 / 10V = 32768 / -10V = - 32767 *)
+(********************************************************************************)
+
+(* standardization **************************************************************)
+	Q															:= TO_INT(Scale(SetValue,MinValue,MAxValue,SEL(Options.0 , 0.0  , -32768.0), 32767.0));		
+
+(*********************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="optEnableScaleSignedValue" Id="{192ee4c2-8b0e-45a3-a124-0d3221324017}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableScaleSignedValue : bool]]></Declaration>
+      <Get Name="Get" Id="{2d36b128-7686-41e4-b823-24a7bf080089}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableScaleSignedValue := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c94eb3db-2640-4540-9ac0-6994e2fcf37b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableScaleSignedValue;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="AnalogOut">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogOut.optEnableScaleSignedValue.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogOut.optEnableScaleSignedValue.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

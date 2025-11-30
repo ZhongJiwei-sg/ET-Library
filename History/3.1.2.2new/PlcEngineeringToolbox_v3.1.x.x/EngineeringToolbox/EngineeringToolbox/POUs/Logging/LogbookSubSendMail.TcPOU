@@ -1,0 +1,383 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="LogbookSubSendMail" Id="{282d0bf4-031f-4ea8-9a4b-ef33f8d851e1}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+//The LogbookSubSendMail sends log entries via email which are handed over by the Logbook Puplisher 
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK LogbookSubSendMail IMPLEMENTS I_LogbookSubscriber
+VAR CONSTANT
+	MAX_BUFFER_LEVEL										:	INT := 85; //If buffer fill level reaches 85% Fb will appear as "busy2 to the LogBookPuplisher 
+END_VAR
+VAR_OUTPUT CONSTANT 
+	STRING_LINE_END_SIGN									: STRING(6) := '$r$n'; //$r $n
+
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_TIMESTAMP_TO_MSG								: BYTE := 2#0000_0001; 	
+{attribute 'displaymode':='binary'}
+	OPTION_SEND_STORED_MSG_WITH_DISABLE						: BYTE := 2#0010_0000; //Send stored messages if FB gets disabled to clear buffer 	
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_BUFFER_ERROR								: BYTE := 2#0100_0000; //The FB changes to error state if the buffer was not emptied in time 
+END_VAR                     								
+VAR_INPUT                   								
+	Enable													: BOOL; //Enable write log entries to file
+	ResetTrig												: BOOL; //Reset internal error
+{attribute 'displaymode':='binary'}
+	Options													: BYTE := 2#0000_0000; // Bit 0 = Add msg timestamnp to entry string 	 
+	SendByNoOfMsg											: INT := PARAM.LOGBOOK_MAX_DATA; //Collected number of messages until a mail will be send
+	PT_SendByTime											: TIME := T#60M; //Delay until a mail will be send if a message occured
+	LogPriorityLevel										:	UINT := 0; 		//Correlate to EventClass prioritys - see Para.EVENT_HANDLING_CONFIG prioritys
+	
+//Smtp parameter
+	SmtpServer												: T_AmsNetID;   // Smtp Server addres ( IP or Name)                  
+	Username												: T_MaxString;  // Smtp Username 
+	Password												: T_MaxString;  // Smtp Password                 
+	Encryption												: UDINT;        // 0=NONE, 1=STARTTLS, 2=SSL                 
+	FromUser												: T_MaxString;  // Sender string
+	ToNames													: T_MaxString;  // To recipient string                   
+	CcNames													: T_MaxString;  // Cc recipient string           
+	Subject													: T_MaxString;  // Email subject            
+END_VAR                     								                 								
+VAR_OUTPUT       
+	CntNoOfStoredMsgs										: INT;
+	TimeSendMsgs											: TIME; //Elapsed time to send messages
+	Busy													: BOOL; //Write msg to file active   
+	Error													: BOOL;        		
+{attribute 'displaymode':='hex'}						
+	ErrorId													: UDINT; 
+END_VAR                     								
+VAR            
+//local ************************************************************************************
+	State													: INT := 0;
+	LastMessageData											: LogbookData;	
+	LastEventClass											:	E_TcEventClass := TC2_SYSTEM.TCEVENTCLASS_NONE;
+	MsgString												: T_MAxString;
+	StartTimeSendMsgs										:	TIME; 
+				
+//trigger *********************************************************************************
+	
+//timer ***********************************************************************************
+	tonSend													:	ton;
+
+//instances ***********************************************************************************             								
+	DblBuffer												: DoubleBuffer;    
+
+	Smtp													: FB_SmtpV3 := (
+																	sNetId         	:= '',
+																	sSmtpServer     := '',  (* Smtp Server addres ( IP or Name) *)
+																	sUsername       := '',  (* Smtp Username *)
+																	sPassword       := '',  (* Smtp Password *)
+																	nEncryption     := 0,   (* 0=NONE, 1=STARTTLS, 2=SSL *)
+																	sFrom           := '',	(* Sender string *)
+																	sTo             := '',  (* To recipient string *)
+																	sCc             := '',  (* Cc recipient string *)
+																	sBcc            := '', (* Bcc recipient string *)
+																	sSubject        := '', (* Subject string *)
+																	tTimeout        := T#20S);
+
+
+//Dummys ****************************************************************************************
+	i,j														: INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Logbook subscriber send mail 						*)
+	(********************************************************)
+
+(* Sequence started by method "NewMessage" ***************************************************)
+	CASE State OF
+	0:	
+		IF Error
+		THEN
+			IF ResetTrig OR NOT Enable
+			THEN
+				Error										:= FALSE;
+				ErrorId										:= 0;
+				Smtp(bExecute := FALSE);
+			END_IF
+		ELSIF Enable
+		THEN 
+			DblBUffer.SizeOfMemory							:= TO_UDINT(SendByNoOfMsg) * SIZEOF(MsgString) * 2;
+			
+			tonSend(IN := PT_SendByTime > T#0MS AND CntNoOfStoredMsgs > 0, PT := PT_SendByTime);
+			
+			IF NOT DblBuffer.ReadyToRead 
+				AND(tonSend.Q OR CntNoOfStoredMsgs > SendByNoOfMsg)
+			THEN 
+				DblBuffer.setReadyToRead(TRUE);
+			END_IF
+			
+			IF DblBuffer.ReadyToRead 			
+			THEN
+				tonSend(IN := FALSE);
+				CntNoOfStoredMsgs							:= 0;
+				StartTimeSendMsgs							:= TIME();
+				
+				Smtp(
+					sNetId		:= , 
+					sSmtpServer	:= SmtpServer, 
+					sUsername	:= Username, 
+					sPassword	:= Password, 
+					nEncryption	:= Encryption, 
+					sFrom		:= FromUser, 
+					sTo			:= ToNames, 
+					sCc			:= CcNames, 
+					sBcc		:= , 
+					sSubject	:= Subject, 
+					pMessage	:= DblBuffer.pDataToRead, 
+					cbMessage	:= DblBuffer.SizeOfDataToRead, 
+					bExecute	:= TRUE, 
+					tTimeout	:= , 
+					bBusy		=> , 
+					bError		=> , 
+					nErrId		=> );
+													
+				state										:= 1;
+			END_IF
+		ELSE //not enabled
+			IF NOT DblBuffer.Empty AND Options.5
+			THEN //Write rest of buffer
+				IF NOT DblBuffer.ReadyToRead THEN DblBuffer.setReadyToRead(TRUE); END_IF 
+				Smtp(
+					sNetId		:= , 
+					sSmtpServer	:= SmtpServer, 
+					sUsername	:= Username, 
+					sPassword	:= Password, 
+					nEncryption	:= Encryption, 
+					sFrom		:= FromUser, 
+					sTo			:= ToNames, 
+					sCc			:= CcNames, 
+					sBcc		:= , 
+					sSubject	:= Subject, 
+					pMessage	:= DblBuffer.pDataToRead, 
+					cbMessage	:= DblBuffer.SizeOfDataToRead, 
+					bExecute	:= TRUE, 
+					tTimeout	:= , 
+					bBusy		=> , 
+					bError		=> , 
+					nErrId		=> );
+				CntNoOfStoredMsgs							:= 0;
+				StartTimeSendMsgs							:= TIME();
+				State										:= 1;
+			END_IF
+		END_IF
+				
+	1:
+		Smtp(bExecute	:= TRUE, pMessage := DblBuffer.pDataToRead,  cbMessage := DblBuffer.SizeOfDataToRead);
+		IF NOT Smtp.bBusy
+		THEN
+			IF Smtp.bError
+			THEN
+				Error										:= TRUE;
+				ErrorId										:= Smtp.nErrId;
+				State										:= 0;
+			ELSE				
+				State										:= 0;
+			END_IF 
+			DblBuffer.setReadyToRead(FALSE);	
+			TimeSendMsgs									:= TIME() - StartTimeSendMsgs;
+			Smtp(bExecute	:= FALSE);
+		END_IF 
+	ELSE
+		;
+	END_CASE
+
+(* Ack ErrorIds **********************************************************)
+	Busy 													:= State <> 0;
+(**************************************************************************)
+
+
+
+]]></ST>
+    </Implementation>
+    <Method Name="addNewMessage" Id="{9b717089-b417-4bfb-ad2c-b99f7e9ebb34}">
+      <Declaration><![CDATA[METHOD PUBLIC FINAL addNewMessage : BOOL //Return value = TRUE if execution successful finished
+VAR_IN_OUT
+	data													:	LogbookData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	
+	IF Enable AND NOT Error
+	THEN	
+		LastMessageData										:= Data;
+		LastEventClass.0									:= LastMessageData.Options.8;
+		LastEventClass.1									:= LastMessageData.Options.9;
+		LastEventClass.2									:= LastMessageData.Options.10;
+		LastEventClass.3									:= LastMessageData.Options.11;
+			
+		//Copy messages to memory	
+		IF LogPriorityLevel = 0 OR_ELSE GetEventClassPriority(LastEventClass) > LogPriorityLevel
+		THEN	
+			MEMSET(ADR(MsgString),0,SIZEOF(MsgString));										
+			IF 1 = (Options AND OPTION_ADD_TIMESTAMP_TO_MSG) 					
+			THEN
+				MsgString									:=	SYSTEMTIME_TO_STRING(LastMessageData.Timestamp);
+				MsgString									:=	MID(MsgString, 12 , 12);
+				MsgString 									:=	CONCAT(MsgString, ' | ');
+			END_IF                          	
+			MsgString 										:= 	CONCAT(MsgString, LastMessageData.Msg);
+			MsgString 										:= 	CONCAT(MsgString, STRING_LINE_END_SIGN);
+
+			//Add msg to memory
+			CntNoOfStoredMsgs								:= CntNoOfStoredMsgs + 1;
+			
+			IF DblBuffer.addString(MsgString) <> S_OK
+				AND Options.6
+			THEN
+				Error										:= TRUE;
+				ErrorId										:= HRESULT_TO_ADSERROR(DblBuffer.hr);	
+			END_IF	
+		END_IF
+	
+		addNewMessage										:= NOT Error;
+	ELSE
+		addNewMessage										:= FALSE;
+	END_IF
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isBusy" Id="{c2ba594b-d7a4-4290-8a8c-17284d3625c9}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC FINAL isBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ea1837fa-7f3b-4108-94ae-b22fd7317556}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy											:= DblBuffer.Full and Enable and not Error and DblBuffer.fillLevel >= MAX_BUFFER_LEVEL;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="optAddTimeToMsg" Id="{a2b0701c-213e-43ba-9103-5a163e43f77f}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAddTimeToMsg : BOOL]]></Declaration>
+      <Get Name="Get" Id="{92fec4e8-fe2b-433d-a734-6a966c41f746}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAddTimeToMsg := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{4012fd5f-7669-4148-8aab-11ee32d7a7d7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optAddTimeToMsg;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableBufferError" Id="{981e88c8-155a-4cc1-a31c-76329d953772}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableBufferError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{15a46b16-9b41-48de-a50d-1b8ba3deeda3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableBufferError := Options.6;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c28df464-7aa0-4952-b13c-69706a50c60b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.6				:= optEnableBufferError;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optSendMsgIfDisabled" Id="{fc484bc5-1078-4e5e-b7f7-f0e7b3b36a3a}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optSendMsgIfDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a19513da-a116-462b-91b7-090e9ca0ad28}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optSendMsgIfDisabled := Options.5;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e559ab65-e8b9-4c9a-8086-1e6538a094d7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.5 := optSendMsgIfDisabled;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="LogbookSubSendMail">
+      <LineId Id="299" Count="11" />
+      <LineId Id="471" Count="0" />
+      <LineId Id="311" Count="2" />
+      <LineId Id="322" Count="0" />
+      <LineId Id="528" Count="0" />
+      <LineId Id="323" Count="0" />
+      <LineId Id="488" Count="0" />
+      <LineId Id="479" Count="0" />
+      <LineId Id="481" Count="2" />
+      <LineId Id="480" Count="0" />
+      <LineId Id="484" Count="0" />
+      <LineId Id="324" Count="0" />
+      <LineId Id="472" Count="0" />
+      <LineId Id="485" Count="0" />
+      <LineId Id="478" Count="0" />
+      <LineId Id="486" Count="0" />
+      <LineId Id="525" Count="0" />
+      <LineId Id="473" Count="0" />
+      <LineId Id="326" Count="16" />
+      <LineId Id="475" Count="0" />
+      <LineId Id="347" Count="0" />
+      <LineId Id="487" Count="0" />
+      <LineId Id="351" Count="0" />
+      <LineId Id="493" Count="2" />
+      <LineId Id="503" Count="16" />
+      <LineId Id="496" Count="3" />
+      <LineId Id="491" Count="0" />
+      <LineId Id="527" Count="0" />
+      <LineId Id="352" Count="4" />
+      <LineId Id="360" Count="7" />
+      <LineId Id="604" Count="0" />
+      <LineId Id="526" Count="0" />
+      <LineId Id="451" Count="0" />
+      <LineId Id="368" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSendMail.addNewMessage">
+      <LineId Id="4" Count="2" />
+      <LineId Id="62" Count="3" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="66" Count="10" />
+      <LineId Id="82" Count="1" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="92" Count="1" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="47" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSendMail.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSendMail.optAddTimeToMsg.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSendMail.optAddTimeToMsg.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSendMail.optEnableBufferError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSendMail.optEnableBufferError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSendMail.optSendMsgIfDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSendMail.optSendMsgIfDisabled.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

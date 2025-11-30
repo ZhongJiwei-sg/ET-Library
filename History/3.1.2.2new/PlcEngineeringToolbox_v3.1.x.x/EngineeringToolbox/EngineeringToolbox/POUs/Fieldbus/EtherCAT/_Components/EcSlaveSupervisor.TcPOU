@@ -1,0 +1,246 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="EcSlaveSupervisor" Id="{7040e898-b768-4182-bf84-df856e2e99be}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+(* Set EtherCAT state(ReqState <> 0) or read state and CRC error counter of EtherCAT slave *)
+FUNCTION_BLOCK EcSlaveSupervisor Extends FbBase
+VAR_INPUT
+	EcMasterAmsNetId										:	T_AmsNetId;
+	SlaveAddr												: 	UINT; 		//-> Slave Port number!
+{attribute 'displaymode':='hex'}
+	ReqState												:	WORD := 0; (* 	EC_DEVICE_STATE_INIT		:BYTE 	:=16#01;
+																				EC_DEVICE_STATE_PREOP		:BYTE 	:=16#02;
+																				EC_DEVICE_STATE_BOOTSTRAP	:BYTE 	:=16#03;
+																				EC_DEVICE_STATE_SAFEOP		:BYTE 	:=16#04;
+																				EC_DEVICE_STATE_OP			:BYTE 	:=16#08; *)																				
+END_VAR                     							
+VAR_OUTPUT                  							
+{attribute 'displaymode':='hex'}
+	CurrState												: 	BYTE;	(* Shows current state 																					
+																				EC_DEVICE_STATE_INIT		:BYTE 	:=16#01;
+																				EC_DEVICE_STATE_PREOP		:BYTE 	:=16#02;
+																				EC_DEVICE_STATE_BOOTSTRAP	:BYTE 	:=16#03;
+																				EC_DEVICE_STATE_SAFEOP		:BYTE 	:=16#04;
+																				EC_DEVICE_STATE_OP			:BYTE 	:=16#08; *)
+{attribute 'displaymode':='hex'}
+	linkState												: 	BYTE;	(* Shows state of link
+																				EC_LINK_STATE_OK :BYTE :=16#00;
+																				EC_LINK_STATE_NOT_PRESENT :BYTE :=16#01;
+																				EC_LINK_STATE_LINK_WITHOUT_COMM :BYTE :=16#02;
+																				EC_LINK_STATE_MISSING_LINK :BYTE :=16#04;
+																				EC_LINK_STATE_ADDITIONAL_LINK :BYTE :=16#08;
+																				EC_LINK_STATE_PORT_A :BYTE :=16#10;
+																				EC_LINK_STATE_PORT_B :BYTE :=16#20;
+																				EC_LINK_STATE_PORT_C :BYTE :=16#40;
+																				EC_LINK_STATE_PORT_D :BYTE :=16#80; *)
+																				
+	ReqStateOK												:	BOOL;		//Requested state of slave is OK
+	StateBits												:	ST_EcSlaveStateBitsEx;
+	StateText												:	STRING(80);	//State as text
+	CrcError    											:    ST_EcCrcErrorEx; (*Crc error of the EtherCAT slave device*)
+END_VAR                 								
+VAR                     								
+	TON_GetStateTrig										:	TON;
+	SetSlaveState											:	FB_EcSetSlaveSTATE := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	GetSlaveState											:	FB_EcGetSlaveSTATE := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	GetSlaveCrcErrorEx 										:	FB_EcGetSlaveCrcErrorEx  := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	MemReqState												:	WORD;
+	ErrorText												:	STRING(40);
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Set EtherCAT state(ReqState <> 0) or read state and CRC error counter of EtherCAT slave *)
+	(*******************************************************************************************)
+
+(* Process ******************************************************)
+	rtExecute(CLK := Execute);
+
+	CASE state OF
+	(* cyclic reading of state ***********************************)
+	0:
+		Busy 												:= FALSE;
+
+		IF rtExecute.Q 
+		THEN
+			Busy 											:= TRUE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			Errortext										:= '';
+			CurrState										:= 0;
+			linkState										:= 0;
+			ReqStateOK										:= FALSE;
+			MEMSET(ADR(StateBits),0,SIZEOF(StateBits));
+			MEMSET(ADR(CrcError),0,SIZEOF(CrcError));	
+			StateText										:= '';
+	
+			SetSlaveSTATE(bExecute := FALSE, sNetId:= EcMasterAmsNetId,nSlaveAddr:= SlaveAddr);
+			GetSlaveSTATE(bExecute := FALSE,sNetId:= EcMasterAmsNetId,nSlaveAddr:= SlaveAddr);
+			GetSlaveCrcErrorEx(bExecute := FALSE,sNetId:= EcMasterAmsNetId,nSlaveAddr:= SlaveAddr);
+
+			IF(ReqState <> CurrState
+				OR ReqState <> MemReqState)
+				AND ReqState <> 0
+			THEN
+				SetSlaveState(bExecute:= TRUE,reqState:= ReqState);
+				MemReqState 								:= ReqState;
+				state 										:= 10;
+
+			ELSE
+				(* Start Reading State *)
+				GetSlaveState(bExecute	:= TRUE);
+				state 										:= 1;
+			END_IF
+
+		ELSIF NOT Execute 
+		THEN
+			Done 											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorText										:= '';
+		END_IF
+
+	(* Read Slave State **************************************)
+	1:
+		(* Work block *)
+		GetSlaveState();
+
+		IF NOT GetSlaveState.bBusy
+		THEN
+			IF GetSlaveState.bError THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= GetSlaveState.nErrId;
+				ErrorText									:= CONCAT('FB_EcGetSlaveSTATE Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSE       
+				ReqStateOK 									:= (ReqState = CurrState OR ReqState = 0);         					
+				CurrState 									:= GetSlaveState.state.deviceState;
+				linkState 									:= GetSlaveState.State.linkState;
+				StateText 									:= F_ConvStateToString(GetSlaveState.State.deviceState);
+			 	StateBits							 		:= F_ConvSlaveStateToBitsEx(GetSlaveState.state);
+				state										:= state + 1;
+			END_IF
+			GetSlaveSTATE(bExecute := FALSE);
+		ELSE
+			;
+		END_IF
+
+	(* Read Slave CRC Error Counter  **************************************)		
+	2: 
+		(* Work block *)
+		GetSlaveCrcErrorEx();
+
+		IF NOT GetSlaveCrcErrorEx.bBusy
+		THEN
+			IF GetSlaveCrcErrorEx.bError THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= GetSlaveCrcErrorEx.nErrId;
+				ErrorText									:= CONCAT('FB_EcGetSlaveCrcErrorEx Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSE       
+				CrcError									:= 	GetSlaveCrcErrorEx.crcError;
+				Done 										:= TRUE;
+				Busy 										:= FALSE;
+				state										:= 0;
+			END_IF
+			GetSlaveCrcErrorEx(bExecute := FALSE);
+		ELSE
+			;
+		END_IF
+
+	(* Set state  *****************************************)
+	10:	
+		SetSlaveState();  
+		IF NOT SetSlaveState.bBusy
+		THEN
+			IF SetSlaveState.bError 
+			THEN             	
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= SetSlaveState.nErrId;
+				ErrorText									:= CONCAT('FB_EcSetSlaveSTATE Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSIF SetSlaveState.CurrState.deviceState = MemReqState 
+			THEN
+				ReqStateOK									:= TRUE;
+				Busy 										:= FALSE;
+				Done 										:= TRUE;	
+				state 										:= 0;
+			ELSE                    				
+				Busy										:= FALSE;		
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_ABORTED;
+				ErrorText									:= 'SetSlaveState DEVICESTATE <> ReqState';
+				state	 									:= 0;
+			END_IF         					
+			CurrState 										:= SetSlaveState.currState.deviceState;
+			linkState 										:= SetSlaveState.currState.linkState;
+			StateText 										:= F_ConvStateToString(SetSlaveState.currState.deviceState);
+			StateBits							 			:= F_ConvSlaveStateToBitsEx(SetSlaveState.currState);
+			SetSlaveState(bExecute := FALSE);              						
+		END_IF                      						
+	END_CASE
+
+
+(*********************************************************************)
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="EcSlaveSupervisor">
+      <LineId Id="221" Count="17" />
+      <LineId Id="452" Count="3" />
+      <LineId Id="532" Count="0" />
+      <LineId Id="446" Count="0" />
+      <LineId Id="456" Count="0" />
+      <LineId Id="239" Count="1" />
+      <LineId Id="530" Count="0" />
+      <LineId Id="241" Count="5" />
+      <LineId Id="256" Count="5" />
+      <LineId Id="270" Count="3" />
+      <LineId Id="445" Count="0" />
+      <LineId Id="274" Count="7" />
+      <LineId Id="402" Count="0" />
+      <LineId Id="401" Count="0" />
+      <LineId Id="411" Count="0" />
+      <LineId Id="282" Count="0" />
+      <LineId Id="284" Count="1" />
+      <LineId Id="427" Count="0" />
+      <LineId Id="286" Count="3" />
+      <LineId Id="431" Count="0" />
+      <LineId Id="433" Count="0" />
+      <LineId Id="294" Count="3" />
+      <LineId Id="301" Count="0" />
+      <LineId Id="308" Count="0" />
+      <LineId Id="412" Count="0" />
+      <LineId Id="309" Count="2" />
+      <LineId Id="504" Count="0" />
+      <LineId Id="502" Count="1" />
+      <LineId Id="505" Count="11" />
+      <LineId Id="533" Count="0" />
+      <LineId Id="522" Count="6" />
+      <LineId Id="312" Count="0" />
+      <LineId Id="323" Count="2" />
+      <LineId Id="415" Count="0" />
+      <LineId Id="326" Count="0" />
+      <LineId Id="328" Count="0" />
+      <LineId Id="334" Count="1" />
+      <LineId Id="428" Count="0" />
+      <LineId Id="336" Count="3" />
+      <LineId Id="420" Count="1" />
+      <LineId Id="434" Count="0" />
+      <LineId Id="422" Count="2" />
+      <LineId Id="340" Count="0" />
+      <LineId Id="432" Count="0" />
+      <LineId Id="341" Count="4" />
+      <LineId Id="439" Count="2" />
+      <LineId Id="437" Count="0" />
+      <LineId Id="414" Count="0" />
+      <LineId Id="350" Count="0" />
+      <LineId Id="364" Count="0" />
+      <LineId Id="367" Count="0" />
+      <LineId Id="369" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

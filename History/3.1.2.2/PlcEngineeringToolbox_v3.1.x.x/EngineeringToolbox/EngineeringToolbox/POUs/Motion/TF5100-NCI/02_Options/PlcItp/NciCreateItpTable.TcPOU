@@ -1,0 +1,952 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="NciCreateItpTable" Id="{344560af-c818-4107-9e8a-81236f72e631}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Create Nci PlcInterpolation tabel
+//
+FUNCTION_BLOCK NciCreateItpTable
+VAR_INPUT
+	BlockNo													: UDINT := 0; //Block number addtional parameter for methods. At 0 -> block number will be automatically increased by every new entry
+	OffsetFactorTblNumber									: UDINT := 100; 
+	MaxTblNumber											: UDINT := 1000; 
+END_VAR                     								
+VAR_OUTPUT                  								
+	Table													: ST_NciFeedGroupTable;
+	FilledRows												: INT;
+	LastBlockNo												: UDINT; //Last Blocknumber 
+	Error													: BOOL;
+{attribute 'displaymode':='hex'}
+	ErrorID													: UDINT;
+	ErrorText												: STRING(20);
+END_VAR                     								
+VAR
+// Cache *******************************************
+	TableNumber												: UDINT := 0;
+	BlockCount												: UDINT := 1;
+
+// Timer ******************************************************
+// Trigger ****************************************************
+// Blocks *****************************************************
+	TblTemplate												: NciCreateItpTableEntryTemplate;
+// Error ******************************************************
+// Dummy Speicher *********************************************
+	i														: INT := 0;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* writing TcPlcInterpolation table				V1.5	*)
+(********************************************************)
+
+(* pleas use methods instead of the function-block body ********************)
+	;
+(***************************************************************************)
+]]></ST>
+    </Implementation>
+    <Method Name="addCircleCIP" Id="{d6fc2f5c-851e-4b70-a597-880cee2f5832}">
+      <Declaration><![CDATA[METHOD addCircleCIP : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	X														: LREAL := 0.0;
+	Y														: LREAL := 0.0;
+	Z														: LREAL := 0.0;
+	Q1														: LREAL := 0.0;
+	Q2														: LREAL := 0.0;
+	Q3														: LREAL := 0.0;
+	Q4														: LREAL := 0.0;
+	Q5														: LREAL := 0.0;
+	Velo													: LREAL; 	// mm/s 
+	AccurateStop											: BOOL := FALSE;
+	CIPPosX													: LREAL := 0.0;
+	CIPPosY													: LREAL := 0.0;
+	CIPPosZ													: LREAL := 0.0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* NCI GeoCirclePlane schreiben									*)
+	(*********************************************************)
+
+(* Zielpos. in Tabelle schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.GeoCircleCIP.nDisplayIndex := LastBlockNo 	:= SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.GeoCircleCIP.fEndPosX						:= X;
+	TblTemplate.GeoCircleCIP.fEndPosY						:= Y;
+	TblTemplate.GeoCircleCIP.fEndPosZ						:= Z;
+	TblTemplate.GeoCircleCIP.fEndPosQ1						:= Q1;
+	TblTemplate.GeoCircleCIP.fEndPosQ2						:= Q2;
+	TblTemplate.GeoCircleCIP.fEndPosQ3						:= Q3;
+	TblTemplate.GeoCircleCIP.fEndPosQ4						:= Q4;
+	TblTemplate.GeoCircleCIP.fEndPosQ5						:= Q5;
+	TblTemplate.GeoCircleCIP.fVelo							:= Velo;
+	TblTemplate.GeoCircleCIP.bAccurateStop					:= AccurateStop;
+	TblTemplate.GeoCircleCIP.fCIPPosX						:= CIPPosX;
+	TblTemplate.GeoCircleCIP.fCIPPosY						:= CIPPosY;
+	TblTemplate.GeoCircleCIP.fCIPPosZ						:= CIPPosZ;
+                                                        	
+	TblTemplate.InsertGeoCircleCIP(Table:= Table);    	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	AddCircleCip											:= NOT Error;
+(***************************************************************************)
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addDwellTime" Id="{bfb03bc9-66ac-4760-ae75-21c0e340a397}">
+      <Declaration><![CDATA[METHOD addDwellTime : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	/// UCS ObjectID 
+	Value													: LREAL ;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*  													*)
+(********************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.DwellTime.nDisplayIndex	 := LastBlockNo 	:= SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.DwellTime.fDwellTime						:= Value;
+
+	TblTemplate.InsertDwellTime(Table:= Table);
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	AddDwellTime											:= not Error;	
+	
+
+(***************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addEndOfTable" Id="{7166de16-d3ea-4f33-b3c2-9755b9672994}">
+      <Declaration><![CDATA[METHOD addEndOfTable : BOOL //Return value = TRUE if executed succesful
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TblTemplate.InsertEndOfTable(Table:= Table);
+Error													:= TblTemplate.Error;
+ErrorId													:= TblTemplate.ErrorId;
+ErrorText												:= TblTemplate.ErrorText;
+FilledRows												:= TblTemplate.FilledRows;
+
+AddEndOfTable											:= NOT Error;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addMFuncFast" Id="{f36ce684-9e59-4d38-860b-d2330548d833}">
+      <Declaration><![CDATA[METHOD addMFuncFast : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	MFuncNo													: INT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*														*)
+(********************************************************)
+
+(*************************************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.MFuncFast.nDisplayIndex := LastBlockNo 		:= SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.MFuncFast.nMFuncIn0							:= MFuncNo;
+	TblTemplate.MFuncFast.nMFuncIn1							:= -1;
+	TblTemplate.MFuncFast.nMFuncIn2							:= -1;
+	TblTemplate.MFuncFast.nMFuncIn3							:= -1;
+	TblTemplate.MFuncFast.nMFuncIn4							:= -1;
+	TblTemplate.MFuncFast.nMFuncIn5							:= -1;
+	TblTemplate.MFuncFast.nMFuncIn6							:= -1;
+	TblTemplate.MFuncFast.nMFuncIn7							:= -1;
+	
+	TblTemplate.InsertMFuncFast(Table:= Table);
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	AddMFuncFast											:= not Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addMFuncFastList" Id="{7e6348af-0eba-4353-a6fc-89f5ef5ef3bd}">
+      <Declaration><![CDATA[METHOD addMFuncFastList : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	MFuncNo0												: INT := -1; //0-159 > Set to -1 to mark end of used MFunc
+	MFuncNo1												: INT := -1; //0-159 > Set to -1 to mark end of used MFunc
+	MFuncNo2												: INT := -1; //0-159 > Set to -1 to mark end of used MFunc
+	MFuncNo3												: INT := -1; //0-159 > Set to -1 to mark end of used MFunc
+	MFuncNo4												: INT := -1; //0-159 > Set to -1 to mark end of used MFunc
+	MFuncNo5												: INT := -1; //0-159 > Set to -1 to mark end of used MFunc
+	MFuncNo6												: INT := -1; //0-159 > Set to -1 to mark end of used MFunc
+	MFuncNo7												: INT := -1; //0-159 > Set to -1 to mark end of used MFunc
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*														*)
+(********************************************************)
+
+(*************************************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.MFuncFast.nDisplayIndex := LastBlockNo 		:= SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.MFuncFast.nMFuncIn0							:= MFuncNo0;
+	TblTemplate.MFuncFast.nMFuncIn1							:= MFuncNo1;
+	TblTemplate.MFuncFast.nMFuncIn2							:= MFuncNo2;
+	TblTemplate.MFuncFast.nMFuncIn3							:= MFuncNo3;
+	TblTemplate.MFuncFast.nMFuncIn4							:= MFuncNo4;
+	TblTemplate.MFuncFast.nMFuncIn5							:= MFuncNo5;
+	TblTemplate.MFuncFast.nMFuncIn6							:= MFuncNo6;
+	TblTemplate.MFuncFast.nMFuncIn7							:= MFuncNo7;
+	
+	TblTemplate.InsertMFuncFast(Table:= Table);
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	AddMFuncFastList										:= NOT Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addMFuncHsk" Id="{947f392e-6102-4a9c-b4ad-d6fb657ed337}">
+      <Declaration><![CDATA[METHOD addMFuncHsk : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	MFuncNo													: INT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* 														*)
+(********************************************************)
+
+(*************************************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.MFuncHsk.nDisplayIndex := LastBlockNo 		:= SEL(BlockNo = 0, BlockNo,  TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.MFuncHsk.nMFunc								:= MFuncNo;
+                                                        	
+	TblTemplate.InsertMFuncHsk(Table:= Table);          	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	AddMFuncHsk												:= not Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addMFuncResetAllFast" Id="{e6ad118c-0ebb-4417-b37d-4654b7c3e6ac}">
+      <Declaration><![CDATA[METHOD addMFuncResetAllFast : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* NCI ResetAllFastMFunc schreiben								*)
+(*************************************************************************************)
+
+(* confirmError all fast M-functions****************************************************)
+	BlockCount 													:= BlockCount + 1;
+	TblTemplate.MFuncResetAllFast.nDisplayIndex	:= LastBlockNo 	:= SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.InsertMFuncResetAllFast(Table:= Table);
+	Error														:= TblTemplate.Error;
+	ErrorId														:= TblTemplate.ErrorId;
+	ErrorText													:= TblTemplate.ErrorText;
+	FilledRows													:= TblTemplate.FilledRows;
+	
+	AddMFuncResetAllFast										:= not Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{eab5b10b-890b-403f-93ae-1e18bbdc3eba}">
+      <Declaration><![CDATA[METHOD reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TblTemplate.Reset(Table := Table);
+FilledRows													:= 0;
+BlockCount 													:= 0;
+LastBlockNo													:= 0;
+TableNumber 												:= TableNumber + 1;
+
+IF TableNumber > MaxTblNumber 
+THEN 
+	TableNumber 											:= 1; 
+END_IF
+
+Error 														:= FALSE;
+Errorid														:= 0;
+ErrorText													:= '';
+Reset														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setAxisDynamics" Id="{2e3f040a-617c-4d45-ac99-58a5419634a3}">
+      <Declaration><![CDATA[METHOD setAxisDynamics : bool //Return value = TRUE if executed succesful
+VAR_INPUT
+	AxisNo													:	UDINT;
+	Acc,Dec,Jerk											:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* NCI SetAxisDynamics schreiben						*)
+	(*********************************************************)
+
+(* Zielpos. in Tabelle schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.AxisDynamics.nDisplayIndex := LastBlockNo := SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+
+	TblTemplate.AxisDynamics.nAxis 							:= AxisNo;
+	TblTemplate.AxisDynamics.fDec							:= Dec;
+	TblTemplate.AxisDynamics.fJerk							:= Jerk;
+	TblTemplate.AxisDynamics.fAcc							:= Acc;
+                                                        	
+	TblTemplate.InsertAxisDynamics(Table:= Table);    	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	SetAxisDynamics											:= NOT Error;
+(***************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setBaseFrame" Id="{99ee1694-074e-4b0c-b758-80b8e9eb693e}">
+      <Declaration><![CDATA[METHOD setBaseFrame : bool //Return value = TRUE if executed succesful
+VAR_INPUT
+    ShiftX													: LREAL;
+    ShiftY													: LREAL;
+    ShiftZ													: LREAL;
+    RotX													: LREAL;
+    RotY													: LREAL;
+    RotZ													: LREAL;
+    ShiftQ1													: LREAL;
+    ShiftQ2													: LREAL;
+    ShiftQ3													: LREAL;
+    ShiftQ4													: LREAL;
+    ShiftQ5													: LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* NCI SetBaseFrame schreiben						*)
+	(*********************************************************)
+
+(* Zielpos. in Tabelle schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.BaseFrame.nDisplayIndex := LastBlockNo := SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+
+    TblTemplate.BaseFrame.fShiftX 							:= ShiftX;
+    TblTemplate.BaseFrame.fShiftY							:= ShiftY;
+    TblTemplate.BaseFrame.fShiftZ							:= ShiftZ;
+    TblTemplate.BaseFrame.fRotX								:= RotX;
+    TblTemplate.BaseFrame.fRotY								:= RotY;
+    TblTemplate.BaseFrame.fRotZ								:= RotZ;
+    TblTemplate.BaseFrame.fShiftQ1							:= ShiftQ1;
+    TblTemplate.BaseFrame.fShiftQ2							:= ShiftQ2;
+    TblTemplate.BaseFrame.fShiftQ3							:= ShiftQ3;
+    TblTemplate.BaseFrame.fShiftQ4							:= ShiftQ4;
+    TblTemplate.BaseFrame.fShiftQ5							:= ShiftQ5;
+                       	
+	TblTemplate.InsertBaseFrame(Table:= Table);    	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	SetBaseFrame											:= NOT Error;
+(***************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setCirclePlane" Id="{3fb3006e-6e5a-4400-ae2f-2e7c086e50b1}">
+      <Declaration><![CDATA[METHOD setCirclePlane : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	X														: LREAL := 0.0;
+	Y														: LREAL := 0.0;
+	Z														: LREAL := 0.0;
+	Q1														: LREAL := 0.0;
+	Q2														: LREAL := 0.0;
+	Q3														: LREAL := 0.0;
+	Q4														: LREAL := 0.0;
+	Q5														: LREAL := 0.0;
+	Velo													: LREAL; 	// mm/s 
+	AccurateStop											: BOOL := FALSE;
+	Clockwise												: BOOL := TRUE;
+	Plane													: E_NciGeoPlane := E_NciGeoPlaneXY;
+	CenterX													: LREAL := 0.0;
+	CenterY													: LREAL := 0.0;
+	CenterZ													: LREAL := 0.0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* NCI GeoCirclePlane schreiben									*)
+	(*********************************************************)
+
+(* Zielpos. in Tabelle schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.GeoCirclePlane.nDisplayIndex := LastBlockNo := SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.GeoCirclePlane.fEndPosX						:= X;
+	TblTemplate.GeoCirclePlane.fEndPosY						:= Y;
+	TblTemplate.GeoCirclePlane.fEndPosZ						:= Z;
+	TblTemplate.GeoCirclePlane.fEndPosQ1					:= Q1;
+	TblTemplate.GeoCirclePlane.fEndPosQ2					:= Q2;
+	TblTemplate.GeoCirclePlane.fEndPosQ3					:= Q3;
+	TblTemplate.GeoCirclePlane.fEndPosQ4					:= Q4;
+	TblTemplate.GeoCirclePlane.fEndPosQ5					:= Q5;
+	TblTemplate.GeoCirclePlane.fVelo						:= Velo;
+	TblTemplate.GeoCirclePlane.bAccurateStop				:= AccurateStop;
+	TblTemplate.GeoCirclePlane.bClockwise					:= Clockwise;
+	TblTemplate.GeoCirclePlane.nPlane						:= Plane;
+	TblTemplate.GeoCirclePlane.fCenterX						:= CenterX;
+	TblTemplate.GeoCirclePlane.fCenterY						:= CenterY;
+	TblTemplate.GeoCirclePlane.fCenterZ						:= CenterZ;
+                                                        	
+	TblTemplate.InsertGeoCirclePlane(Table:= Table);    	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	SetCirclePlane											:= NOT Error;
+(***************************************************************************)
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setCoordinateSystem" Id="{3d4e21f1-735f-43bc-95cb-916361b10c39}">
+      <Declaration><![CDATA[METHOD setCoordinateSystem : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	/// UCS ObjectID 
+	ObjectId												: UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* NCI UserKos schreiben															*)
+(************************************************************************************)
+
+(* User Koordinatensystem schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.SetCoordinateSystem.nDisplayIndex := LastBlockNo := SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.SetCoordinateSystem.nObjectId				:= ObjectId;
+
+	TblTemplate.InsertSetCoordinateSystem(Table:= Table);
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	SetCoordinateSystem										:= not Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setDynOverride" Id="{9a36f911-ccd0-4369-8e73-3c27e2176e6c}">
+      <Declaration><![CDATA[METHOD setDynOverride : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	/// UCS ObjectID 
+	Value													: lreal := 0; //0.0-100.0%
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* NCI Oevrride schreiben											*)
+(********************************************************************)
+
+(* insert override **************************************************)
+	(* apapt override *)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.DynOverride.nDisplayIndex := LastBlockNo 		:= SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.DynOverride.fDynOvr								:= 0.01 * Value;
+
+	TblTemplate.InsertDynOverride(Table:= Table);
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	SetDynOverride											:= not Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setGeoBezier3" Id="{2ec97a5b-fa73-46b5-8981-91aaa254c1d3}">
+      <Declaration><![CDATA[METHOD setGeoBezier3 : booL //Return value = TRUE if executed succesful
+VAR_INPUT
+     ControlPoint1X											: LREAL;
+     ControlPoint1Y											: LREAL;
+     ControlPoint1Z											: LREAL;
+     ControlPoint2X											: LREAL;
+     ControlPoint2Y											: LREAL;
+     ControlPoint2Z											: LREAL;
+     EndPosX												: LREAL;
+     EndPosY												: LREAL;
+     EndPosZ												: LREAL;
+     EndPosQ1												: LREAL;
+     EndPosQ2												: LREAL;
+     EndPosQ3												: LREAL;
+     EndPosQ4												: LREAL;
+     EndPosQ5												: LREAL;
+     Velo													: LREAL;
+     AccurateStop											: BOOL; (* VeloEnd := 0 *)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* NCI SetGeoBezier3 schreiben						*)
+	(*********************************************************)
+
+(* Zielpos. in Tabelle schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.GeoBezier3.nDisplayIndex := LastBlockNo := SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+
+    TblTemplate.GeoBezier3.fControlPoint1X					:= ControlPoint1X;
+    TblTemplate.GeoBezier3.fControlPoint1Y					:= ControlPoint1Y;
+    TblTemplate.GeoBezier3.fControlPoint1Z					:= ControlPoint1Z;
+    TblTemplate.GeoBezier3.fControlPoint2X					:= ControlPoint2X;
+    TblTemplate.GeoBezier3.fControlPoint2Y					:= ControlPoint2Y;
+    TblTemplate.GeoBezier3.fControlPoint2Z					:= ControlPoint2Z;
+    TblTemplate.GeoBezier3.fEndPosX							:= EndPosX;
+    TblTemplate.GeoBezier3.fEndPosY							:= EndPosY;
+    TblTemplate.GeoBezier3.fEndPosZ							:= EndPosZ;
+    TblTemplate.GeoBezier3.fEndPosQ1						:= EndPosQ1;
+    TblTemplate.GeoBezier3.fEndPosQ2						:= EndPosQ2;
+    TblTemplate.GeoBezier3.fEndPosQ3						:= EndPosQ3;
+    TblTemplate.GeoBezier3.fEndPosQ4						:= EndPosQ4;
+    TblTemplate.GeoBezier3.fEndPosQ5						:= EndPosQ5;
+    TblTemplate.GeoBezier3.fVelo							:= Velo;
+    TblTemplate.GeoBezier3.bAccurateStop					:= AccurateStop  ;                            	
+	
+	TblTemplate.InsertGeoBezier3(Table:= Table);    	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	SetGeoBezier3											:= NOT Error;
+(***************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setGeoBezier5" Id="{6928d1a1-5a33-4325-af73-d645db63ba0b}">
+      <Declaration><![CDATA[METHOD setGeoBezier5 : booL //Return value = TRUE if executed succesful
+VAR_INPUT
+     ControlPoint1X											: LREAL;
+     ControlPoint1Y											: LREAL;
+     ControlPoint1Z											: LREAL;
+     ControlPoint2X											: LREAL;
+     ControlPoint2Y											: LREAL;
+     ControlPoint2Z											: LREAL;
+     ControlPoint3X											: LREAL;
+     ControlPoint3Y											: LREAL;
+     ControlPoint3Z											: LREAL;
+     ControlPoint4X											: LREAL;
+     ControlPoint4Y											: LREAL;
+     ControlPoint4Z											: LREAL;
+     EndPosX												: LREAL;
+     EndPosY												: LREAL;
+     EndPosZ												: LREAL;
+     EndPosQ1												: LREAL;
+     EndPosQ2												: LREAL;
+     EndPosQ3												: LREAL;
+     EndPosQ4												: LREAL;
+     EndPosQ5												: LREAL;
+     Velo													: LREAL;
+     AccurateStop											: BOOL; (* VeloEnd := 0 *)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* NCI SetGeoBezier5 schreiben						*)
+	(*********************************************************)
+
+(* Zielpos. in Tabelle schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.GeoBezier5.nDisplayIndex := LastBlockNo := SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+
+    TblTemplate.GeoBezier5.fControlPoint1X					:= ControlPoint1X;
+    TblTemplate.GeoBezier5.fControlPoint1Y					:= ControlPoint1Y;
+    TblTemplate.GeoBezier5.fControlPoint1Z					:= ControlPoint1Z;
+    TblTemplate.GeoBezier5.fControlPoint2X					:= ControlPoint2X;
+    TblTemplate.GeoBezier5.fControlPoint2Y					:= ControlPoint2Y;
+    TblTemplate.GeoBezier5.fControlPoint2Z					:= ControlPoint2Z;
+    TblTemplate.GeoBezier5.fControlPoint3X					:= ControlPoint3X;
+    TblTemplate.GeoBezier5.fControlPoint3Y					:= ControlPoint3Y;
+    TblTemplate.GeoBezier5.fControlPoint3Z					:= ControlPoint3Z;
+    TblTemplate.GeoBezier5.fControlPoint4X					:= ControlPoint4X;
+    TblTemplate.GeoBezier5.fControlPoint4Y					:= ControlPoint4Y;
+    TblTemplate.GeoBezier5.fControlPoint4Z					:= ControlPoint4Z;
+    TblTemplate.GeoBezier5.fEndPosX							:= EndPosX;
+    TblTemplate.GeoBezier5.fEndPosY							:= EndPosY;
+    TblTemplate.GeoBezier5.fEndPosZ							:= EndPosZ;
+    TblTemplate.GeoBezier5.fEndPosQ1						:= EndPosQ1;
+    TblTemplate.GeoBezier5.fEndPosQ2						:= EndPosQ2;
+    TblTemplate.GeoBezier5.fEndPosQ3						:= EndPosQ3;
+    TblTemplate.GeoBezier5.fEndPosQ4						:= EndPosQ4;
+    TblTemplate.GeoBezier5.fEndPosQ5						:= EndPosQ5;
+    TblTemplate.GeoBezier5.fVelo							:= Velo;
+    TblTemplate.GeoBezier5.bAccurateStop					:= AccurateStop  ;                            	
+	
+	TblTemplate.InsertGeoBezier5(Table:= Table);    	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	SetGeoBezier5											:= NOT Error;
+(***************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setGeoLine" Id="{cd182db1-e066-4626-899a-6c961bf8dba4}">
+      <Declaration><![CDATA[METHOD setGeoLine : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	X														: LREAL := 0.0;
+	Y														: LREAL := 0.0;
+	Z														: LREAL := 0.0;
+	Q1														: LREAL := 0.0;
+	Q2														: LREAL := 0.0;
+	Q3														: LREAL := 0.0;
+	Q4														: LREAL := 0.0;
+	Q5														: LREAL := 0.0;
+	Velo													: LREAL; 	// mm/s 
+	AccurateStop											: BOOL := FALSE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* writing NCI GeoLine 									*)
+(********************************************************)
+
+(***************************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.GeoLine.nDisplayIndex := LastBlockNo 		:= SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.GeoLine.fEndPosX							:= X;
+	TblTemplate.GeoLine.fEndPosY							:= Y;
+	TblTemplate.GeoLine.fEndPosZ							:= Z;
+	TblTemplate.GeoLine.fEndPosQ1							:= Q1 ;
+	TblTemplate.GeoLine.fEndPosQ2							:= Q2;
+	TblTemplate.GeoLine.fEndPosQ3							:= Q3;
+	TblTemplate.GeoLine.fEndPosQ4							:= Q4;
+	TblTemplate.GeoLine.fEndPosQ5							:= Q5;
+	TblTemplate.GeoLine.fVelo								:= Velo;
+	TblTemplate.GeoLine.bRapidTraverse						:= Velo = 0.0;
+	TblTemplate.GeoLine.bAccurateStop						:= AccurateStop;
+                                                        	
+	TblTemplate.InsertGeoLine(Table:= Table);           	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	SetGeoLine												:= not Error;
+(***************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setGeoStart" Id="{73f7a5d5-a361-4d3f-9999-82b8748313ec}">
+      <Declaration><![CDATA[METHOD setGeoStart : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	X														: LREAL := 0.0;
+	Y														: LREAL := 0.0;
+	Z														: LREAL := 0.0;
+	Q1														: LREAL := 0.0;
+	Q2														: LREAL := 0.0;
+	Q3														: LREAL := 0.0;
+	Q4														: LREAL := 0.0;
+	Q5														: LREAL := 0.0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* writing NCI GeoLine 									*)
+(********************************************************)
+
+(***************************************************************************)
+	TblTemplate.GeoStart.fPosX								:= X;
+	TblTemplate.GeoStart.fPosY								:= Y;
+	TblTemplate.GeoStart.fPosZ								:= Z;
+	TblTemplate.GeoStart.fPosQ1								:= Q1 ;
+	TblTemplate.GeoStart.fPosQ2								:= Q2;
+	TblTemplate.GeoStart.fPosQ3								:= Q3;
+	TblTemplate.GeoStart.fPosQ4								:= Q4;
+	TblTemplate.GeoStart.fPosQ5								:= Q5;
+                                                        	
+	TblTemplate.InsertGeoStart(Table:= Table);           	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	SetGeoStart												:= not Error;
+(***************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setHParam" Id="{d2f0b7e8-7cae-4265-982d-f2ff7d55a87f}">
+      <Declaration><![CDATA[METHOD setHParam : booL //Return value = TRUE if executed succesful
+VAR_INPUT
+	HParam													: UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* 														*)
+(********************************************************)
+
+(*************************************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.HParam.nDisplayIndex := LastBlockNo 		:= SEL(BlockNo = 0, BlockNo,  TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.HParam.nHParam								:= HParam;
+                                                        	
+	TblTemplate.InsertHParam(Table:= Table);          	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	SetHParam												:= NOT Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setPathDynamics" Id="{1d4ec8c1-1ee8-43b0-a101-b651a61e54cd}">
+      <Declaration><![CDATA[METHOD setPathDynamics : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	Acc,Dec,Jerk											:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* NCI SetPathDynamics schreiben						*)
+	(*********************************************************)
+
+(* Zielpos. in Tabelle schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.PathDynamics.nDisplayIndex := LastBlockNo := SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+
+	TblTemplate.PathDynamics.fDec							:= Dec;
+	TblTemplate.PathDynamics.fJerk							:= Jerk;
+	TblTemplate.PathDynamics.fAcc							:= Acc;
+                                                        	
+	TblTemplate.InsertPathDynamics(Table:= Table);    	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	SetPathDynamics											:= NOT Error;
+(***************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setSParam" Id="{4344db7c-9553-41d4-98dd-46a5c518e2c5}">
+      <Declaration><![CDATA[METHOD setSParam : bool //Return value = TRUE if executed succesful
+VAR_INPUT
+	SParam													: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* 														*)
+(********************************************************)
+
+(*************************************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.SParam.nDisplayIndex := LastBlockNo 		:= SEL(BlockNo = 0, BlockNo,  TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.SParam.nSParam								:= SParam;
+                                                        	
+	TblTemplate.InsertSParam(Table:= Table);          	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	SetSParam												:= NOT Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setTangFollowingDesc" Id="{2f9d9ccb-ee33-4f6b-9f85-7c42534ae045}">
+      <Declaration><![CDATA[METHOD setTangFollowingDesc : booL //Return value = TRUE if executed succesful
+VAR_INPUT
+    TangOn													: BOOL;
+    TangAxis												: E_NciAxesInGroup;  
+    PathAxis1												: E_NciAxesInGroup; 
+    PathAxis2												: E_NciAxesInGroup; 
+    Offset													: LREAL; 
+    CriticalAngle1											: LREAL;
+    TfBehavior												: E_TangentialFollowingBehavior; 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* NCI SetTangFollowingDesc schreiben						*)
+	(*********************************************************)
+
+(* Zielpos. in Tabelle schreiben ************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	LastBlockNo 											:= SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+
+    TblTemplate.TangentialFollowingDesc.bTangOn				:= TangOn;
+    TblTemplate.TangentialFollowingDesc.nTangAxis			:= TangAxis;
+    TblTemplate.TangentialFollowingDesc.nPathAxis1			:= PathAxis1;
+    TblTemplate.TangentialFollowingDesc.nPathAxis2			:= PathAxis2;
+    TblTemplate.TangentialFollowingDesc.fOffset				:= Offset;
+    TblTemplate.TangentialFollowingDesc.fCriticalAngle1		:= CriticalAngle1;
+    TblTemplate.TangentialFollowingDesc.nTfBehavior			:= TfBehavior;
+                       	
+	TblTemplate.InsertTangFollowingDesc(Table:= Table);    	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+
+	SetTangFollowingDesc									:= NOT Error;
+(***************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setTParam" Id="{13dacfa6-3ec7-4267-8f02-59ca7d202832}">
+      <Declaration><![CDATA[METHOD setTParam : bool //Return value = TRUE if executed succesful
+VAR_INPUT
+	TParam													: UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* 														*)
+(********************************************************)
+
+(*************************************************************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.TParam.nDisplayIndex := LastBlockNo 		:= SEL(BlockNo = 0, BlockNo,  TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.TParam.nTParam								:= TParam;
+                                                        	
+	TblTemplate.InsertTParam(Table:= Table);          	
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	
+	SetTParam												:= NOT Error;
+(**************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setVertexSmoothing" Id="{df51bb2d-182e-4a44-83b8-46b8b072e601}">
+      <Declaration><![CDATA[METHOD setVertexSmoothing : BOOL //Return value = TRUE if executed succesful
+VAR_INPUT
+	Radius													: LREAL := 0.0;
+	VertSmType												: UDINT := 5;
+	VertSmSubType											: UDINT := 3;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* writing NCI Vertex smoothing 								*)
+(****************************************************************)
+
+(* writing into table	*****************************************)
+	BlockCount 												:= BlockCount + 1;
+	TblTemplate.VertexSmoothing.nDisplayIndex := LastBlockNo := SEL(BlockNo = 0, BlockNo, TableNumber * OffsetFactorTblNumber + BlockCount);
+	TblTemplate.VertexSmoothing.nType						:= VertSmType;
+	TblTemplate.VertexSmoothing.nSubtype					:= VertSmSubtype; (* 	1: constant radius tolerance
+																					2: distance between Abstand intersectoin point and peal point
+																					3: adaptiv raidus tolerance
+																					*)
+	TblTemplate.VertexSmoothing.fRadius						:= Radius; (* mm *)
+
+	TblTemplate.InsertVertexSmoothing(Table:= Table);
+	Error													:= TblTemplate.Error;
+	ErrorId													:= TblTemplate.ErrorId;
+	ErrorText												:= TblTemplate.ErrorText;
+	FilledRows												:= TblTemplate.FilledRows;
+	SetVertexSmoothing										:= not Error;
+(*************************************************************************************)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciCreateItpTable">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.addCircleCIP">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.addDwellTime">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.addEndOfTable">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.addMFuncFast">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.addMFuncFastList">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.addMFuncHsk">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.addMFuncResetAllFast">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.reset">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setAxisDynamics">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setBaseFrame">
+      <LineId Id="3" Count="25" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setCirclePlane">
+      <LineId Id="3" Count="29" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setCoordinateSystem">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setDynOverride">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setGeoBezier3">
+      <LineId Id="3" Count="30" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setGeoBezier5">
+      <LineId Id="3" Count="36" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setGeoLine">
+      <LineId Id="3" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setGeoStart">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setHParam">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setPathDynamics">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setSParam">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setTangFollowingDesc">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setTParam">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTable.setVertexSmoothing">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

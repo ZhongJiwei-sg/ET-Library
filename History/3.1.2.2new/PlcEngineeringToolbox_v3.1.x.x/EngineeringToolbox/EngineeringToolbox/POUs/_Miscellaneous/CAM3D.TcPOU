@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="CAM3D" Id="{bc5f34cb-c1d0-45ef-8872-b578c876c5df}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'monitoring' := 'variable'}
+{attribute 'no_check'}
+//if x,y,z in setpoint +/- window then cam3d = true else cam3d = false	
+FUNCTION CAM3D : BOOL
+VAR_INPUT
+	X														: LREAL ;	//X-value to be monitored
+	Y														: LREAL;	//Y-value to be monitored
+	Z														: LREAL;	//Z-value to be monitored
+	SETP_X													: LREAL ;	//X-target value
+	SETP_Y													: LREAL ;	//Y-target value
+	SETP_Z													: LREAL ;	//Z-target value
+	WINDOW													: LREAL ;	//tolerance zone
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* cam check				  											ds	*)
+	(****************************************************************************)
+	(* if x in setpoint +/- window then cam = true else cam = false				*)
+	(****************************************************************************)
+
+(* the current value of the window  *****************************************)
+CAM3D 														:=  	X >= SETP_X - WINDOW AND X <= SETP_X + WINDOW
+																AND Y >= SETP_Y - WINDOW AND Y <= SETP_Y + WINDOW
+																AND Z >= SETP_Z - WINDOW AND Z <= SETP_Z + WINDOW;
+
+(******************************************************************************)]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="CAM3D">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

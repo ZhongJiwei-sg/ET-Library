@@ -1,0 +1,640 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxHomingOnBlock" Id="{cc4a1dd1-3202-49c2-8882-dee58c92d2dd}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Nc-axis homing on block sequence control for CoE drive 
+//based on Tc2_MC2 library
+FUNCTION_BLOCK AxHomingOnBlock EXTENDS FbBase
+VAR CONSTANT	
+	DEVICE_TYPE_PROFILE_DS402								:	UDINT := 5001;
+	DEVICE_TYPE_PROFILE_MDP									:	UDINT := 131474;	
+END_VAR
+VAR_INPUT
+	Position												: LREAL := DEFAULT_HOME_POSITION;//Used as homepos if value is <> DEFAULT_HOME_POSITION
+	Direction												: MC_Direction := MC_Negative_Direction; //Homing direction
+	Velocity												: LREAL := 0.0; //0.0 = Default NC valuse are used, else "Velocity" is used for both movements, into block direction and retraction
+	Acceleration											: LREAL := 0.0; //0.0 = Default dynamics are used
+	Deceleration											: LREAL := 0.0; //0.0 = Default dynamics are used
+	Offset													: LREAL := 2.0; //Offset to release block
+	LagTolerance											: LREAL	:= 0.5; //Lag error tolerance to detect axis on block
+	MaxTorque												: LREAL	:= 50.0;//Max torque during homing towards block and retartion
+	DrvChannel												: BYTE	:= 0; //Drive channel 0 or 1 
+END_VAR
+VAR_IN_OUT
+	Axis													: AXIS_REF;
+END_VAR
+VAR_OUTPUT
+	DriveProfileIsDS402										:	BOOL;							
+END_VAR
+VAR
+(* Internal memory **********************************************************************)
+	LastErrorState											: INT ; //Last error state for debugging
+	LastErrorId												: UDINT;
+	MemError												: BOOL;
+	MemBlockPos												: LREAL;
+	VelocityTowardsBlock									: LREAL;
+	VelocityOffBlock										: LREAL;
+	// Parameter storage for returning values to original after running the procedure.
+	Param_DeviceType										: UDINT;
+	Param_MotionMonitoring									: BYTE;
+	Param_LagMonitoring										: BYTE;
+	Param_SoftMaxMonitoring									: BYTE;
+	Param_SoftMinMonitoring									: BYTE;	                        	
+	Param_MaxTorque											: UINT;
+	Param_MaxTorqueRead										: BOOL;
+	Param_CalibrationValue									: LREAL;
+	
+(* Timer ********************************************************************************)                 	
+
+(* Trigger ******************************************************************************)
+
+(* FB instances *************************************************************************)
+	Read_ADS												: ADSREAD := (TmOut := DEFAULT_ADS_TIMEOUT);
+	Write_ADS												: ADSWRITE  := (TmOut := DEFAULT_ADS_TIMEOUT);
+	MC_Home													: MC_Home;
+	Mc_Halt													: MC_Halt;
+	MC_Velocity												: MC_MoveVelocity;
+	MC_Absolute												: MC_MoveAbsolute;
+	CoEWrite												: FB_CoEWrite;
+	CoERead													: FB_CoERead;
+(* Dummys *******************************************************************************)
+	uiValue													: UINT; //Temporary use for reading BOOL
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Homing on block function																		*)
+	(*																								*)
+	(* V1.0 2016/02/15 ABarrett																		*)
+	(************************************************************************************************)
+	
+(* Sequence *************************************************************************************)
+rtExecute(CLK := Execute);
+CASE State OF
+0://Wait for execute signal to change state to true
+	IF NOT Execute OR rtExecute.Q	
+	THEN
+		Read_ADS(Read := FALSE);	Write_Ads(Write := FALSE);
+		CoEWrite(Execute := FALSE,axis  := axis); CoERead(Execute := FALSE,axis  := axis);										
+		MC_Home(Execute := FALSE,Axis := Axis);
+		MC_Halt(Execute := FALSE,Axis := Axis);
+		MC_Velocity(Execute := FALSE,Axis := Axis);
+		MC_Absolute(Execute := FALSE,Axis := Axis);	
+		Param_MotionMonitoring								:= 0;
+		Param_LagMonitoring									:= 0;
+		Param_SoftMaxMonitoring								:= 0;
+		Param_SoftMinMonitoring								:= 0;
+	
+		Busy												:= rtExecute.Q;
+		Done 												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		MemError											:= 0;
+		state												:= SEL(rtExecute.Q, 0, 100);
+	
+	END_IF
+
+(* Read original parameters for position lag monitoring, limit switches, max torque....... ************************************)
+100:
+	(* Read device type from drive *)
+	CoERead( 
+		NetId			:= '', 
+		Index			:= 16#1000,
+		SubIndex		:= 0, 
+		pDstBuf			:= ADR(Param_DeviceType), 
+		BufLen			:= SIZEOF(Param_DeviceType), 
+		Execute			:= TRUE, 
+		Axis			:= Axis );
+	IF NOT CoERead.BUSY
+	THEN
+		IF CoERead.Error
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= CoERead.AdsErrId;//or CANopenErrId;				
+			State											:= 900;
+		ELSE
+			DriveProfileIsDS402								:= Param_DeviceType = DEVICE_TYPE_PROFILE_DS402; 
+			CoERead(Execute := FALSE, Axis := Axis);	
+			state											:= State + 1;
+		END_IF		
+	END_IF
+
+101:
+	Read_ADS(NetId:= '' , Port:=500, IdxGrp:=16#4000+Axis.NcToPlc.AxisId, IDxOffs:=16#11,
+				LEN:=SIZEOF(uiValue), DestAddr:=ADR(uiValue), Read := TRUE );
+	IF NOT Read_ADS.BUSY 
+	THEN
+		IF Read_Ads.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 900;
+		ELSE                                            	
+			Param_MotionMonitoring.0						:= TRUE;                                    	
+			Param_MotionMonitoring.1						:= TO_BOOL(uiValue);
+			state											:= state + 1;
+		END_IF
+		Read_ADS(Read := FALSE);						
+	END_IF
+	
+102:
+	Read_ADS(NetId:= '' , Port:=500, IdxGrp:=16#6000+Axis.NcToPlc.AxisId, IDxOffs:=16#10,
+				LEN:=SIZEOF(uiValue), DestAddr:=ADR(uiValue), Read := TRUE );
+	IF NOT Read_ADS.BUSY 
+	THEN
+		IF Read_Ads.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 900;
+		ELSE                                            	
+			Param_LagMonitoring.0							:= TRUE;                                    	
+			Param_LagMonitoring.1							:= TO_BOOL(uiValue);
+			state											:= state + 1;
+		END_IF
+		Read_ADS(Read := FALSE);						
+	END_IF		
+		
+103:
+	Read_ADS(NetId:= '' , Port:=500, IdxGrp:=16#5000+Axis.NcToPlc.AxisId, IDxOffs:=16#C,
+				LEN:=SIZEOF(uiValue), DestAddr:=ADR(uiValue), Read := TRUE );
+	IF NOT Read_ADS.BUSY 
+	THEN
+		IF Read_Ads.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 900;
+		ELSE                                            	
+			Param_SoftMaxMonitoring.0						:= TRUE;                                    	
+			Param_SoftMaxMonitoring.1						:= TO_BOOL(uiValue);
+			state											:= state + 1;
+		END_IF
+		Read_ADS(Read := FALSE);						
+	END_IF		
+	
+104:
+	Read_ADS(NetId:= '' , Port:=500, IdxGrp:=16#5000+Axis.NcToPlc.AxisId, IDxOffs:=16#B,
+				LEN:=SIZEOF(uiValue), DestAddr:=ADR(uiValue), Read := TRUE );
+	IF NOT Read_ADS.BUSY 
+	THEN
+		IF Read_Ads.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 900;
+		ELSE                                            	
+			Param_SoftMinMonitoring.0						:= TRUE;                                    	
+			Param_SoftMinMonitoring.1						:= TO_BOOL(uiValue);
+			state											:= State + 1;
+		END_IF
+		Read_ADS(Read := FALSE);						
+	END_IF	
+
+105:
+	Read_ADS(NetId:= '' , Port:=500, IdxGrp:=16#5000+Axis.NcToPlc.AxisId, IDxOffs:=16#103,
+				LEN:=SIZEOF(Param_CalibrationValue), DestAddr:=ADR(Param_CalibrationValue), Read := TRUE );
+	IF NOT Read_ADS.BUSY 
+	THEN
+		IF Read_Ads.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 900;
+		ELSE                                            	
+			state											:= State + 1;
+		END_IF
+		Read_ADS(Read := FALSE);						
+	END_IF			
+	
+106://Read velocity to use towards block
+	IF Velocity = 0.0
+	THEN //Only read values if FB parameter is 0.0
+		Read_ADS(NetId:= '' , Port:=500, IdxGrp:=16#4000+Axis.NcToPlc.AxisId, IDxOffs:=16#6,
+					LEN:=SIZEOF(VelocityTowardsBlock), DestAddr:=ADR(VelocityTowardsBlock), Read := TRUE );
+		IF NOT Read_ADS.BUSY 
+		THEN
+			IF Read_Ads.ERR
+			THEN
+				MemError									:= TRUE;
+				LastErrorState								:= state;
+				LastErrorId									:= Read_Ads.ERRID;				
+				State										:= 900;
+			ELSE                                            
+				state										:= State + 1;
+			END_IF                                          
+			Read_ADS(Read := FALSE);						
+		END_IF                                              
+	ELSE	                                                
+		VelocityTowardsBlock								:= Velocity;
+		VelocityOffBlock									:= Velocity;
+		state												:= 108;	//Skip this and next state
+	END_IF
+	
+107://Read velocity to use away from block to home position
+	Read_ADS(NetId:= '' , Port:=500, IdxGrp:=16#4000+Axis.NcToPlc.AxisId, IDxOffs:=16#7,
+				LEN:=SIZEOF(VelocityOffBlock), DestAddr:=ADR(VelocityOffBlock), Read := TRUE );
+	IF NOT Read_ADS.BUSY 
+	THEN
+		IF Read_Ads.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 900;
+		ELSE                                            	
+			state											:= State + 1;
+		END_IF
+		Read_ADS(Read := FALSE);						
+	END_IF	
+		
+108://Read CoE value for max torque
+	IF DrvChannel = 1
+	THEN
+		CoERead.Index										:= SEL(DriveProfileIsDS402, 16#7110 , 	16#6872); 
+		CoERead.SubIndex									:= SEL(DriveProfileIsDS402, 16#B  , 	16#0);
+	ELSE //Channel 0
+		CoERead.Index										:= SEL(DriveProfileIsDS402, 16#7010 , 	16#6072);
+		CoERead.SubIndex									:= SEL(DriveProfileIsDS402, 16#B  , 	16#0);
+ 	END_IF 
+	
+	CoERead( 
+		NetId			:= '', 
+		Index			:= , //See above 
+		SubIndex		:= , //See above 
+		pDstBuf			:= ADR(uiValue), 
+		BufLen			:= SIZEOF(uiValue), //2,
+		Execute			:= TRUE, 
+		Axis			:= Axis );
+	IF NOT CoERead.BUSY
+	THEN
+		IF CoERead.Error
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= CoERead.AdsErrId;//or CANopenErrId;				
+			State											:= 900;
+		ELSE
+			Param_MaxTorqueRead								:= TRUE;
+			Param_MaxTorque									:= uiValue;
+			CoERead(Execute := FALSE, Axis := Axis);	
+			state											:= 200;
+		END_IF		
+	END_IF
+	
+	
+(* Write all parameters to needed settings *********************************************************)
+200:
+	uiValue													:= TO_UINT(FALSE);
+	Write_ADS(NetId:= '' , Port:=500, IdxGrp:=16#4000+Axis.NcToPlc.AxisId, IDxOffs:=16#11,
+				LEN:=SIZEOF(uiValue), SrcAddr:=ADR(uiValue), Write := TRUE );
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 600; //Jump to state 600 to restore old entrys
+		ELSE
+			state											:= state + 1;
+		END_IF
+		Write_ADS(Write := FALSE);						
+	END_IF
+
+201:
+	uiValue													:= TO_UINT(FALSE);
+	Write_ADS(NetId:= '' , Port:=500, IdxGrp:=16#6000+Axis.NcToPlc.AxisId, IDxOffs:=16#10,
+				LEN:=SIZEOF(uiValue), SrcAddr:=ADR(uiValue), Write := TRUE );
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 600; //Jump to state 600 to restore old entrys
+		ELSE
+			state											:= state + 1;
+		END_IF
+		Write_ADS(Write := FALSE);						
+	END_IF
+
+202:	
+	uiValue													:= TO_UINT(FALSE);
+	Write_ADS(NetId:= '' , Port:=500, IdxGrp:=16#5000+Axis.NcToPlc.AxisId, IDxOffs:=16#C,
+					LEN:=SIZEOF(uiValue), SrcAddr:=ADR(uiValue), Write := TRUE );
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 600; //Jump to state 600 to restore old entrys
+		ELSE
+			state											:= state + 1;
+		END_IF
+		Write_ADS(Write := FALSE);						
+	END_IF
+	
+203:	
+	uiValue													:= TO_UINT(FALSE);
+	Write_ADS(NetId:= '' , Port:=500, IdxGrp:=16#5000+Axis.NcToPlc.AxisId, IDxOffs:=16#B,
+					LEN:=SIZEOF(uiValue), SrcAddr:=ADR(uiValue), Write := TRUE );
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Read_Ads.ERRID;				
+			State											:= 600; //Jump to state 600 to restore old entrys
+		ELSE
+			state											:= 204;
+		END_IF
+		Write_ADS(Write := FALSE);						
+	END_IF
+
+	
+204://Write the max torque value used for homing
+	IF DrvChannel = 1
+	THEN
+		CoERead.Index										:= SEL(DriveProfileIsDS402, 16#7110 , 	16#6872); 
+		CoERead.SubIndex									:= SEL(DriveProfileIsDS402, 16#B  , 	16#0);
+	ELSE //Channel 0
+		CoERead.Index										:= SEL(DriveProfileIsDS402, 16#7010 , 	16#6072);
+		CoERead.SubIndex									:= SEL(DriveProfileIsDS402, 16#B  , 	16#0);
+ 	END_IF 
+
+	uiValue													:= LREAL_TO_UINT(MaxTorque) * 10;
+	CoEWrite(
+		NetId			:= '', 
+		Index			:= , //See above
+		SubIndex		:= , //See above
+		pSrcBuf			:= ADR(uiValue), 
+		BufLen			:= SIZEOF(uiValue),//2, 
+		Execute			:= TRUE, 
+		Axis			:= Axis
+	);
+	IF NOT CoEWrite.BUSY 
+	THEN
+		IF CoEWrite.Error
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= CoEWrite.AdsErrId;//or CANopenErrId;				
+			State											:= 600; //Jump to state 600 to restore old entrys
+		ELSE
+			state											:= 300;
+		END_IF
+		CoEWrite(Execute := FALSE, Axis := Axis);						
+	END_IF
+	
+(* Velocity move until Homing_Tolerance exceeded *****************************************************************)
+300:
+	MC_Velocity( 
+		Axis			:= Axis,
+		Execute			:= TRUE,
+		Velocity		:= VelocityTowardsBlock,
+		Direction		:= Direction,
+		Acceleration	:= Acceleration,
+		Deceleration	:= Deceleration
+	);
+	
+	IF ABS(Axis.NcToPlc.PosDiff) > lagTolerance
+		OR NOT MC_Velocity.Busy //In case and error occure, the state machine can still continie
+	THEN
+		IF MC_Velocity.Error
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= MC_Velocity.ErrorID;	
+			state											:= 600; //Try to restore old parameter first
+		ELSE
+			MemBlockPos										:= Axis.NcToPlc.ActPos; //Record block pos
+			MC_Halt(Execute := TRUE, Axis := Axis);
+			State 											:= state + 1;
+		END_IF
+		MC_Velocity(Execute := FALSE, Axis := Axis);
+	END_IF
+	
+301: //Wait for movment stopped 
+	MC_Halt(Execute := TRUE, Axis := Axis);
+	IF NOT MC_Halt.Busy
+	THEN
+		IF MC_Halt.Error
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= MC_Halt.ErrorID;	
+			state											:= 600; //Try to restore old parameter first		
+		ELSE	
+			state											:= 400; 	
+		END_IF
+		MC_Halt(Execute := FALSE, Axis := Axis);
+	END_IF
+	
+400://Move to offset 
+	MC_Absolute(
+		Axis			:= Axis,
+		Execute			:= TRUE,		
+		Position		:= MemBlockPos + (ABS(Offset) * SEL(MC_Velocity.Direction = MC_Negative_Direction, -1.0 , 1.0)), //Calculate offset direction automaically 
+		Velocity		:= VelocityOffBlock,
+		Acceleration	:= Acceleration,
+		Deceleration	:= Deceleration
+	);
+	IF NOT MC_Absolute.Busy 
+	THEN
+		IF MC_Absolute.Error
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= MC_Absolute.ErrorID;	
+			state											:= 600; //Try to restore old parameter first		
+		ELSE	
+			state											:= 500; 	
+		END_IF
+		MC_Absolute(Execute := FALSE, Axis := Axis);
+	END_IF
+	
+500://Set home position and home flag
+	IF Position <> DEFAULT_HOME_POSITION
+	THEN
+		MC_Home.Position									:= Position + (ABS(MemBlockPos - Axis.NcToPlc.ActPos) * SEL(MC_Velocity.Direction = MC_Negative_Direction, -1.0 , 1.0));
+	ELSE
+		MC_Home.Position									:= Param_CalibrationValue + (ABS(MemBlockPos - Axis.NcToPlc.ActPos) * SEL(MC_Velocity.Direction = MC_Negative_Direction, -1.0 , 1.0)); 
+	END_IF
+	MC_Home(
+		Axis 		:= Axis,
+		Execute		:= TRUE,
+		Position	:= , //see above 
+		HomingMode	:= MC_Direct
+	);
+	IF NOT MC_Home.Busy 
+	THEN
+		IF NOT MC_Home.Error
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= MC_Absolute.ErrorID;	
+			state											:= 600; //Try to restore old parameter first			
+		ELSE
+			state											:= 600;
+		END_IF
+		MC_Home(Execute := FALSE, Axis := Axis);
+	END_IF
+
+(* Return parameters for NC and drive to prior value ************************************************)
+600:
+	uiValue													:= TO_UINT(Param_MotionMonitoring.1);
+	Write_ADS(NetId:= '' , Port:=500, IdxGrp:=16#4000+Axis.NcToPlc.AxisId, IDxOffs:=16#11,
+				LEN:=SIZEOF(uiValue), SrcAddr:=ADR(uiValue), Write := Param_MotionMonitoring.0 );
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR AND NOT MemError
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Write_ADS.ERRID;	
+		END_IF
+		Write_ADS(Write := FALSE);
+		State												:= state + 1;									
+	END_IF
+		
+601:
+	uiValue													:= TO_UINT(Param_LagMonitoring.1);	
+	Write_ADS(NetId:= '' , Port:=500, IdxGrp:=16#6000+Axis.NcToPlc.AxisId, IDxOffs:=16#10,
+				LEN:=SIZEOF(uiValue), SrcAddr:=ADR(uiValue), Write := Param_LagMonitoring.0 );
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR AND NOT MemError
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Write_ADS.ERRID;	
+		END_IF
+		Write_ADS(Write := FALSE);
+		State												:= state + 1;									
+	END_IF
+	
+602:
+	uiValue													:= TO_UINT(Param_SoftMaxMonitoring.1);
+	Write_ADS(NetId:= '' , Port:=500, IdxGrp:=16#5000+Axis.NcToPlc.AxisId, IDxOffs:=16#C,
+				LEN:=SIZEOF(uiValue), SrcAddr:=ADR(uiValue), Write := Param_SoftMaxMonitoring.0 );
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR AND NOT MemError
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Write_ADS.ERRID;	
+		END_IF
+		Write_ADS(Write := FALSE);
+		State												:= state + 1;									
+	END_IF
+	
+603:
+	uiValue													:= TO_UINT(Param_SoftMinMonitoring.1);
+	Write_ADS(NetId:= '' , Port:=500, IdxGrp:=16#5000+Axis.NcToPlc.AxisId, IDxOffs:=16#B,
+				LEN:=SIZEOF(uiValue), SrcAddr:=ADR(uiValue), Write := Param_SoftMinMonitoring.0 );
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR AND NOT MemError
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= Write_ADS.ERRID;	
+		END_IF
+		Write_ADS(Write := FALSE);
+		State												:= 604;									
+	END_IF
+
+604:
+	IF DrvChannel = 1
+	THEN
+		CoERead.Index										:= SEL(DriveProfileIsDS402, 16#7110 , 	16#6872); 
+		CoERead.SubIndex									:= SEL(DriveProfileIsDS402, 16#B  , 	16#0);
+	ELSE //Channel 0
+		CoERead.Index										:= SEL(DriveProfileIsDS402, 16#7010 , 	16#6072);
+		CoERead.SubIndex									:= SEL(DriveProfileIsDS402, 16#B  , 	16#0);
+ 	END_IF 
+
+	uiValue													:= Param_MaxTorque;
+	CoEWrite(
+		NetId			:= '', 
+		Index			:= ,//See above
+		SubIndex		:= , //See above 
+		pSrcBuf			:= ADR(uiValue), 
+		BufLen			:= SIZEOF(uiValue),//2,
+		Execute			:= Param_MaxTorqueRead, 
+		Axis			:= Axis
+	);
+	IF NOT CoEWrite.BUSY 
+	THEN
+		IF CoEWrite.Error
+		THEN
+			MemError										:= TRUE;
+			LastErrorState									:= state;
+			LastErrorId										:= CoEWrite.AdsErrId;//or CANopenErrId;				
+		END_IF
+		CoEWrite(Execute := FALSE, Axis := Axis);
+		state												:= 900;			
+	END_IF
+	
+(* Done *****************************************************************************)
+900://Wait for execute signal to change to false
+	Done 													:= NOT MemError; //Set the done flag to true if not error occur
+	BUSY 													:= FALSE;
+	Error													:= MemError;
+	ErrorId													:= SEL(Error, 0 , LastErrorId);
+	
+	//Make sure all components stop operating
+	Read_ADS(Read := FALSE);	Write_Ads(Write := FALSE);
+	CoEWrite(Execute := FALSE,axis  := axis); CoERead(Execute := FALSE,axis  := axis);	
+	MC_Home(Execute := FALSE,Axis := Axis);
+	MC_Halt(Execute := FALSE,Axis := Axis);
+	MC_Velocity(Execute := FALSE,Axis := Axis);
+	MC_Absolute(Execute := FALSE,Axis := Axis);	
+	
+	State													:= 0;
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="AxHomingOnBlock">
+      <LineId Id="3" Count="31" />
+      <LineId Id="577" Count="0" />
+      <LineId Id="594" Count="17" />
+      <LineId Id="623" Count="0" />
+      <LineId Id="614" Count="2" />
+      <LineId Id="574" Count="0" />
+      <LineId Id="573" Count="0" />
+      <LineId Id="35" Count="132" />
+      <LineId Id="546" Count="0" />
+      <LineId Id="169" Count="0" />
+      <LineId Id="683" Count="0" />
+      <LineId Id="685" Count="1" />
+      <LineId Id="691" Count="0" />
+      <LineId Id="687" Count="0" />
+      <LineId Id="692" Count="0" />
+      <LineId Id="689" Count="0" />
+      <LineId Id="688" Count="0" />
+      <LineId Id="690" Count="0" />
+      <LineId Id="170" Count="23" />
+      <LineId Id="545" Count="0" />
+      <LineId Id="194" Count="74" />
+      <LineId Id="694" Count="7" />
+      <LineId Id="693" Count="0" />
+      <LineId Id="269" Count="183" />
+      <LineId Id="704" Count="7" />
+      <LineId Id="703" Count="0" />
+      <LineId Id="453" Count="38" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

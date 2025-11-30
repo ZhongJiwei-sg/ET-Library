@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorFwdRev" Id="{7c3672fa-aa5f-4b5c-9b01-a1d1dd44e16b}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorFwdRev EXTENDS I_ActuatorBase
+]]></Declaration>
+    <Property Name="forwardStarted" Id="{6d375df9-c0d9-4072-bdc7-74382f600bfd}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public forwardStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{406d0d05-f80c-4330-93c2-01c2d206c765}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="reverseStarted" Id="{b638f48f-dd2f-4916-b1df-24d5776e4968}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public reverseStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{eb12ee42-d75a-4d01-9998-6f6c95511332}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="startForward" Id="{c29bce8f-d605-4c2f-8cea-a869b179ccc6}">
+      <Declaration><![CDATA[METHOD public startForward : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="startReverse" Id="{e0d5b3dc-7ab5-431c-bca3-b25c646f2c4b}">
+      <Declaration><![CDATA[METHOD public startReverse : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

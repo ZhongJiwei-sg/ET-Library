@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="Ipv4Addr_TO_UDINT" Id="{ca1592b7-afa3-40af-a792-a7683ea9a1d0}" SpecialFunc="None">
+    <Declaration><![CDATA[//Converts an IPv4 address string to a hex coded UDINT
+	{attribute 'displaymode':='hex'}
+FUNCTION Ipv4Addr_TO_UDINT : UDINT
+VAR_INPUT
+	IPv4Addr				:	T_IPv4Addr; //String
+END_VAR
+VAR
+	Bytes 					: 	T_IPv4AddrArr; //IPv4 address as an array 0..3 of Byte
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Bytes						:= F_ScanIPv4AddrIds(IPv4Addr);
+MEMCPY(ADR(Ipv4Addr_TO_UDINT),ADR(Bytes[3]),1);
+MEMCPY(ADR(Ipv4Addr_TO_UDINT)+1,ADR(Bytes[2]),1);
+MEMCPY(ADR(Ipv4Addr_TO_UDINT)+2,ADR(Bytes[1]),1);
+MEMCPY(ADR(Ipv4Addr_TO_UDINT)+3,ADR(Bytes[0]),1);
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="Ipv4Addr_TO_UDINT">
+      <LineId Id="3" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="21" Count="2" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

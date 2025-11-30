@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SYSTEMTIME_TO_DATE" Id="{a16f73c3-1265-4327-8223-611efed68867}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION SYSTEMTIME_TO_DATE : DATE //Converts Systemtime (Timestruct) to DATE (D#2020-06-02)
+VAR_INPUT
+	IN													: TIMESTRUCT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SYSTEMTIME_TO_DATE										:= DT_TO_DATE(SYSTEMTIME_TO_DT(IN));]]></ST>
+    </Implementation>
+    <LineIds Name="SYSTEMTIME_TO_DATE">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="CSETBIT64" Id="{f81ffc70-37ff-4844-9e59-a18e9409eeaa}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'displaymode':='binary'}	
+FUNCTION CSETBIT64 : LWORD (* conditional set bit in 64bit lword *)
+VAR_INPUT
+	inVal64													:	LWORD;
+	bitNo													:	INT;
+	bitVal													:	BOOL;		(* value to which the bit should be set *)
+END_VAR
+VAR
+{attribute 'displaymode':='binary'}	
+	lwConst 												: 	LWORD := 1;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bitVal
+THEN
+	CSETBIT64 												:= inVal64 OR SHL(lwConst,bitNo MOD 64);
+ELSE
+	CSETBIT64 												:= inVal64 AND NOT (SHL(lwConst,bitNo MOD 64));
+END_IF;]]></ST>
+    </Implementation>
+    <LineIds Name="CSETBIT64">
+      <LineId Id="16" Count="4" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

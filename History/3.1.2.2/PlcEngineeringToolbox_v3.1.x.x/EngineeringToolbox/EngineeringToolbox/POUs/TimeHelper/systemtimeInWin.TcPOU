@@ -1,0 +1,116 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="systemtimeInWin" Id="{1423a645-433c-42c2-97b6-a8ce9799a82d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+// retuns True if Low <= In <= High Timestruct datatypes inputs
+// 0 value will except part of this comparison
+FUNCTION systemtimeInWin : Bool
+VAR_IN_OUT
+	In														: TIMESTRUCT;
+	Low														: TIMESTRUCT;
+	High													: TIMESTRUCT;
+END_VAR
+VAR
+	LowOK													: BOOL;
+	HighOK													: BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[systemtimeInWin												:= FALSE;
+LowOK														:= FALSE;
+HighOK														:= FALSE;
+
+IF In.wYear > Low.wYear THEN
+	LowOK													:= TRUE;
+ELSIF In.wYear = Low.wYear THEN
+	IF In.wMonth > Low.wMonth THEN
+			LowOK											:= TRUE;
+	ELSIF In.wMonth = Low.wMonth THEN
+		IF In.wDay > Low.wDay THEN
+			LowOK											:= TRUE;
+		ELSIF In.wDay = Low.wDay THEN
+			IF In.wDayOfWeek > Low.wDayOfWeek THEN
+				LowOK										:= TRUE;
+			ELSIF In.wDayOfWeek = Low.wDayOfWeek THEN
+				IF In.wHour > Low.wHour THEN
+					LowOK									:= TRUE;
+				ELSIF In.wHour = Low.wHour THEN
+					IF In.wMinute > Low.wMinute THEN
+						LowOK								:= TRUE;
+					ELSIF In.wMinute = Low.wMinute THEN
+						IF In.wSecond > Low.wSecond THEN
+							LowOK							:= TRUE;
+						ELSIF In.wSecond = Low.wSecond THEN
+							IF In.wMilliseconds >= Low.wMilliseconds THEN
+								LowOK						:= TRUE;
+							END_IF	// ms
+						END_IF	//s
+					END_IF	//min 
+				END_IF	// h
+			END_IF	// dow
+		END_IF	// d
+	END_IF	// M
+END_IF	// Y
+
+IF In.wYear < High.wYear THEN
+	HighOK													:= TRUE;
+ELSIF In.wYear = High.wYear
+	OR_ELSE High.wYear = 0
+THEN
+	IF In.wMonth < High.wMonth THEN
+			HighOK											:= TRUE;
+	ELSIF In.wMonth = High.wMonth
+		 OR_ELSE High.wMonth = 0
+	THEN
+		IF In.wDay < High.wDay THEN
+			HighOK											:= TRUE;
+		ELSIF In.wDay = High.wDay 
+			OR_ELSE High.wDay = 0
+		THEN
+			IF In.wDayOfWeek < High.wDayOfWeek THEN
+				HighOK										:= TRUE;
+			ELSIF In.wDayOfWeek = High.wDayOfWeek 
+				OR_ELSE High.wDayOfWeek = 0
+			THEN
+				IF In.wHour < High.wHour THEN
+					HighOK									:= TRUE;
+				ELSIF In.wHour = High.wHour 
+					OR_ELSE High.wHour = 0
+				THEN
+					IF In.wMinute < High.wMinute THEN
+						HighOK								:= TRUE;
+					ELSIF In.wMinute = High.wMinute 
+						OR_ELSE High.wMinute = 0
+					THEN
+						IF In.wSecond < High.wSecond THEN
+							HighOK							:= TRUE;
+						ELSIF In.wSecond = High.wSecond 
+							OR_ELSE High.wSecond = 0
+						THEN
+							IF In.wMilliseconds <= High.wMilliseconds 
+								OR_ELSE High.wMilliseconds = 0
+							THEN
+								HighOK						:= TRUE;
+							END_IF	// ms
+						END_IF	//s
+					END_IF	//min 
+				END_IF	// h
+			END_IF	// dow
+		END_IF	// d
+	END_IF	// M
+END_IF	// Y
+
+systemtimeInWin												:= LowOK AND HighOK;
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="systemtimeInWin">
+      <LineId Id="437" Count="90" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,347 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="ModbusTcpMaster" Id="{aa368b98-e2dc-4f6a-bb23-22794a4ee1b8}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+// ModBus comunication master to multible slaves useing TCP protocol	
+// based on TF6250 - required lib: Tc2_ModbusTCP
+FUNCTION_BLOCK ModbusTcpMaster
+VAR CONSTANT
+	MIN_SLAVE												:	INT := 1;
+	MAX_SLAVE												:	INT := PARAM.MODBUS_MAX_SLAVES_OF_MASTER;
+END_VAR
+VAR_INPUT
+	Enable													:	BOOL ; 	// FB will be processed as long as enable is TRUE 
+	ResetTrig												:	BOOL ; 	// The function block will be reset with a rising edge 
+	SlaveCom												:	ARRAY[MIN_SLAVE..MAX_SLAVE] OF POINTER TO ModbusSlaveCom;
+	Timestamp												:	DT;
+END_VAR         	
+VAR_OUTPUT      	
+	JobNo													:	INT := 0;
+	SlaveNo													:	INT := 0;
+	Error													:	BOOL; 	// Rising edge of Error informs that an error occurred during the execution of the Function Block 
+{attribute 'displaymode':='hex'}
+	ErrorID													:	UDINT; 	// Error identification - see ADS return codes at Beckhoff infosys for further information 
+	ErrorText												:	STRING;
+END_VAR
+VAR
+(* memory **************************************************)
+	state 													:	INT := 0;
+
+(* trigger *************************************************)
+
+(* timer ***************************************************)
+
+(* blocks **************************************************)
+	ReadCoils												:	FB_MBReadCoils := (tTimeout	 := DEFAULT_ADS_TIMEOUT);			// Fnc 1
+	ReadInputs												:	FB_MBReadInputs := (tTimeout := DEFAULT_ADS_TIMEOUT);			// Fnc 2
+	ReadRegs												:	FB_MBReadRegs := (tTimeout	:= DEFAULT_ADS_TIMEOUT);			// Fnc 3
+	ReadInputRegs											:	FB_MBReadInputRegs := (tTimeout	:= DEFAULT_ADS_TIMEOUT);		// Fnc 4
+	WriteSingleCoil											:	FB_MBWriteSingleCoil := (tTimeout	:= DEFAULT_ADS_TIMEOUT);	// Fnc 5
+	WriteSingleReg											:	FB_MBWriteSingleReg := (tTimeout:= DEFAULT_ADS_TIMEOUT);		// Fnc 6
+	Diagnose												:	FB_MBDiagnose := (tTimeout	:= DEFAULT_ADS_TIMEOUT);			// Fnc 8
+	WriteCoils												:	FB_MBWriteCoils := (tTimeout:= DEFAULT_ADS_TIMEOUT);			// Fnc 15
+	WriteRegs												:	FB_MBWriteRegs := (tTimeout	:= DEFAULT_ADS_TIMEOUT);			// Fnc 16
+	ReadWriteRegs											:	FB_MBReadWriteRegs := (tTimeout	:= DEFAULT_ADS_TIMEOUT); 		// Fnc 23	use read and write job instead
+(* internal used variables *********************************)
+	i,j,k													:	INT :=0;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+	CASE state OF
+	0:	(* Idle *)
+		IF Enable 
+		THEN
+			k 												:=	0;
+			JobNo  :=  SlaveNo								:=	1;
+			state 											:=	10;
+		END_IF
+
+	10: 
+		IF GetNextSlave() 
+		THEN (* find Slave *)
+			k 												:= 0;
+			IF GetNextJob() 
+			THEN (* find JobNo *)
+				SlaveCom[SlaveNo]^.currentJobIdx 			:= JobNo;
+				SlaveCom[SlaveNo]^.writeJobRequested 		:= SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode >= 5;
+				State 										:= SEL(SlaveCom[SlaveNo]^.writeJobRequested, 20, 15);
+			END_IF
+		ELSE
+			state 											:=	0;
+		END_IF
+			
+	15: (* wait for valid write date *)
+		IF NOT SlaveCom[SlaveNo]^.writeJobRequested
+		THEN
+			SlaveCom[SlaveNo]^.Jobs[JobNo].Valid 			:= FALSE;
+			state 											:= 20;
+		END_IF
+
+	20: (* start job *)	
+		IF NOT StartJob(FALSE) // Busy
+		THEN						
+			state 											:= 30;
+		END_IF
+
+	30: (* wait for com cycle *)
+		IF NOT StartJob(TRUE) THEN // Busy
+			IF Error 
+			THEN
+				ErrorText									:= CONCAT('Error at SlaveNo: ',	CONCAT(INT_TO_STRING(SlaveNo), CONCAT(', JobNo: ', INT_TO_STRING(JobNo))));
+				SlaveCom[SlaveNo]^.countBad 				:= SlaveCom[SlaveNo]^.countBad +1;
+				state 										:= 98; 
+			ELSE
+				SlaveCom[SlaveNo]^.countGood 				:= SlaveCom[SlaveNo]^.countGood +1;
+				SlaveCom[SlaveNo]^.Jobs[JobNo].Valid 		:= TRUE;
+				SlaveCom[SlaveNo]^.Jobs[JobNo].TimeStamp 	:= Timestamp;
+				JobNo 										:= JobNo + 1;
+				state 										:= 10;	(* next job *)
+			END_IF
+			StartJob(FALSE);
+		END_IF
+
+	98: (* wait for quit *)
+		IF ResetTrig THEN
+			reset();
+		END_IF
+
+	END_CASE]]></ST>
+    </Implementation>
+    <Method Name="getNextJob" Id="{5b7d8546-037c-414a-ba30-2edca148d219}">
+      <Declaration><![CDATA[METHOD PRIVATE getNextJob : Bool //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	
+	WHILE SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 0 DO
+		JobNo 											:= JobNo + 1;
+		IF JobNo > SlaveCom[SlaveNo]^.MAX_SLAVE_JOB THEN
+			JobNo 										:= SlaveCom[SlaveNo]^.MIN_SLAVE_JOB;
+			SlaveNo 									:= SlaveNo + 1;
+			GetNextJob									:= FALSE;
+			RETURN;
+		END_IF
+	END_WHILE
+	GetNextJob											:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="getNextSlave" Id="{48a1f931-f855-4940-bc4a-e458b855a962}">
+      <Declaration><![CDATA[METHOD PRIVATE getNextSlave : Bool //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	WHILE SlaveCom[SlaveNo] = 0 OR_ELSE NOT SlaveCom[SlaveNo]^.Enable DO
+		SlaveNo 										:= SlaveNo + 1;
+		IF SlaveNo > MAX_SLAVE 
+		THEN
+			k 											:= k + 1;
+			SlaveNo 									:= MIN_SLAVE;
+		ELSIF k = 2 
+		THEN
+			k 											:= 0;
+			GetNextSlave								:= FALSE;
+			RETURN;
+		END_IF	
+	END_WHILE
+	GetNextSlave										:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{8b63d170-9c9d-42b0-8c8e-35d50a3615b7}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : bool //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF State = 98 
+THEN
+	Error													:= FALSE;
+	ErrorID													:= 0;
+	ErrorText												:= '';
+	state													:= 0;
+END_IF
+reset														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startJob" Id="{eb5f0847-3049-40f5-8935-c64cc79b73d9}">
+      <Declaration><![CDATA[METHOD PRIVATE startJob : BOOL //Return value = TRUE as long as the job is busy
+VAR_INPUT
+	Execute							: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF 		SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 1 THEN
+		ReadCoils(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nQuantity		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			nMBAddr			:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			cbLength		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			pDestAddr		:= ADR(SlaveCom[SlaveNo]^.Data), 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);
+			
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 2 THEN
+		ReadInputs(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nQuantity		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			nMBAddr			:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			cbLength		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			pDestAddr		:= ADR(SlaveCom[SlaveNo]^.Data), 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);
+			
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 3 THEN
+		ReadRegs(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nQuantity		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			nMBAddr			:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			cbLength		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity * 2, 
+			pDestAddr		:= ADR(SlaveCom[SlaveNo]^.Data), 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);
+	
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 4 THEN
+		ReadInputRegs(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nQuantity		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			nMBAddr			:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			cbLength		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity * 2, 
+			pDestAddr		:= ADR(SlaveCom[SlaveNo]^.Data), 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);
+	
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 5 THEN
+		WriteSingleCoil(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nMBAddr			:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			nValue			:= SlaveCom[SlaveNo]^.data[1], 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);
+	
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 6 THEN
+		WriteSingleReg(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nMBAddr			:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			nValue			:= SlaveCom[SlaveNo]^.data[1], 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);	
+			
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 8 THEN
+		Diagnose(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);		
+
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 15 THEN
+		WriteCoils(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nQuantity		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			nMBAddr			:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			cbLength		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			pSrcAddr		:= ADR(SlaveCom[SlaveNo]^.Data), 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);
+	
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 16 THEN
+		WriteRegs(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= TO_UINT(SlaveCom[SlaveNo]^.Port), 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nQuantity		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			nMBAddr			:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			cbLength		:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			pSrcAddr		:= ADR(SlaveCom[SlaveNo]^.Data), 
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);
+		
+	ELSIF 	SlaveCom[SlaveNo]^.Jobs[JobNo].FunctionCode = 23 THEN
+		// not implemented
+(*		ReadWriteRegs(
+			sIPAddr			:= SlaveCom[SlaveNo]^.ipAddr, 
+			nTCPPort		:= SlaveCom[SlaveNo]^.Port, 
+			nUnitID			:= SlaveCom[SlaveNo]^.Address, 
+			nReadQuantity	:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			nMBReadAddr		:= SlaveCom[SlaveNo]^.jobs[JobNo].startAddress, 
+			nWriteQuantity	:= , // missing
+			nMBWriteAddr	:= , // missing
+			cbDestLength	:= SlaveCom[SlaveNo]^.jobs[JobNo].Quantity, 
+			pDestAddr		:= ADR(SlaveCom[SlaveNo]^.Data),
+			cbSrcLength		:= , // missing
+			pSrcAddr 		:= , // missing
+			bExecute		:= Execute, 
+			tTimeout		:= , 
+			bBusy			=> StartJob, 
+			bError			=> Error, 
+			nErrId			=> ErrorID);	
+		*)			
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ModbusTcpMaster">
+      <LineId Id="207" Count="58" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusTcpMaster.getNextJob">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusTcpMaster.getNextSlave">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusTcpMaster.reset">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="18" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusTcpMaster.startJob">
+      <LineId Id="3" Count="146" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

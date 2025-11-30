@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_LogbookSubscriber" Id="{05d9316c-0f52-49ec-a57c-e9db30bd7c63}">
+    <Declaration><![CDATA[INTERFACE I_LogbookSubscriber Extends __System.IQueryInterface 
+]]></Declaration>
+    <Method Name="addNewMessage" Id="{34fc6af4-b5a5-4d54-be0b-36fd00198aba}">
+      <Declaration><![CDATA[METHOD addNewMessage : BOOL
+VAR_IN_OUT
+	data										:	LogbookData;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="isBusy" Id="{df0a44f0-af3e-4f31-bd8e-8b6f1eb4c31b}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC isBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{fb780491-b5b3-47c1-817f-4855864daa54}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

@@ -1,0 +1,267 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="SEQUENCE_HDL" Id="{aa74b748-c768-4296-a2fc-41ba9ed57182}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Sequence handle object contains all needed variables for a state machine, like timer, state variable and error handle object
+FUNCTION_BLOCK SEQUENCE_HDL
+VAR_INPUT
+	State													:	DINT := 0;		//Current state
+	Err														:	ERROR_HDL;		//Error handle object
+	Text													:	STRING := '';	//Could used for user defined texts 
+END_VAR             										
+VAR_OUTPUT          										
+	MemSetState												:	DINT := 0;		//Memory for start state , set by method "Set"
+	Busy													:	BOOL := FALSE;	//State machine is active - sets to TRUE by method "Set" and state <> 0
+	Done													:	BOOL := FALSE;	//State machine sucessful finished - sets to TRUE by method "Finish" if Error handle is emnpty
+	TON														:	TON := (IN := FALSE); //Use Methods to control state machine time
+END_VAR             	
+VAR                 	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="abort" Id="{a4eb6e7b-b0a8-416d-846d-2f44cd210519}">
+      <Declaration><![CDATA[METHOD PUBLIC abort : BOOL //Return value = TRUE - state will reset to 0 and Busy to FALSE in case state was <> 0 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF state <> 0 
+THEN
+	Busy 													:= FALSE;
+	Done 													:= FALSE;
+	     													  													
+	text 													:= CONCAT('ABORTED~State:',DINT_TO_STRING(state));
+	text 													:= CONCAT(text,'(SetState:');
+	text 													:= CONCAT(text,DINT_TO_STRING(MemSetState));
+	text 													:= CONCAT(text,')/Busy=');
+	text 													:= CONCAT(text,BOOL_TO_STRING(Busy));
+	text 													:= CONCAT(text,'/Done=');
+	text 													:= CONCAT(text,BOOL_TO_STRING(Done));
+	text 													:= CONCAT(text,'/Error=');
+	text 													:= CONCAT(text,BOOL_TO_STRING(Err.flag));
+	
+	state													:= 0;
+	Abort 													:= TRUE;
+ELSE
+	Abort 													:= TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="active" Id="{08f89166-34c4-4368-bcdc-3ed0c4ed6ab6}">
+      <Declaration><![CDATA[METHOD PUBLIC active : BOOL //Return value = TRUE if sequence handle is active (state <> 0)
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Busy														:= State <> 0;
+Done														:= FALSE;
+Active														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="finish" Id="{2874e965-38bb-4119-98e2-eba3e25ac0a2}">
+      <Declaration><![CDATA[METHOD PUBLIC finish : BOOL//Return value = TRUE if state was <> 0 and Err.flag = FALSE
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF state <> 0 
+THEN
+	Busy 													:= FALSE;
+	Done 													:= NOT Err.flag;
+	     													  													
+	text 													:= CONCAT('FINISH~State:',DINT_TO_STRING(state));
+	text 													:= CONCAT(text,'(SetState:');
+	text 													:= CONCAT(text,DINT_TO_STRING(MemSetState));
+	text 													:= CONCAT(text,')/Busy=');
+	text 													:= CONCAT(text,BOOL_TO_STRING(Busy));
+	text 													:= CONCAT(text,'/Done=');
+	text 													:= CONCAT(text,BOOL_TO_STRING(Done));
+	
+	state													:= 0;
+	Finish 													:= Done;	
+ELSE
+	Finish 													:= FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="incState" Id="{4e29fa77-cf0f-4a6f-a5f2-0c96a9ede638}">
+      <Declaration><![CDATA[METHOD PUBLIC incState : BOOL //Increment State by NoOfIncrements / Result always true 
+VAR_INPUT
+	NoOfIncrements								:	DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[State := State + NoOfIncrements;
+incState := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{fcfcea69-4e30-4d8a-97ad-3d23847e22cc}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //return value = TRUE if execution finished 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Done 														:= FALSE;
+Busy 														:= FALSE;
+text 														:= CONCAT('RESET~State:',DINT_TO_STRING(state));
+text 														:= CONCAT(text,'(SetState:');
+text 														:= CONCAT(text,DINT_TO_STRING(MemSetState));
+text 														:= CONCAT(text,')/Busy=');
+text 														:= CONCAT(text,BOOL_TO_STRING(Busy));
+text 														:= CONCAT(text,'/Done=');
+text 														:= CONCAT(text,BOOL_TO_STRING(Done));
+
+MemSetState := state 										:=  0;
+reset 														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resetWithErrHdl" Id="{a296fc9e-e145-4b85-bd19-e7f196163e9e}">
+      <Declaration><![CDATA[METHOD PUBLIC resetWithErrHdl : BOOL //return value = TRUE if execution finished 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Reset();
+Err.Reset();
+ResetWithErrHdl												 := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="set" Id="{42bb9387-8611-49ac-8e8e-f1186f0a93c3}">
+      <Declaration><![CDATA[METHOD PUBLIC set : BOOL //Set MemSetstate to state value, Return value = TRUE if sequence handle will be busy (State <> 0)
+VAR_INPUT
+	State													:		 DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MemSetState 												:= THIS^.state := State;
+Busy 														:= state <> 0;
+Done 														:= FALSE;
+Set															:= Busy;
+                    										
+text 														:= CONCAT('SET~State:',DINT_TO_STRING(MemSetstate));
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="ton_BT" Id="{c0685f15-62bd-4ec8-a34e-03a058759ea2}">
+      <Declaration><![CDATA[PROPERTY PUBLIC ton_BT : TIME]]></Declaration>
+      <Get Name="Get" Id="{f01f93e1-12c1-4be5-9917-8a7fc952d4ec}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF ton.IN
+	AND NOT ton.Q
+THEN
+	Ton_BT 													:= ton.PT - ton.ET;
+ELSE       													
+	Ton_BT 													:= T#0MS;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ton_PT" Id="{c3de0b17-e41e-45ea-baa1-45e46932b1a5}">
+      <Declaration><![CDATA[PROPERTY PUBLIC ton_PT : TIME]]></Declaration>
+      <Get Name="Get" Id="{afe92ad7-02d8-4f6f-be00-13e13b26b6da}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Ton_PT 														:= ton.PT;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f2642873-ee6d-481a-972e-e816ed609ad6}">
+        <Declaration><![CDATA[PUBLIC 
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Ton.PT 														:= Ton_PT;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="tonOFF" Id="{15bdd105-bfca-496f-9a98-c8a627daccaa}">
+      <Declaration><![CDATA[METHOD PUBLIC tonOFF : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TON(In := FALSE,Q => );
+TonOFF := NOT Ton.Q;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="tonON" Id="{09ca4010-695d-4533-848d-c9b1c9fe7de3}">
+      <Declaration><![CDATA[METHOD PUBLIC tonON : BOOL; //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TON(In := TRUE,Q => TonON);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="tonRUN" Id="{c820356e-eda5-42d7-b973-3c056ffef969}">
+      <Declaration><![CDATA[METHOD PUBLIC tonRUN : BOOL //Return value status of time (Ton.Q)
+VAR_INPUT
+	IN														:	BOOL;
+	PT														:	TIME;
+END_VAR         											
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.TON.IN := IN;
+THIS^.TON.PT := PT;
+TON(IN := IN , PT := PT, Q => TonRUN);]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="SEQUENCE_HDL">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.abort">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.active">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.finish">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.incState">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.reset">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.resetWithErrHdl">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.set">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.ton_BT.Get">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.ton_PT.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.ton_PT.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.tonOFF">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.tonON">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SEQUENCE_HDL.tonRUN">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

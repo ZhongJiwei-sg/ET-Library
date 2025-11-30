@@ -1,0 +1,212 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="CoordinateTransformation2D" Id="{0eebd25c-d4c0-48e4-809f-89aeeafae309}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CoordinateTransformation2D //CoordinateTransformation
+// transformation of an X/Y product coordinate to the machine coordinate system
+// MCS = machine coordinate system
+// PCS = product coordinate system
+VAR_INPUT
+//Parameter
+	x0 														: LREAL;		// origin MCS X coordinate of the product coordinate system
+	y0 														: LREAL;		// origin MCS Y coordinate of the product coordinate system
+	x1 														: LREAL;		// opposite corner point MCS X coordinate of the product 
+	y1 														: LREAL;		// opposite corner point MCS Y coordinate of the product
+	a 														: LREAL;		// length of the product (difference x1pcs-x0pcs)
+	b 														: LREAL;		// width of the product (difference y1pcs-y0pcs)
+END_VAR                                                 	
+VAR_OUTPUT                                              	
+	Xmcs 													: LREAL;	// X coordinate in machine coordinate system
+	Ymcs 													: LREAL;	// Y coordinate in machine coordinate system
+															
+	Xpcs 													: LREAL;	// X coordinate in Product coordinate system
+	Ypcs 													: LREAL;	// Y coordinate in Product coordinate system
+                                                        	
+	Alfa													: LREAL;	
+
+	Error 													: BOOL;	
+//		ErrorID 											: UDINT;
+END_VAR
+VAR
+	c														: LREAL;
+	diagonal												: LREAL;
+
+	ratio													: LREAL;
+	
+	alfa1													: LREAL;
+	alfa2													: LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Property Name="diagonalMSC" Id="{70b0b336-5fe9-46a6-990c-6e9c3eb529fd}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC diagonalMSC : LREAL]]></Declaration>
+      <Get Name="Get" Id="{192b313f-90df-4a4a-ab56-bc9d8b4e183e}">
+        <Declaration><![CDATA[VAR
+	t		:	LREAL;
+END_VAR
+                                  ]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[t 			:=  EXPT(X1-X0,2.0) + EXPT(y1-y0,2.0);
+DiagonalMSC := SQRT(t);
+				  
+	]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="diagonalPCS" Id="{e5ced07d-5bbc-409c-a19b-f4de621f05b6}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC diagonalPCS : LREAL]]></Declaration>
+      <Get Name="Get" Id="{8f02223e-c7b7-483f-b7ba-9ced9eb290fa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DiagonalPCS := SQRT((a*a)+(b*b));
+
+
+	]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isParamValid" Id="{65c3dd37-edc9-4926-a601-ec5001996884}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC isParamValid : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0ae453e5-a06d-4bdc-b615-eb2f6a2d7f78}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IsParamValid 													:= not ParamHasError;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{007ef2de-4c32-46c8-bf9c-1c009911f215}">
+        <Declaration><![CDATA[PUBLIC 
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF NOT IsParamValid
+THEN
+	a 														:= 0.0;
+	b 														:= 0.0;
+	x1 														:= Y1 := 0.0;
+	y0 														:= X0 := 0.0;
+END_IF
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="MSCtoPCS" Id="{7f992c96-8ab1-46c9-a924-0389a27e7d2e}">
+      <Declaration><![CDATA[METHOD MSCtoPCS : BOOL //Return value = TRUE if execution finished successful / FALSE if finished with error
+VAR_INPUT
+	Xmcs 													: LREAL;	// X coordinate in machine coordinate system
+	Ymcs 													: LREAL;	// Y coordinate in machine coordinate system
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ParamHasError THEN
+	Error 													:= TRUE; 
+	MSCtoPCS 												:= FALSE;
+ELSE	
+	THIS^.Xmcs												:= Xmcs;	
+	THIS^.Ymcs												:= Ymcs;	
+
+	c 														:= SQRT(a*a + b*b);
+	alfa 													:= ACOS((x1-x0) / c) - ACOS( a / c);
+	
+	Xpcs 													:= 	 (Xmcs - x0) * COS(alfa) + (Ymcs - y0) * SIN(alfa);
+	Ypcs 													:= - (Xmcs - x0) * SIN(alfa) + (Ymcs - y0) * COS(alfa);
+	
+	Error 													:= FALSE; 
+	MSCtoPCS 												:= TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="paramHasError" Id="{0c612392-d6d6-4c78-946d-64729282f66d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PRIVATE paramHasError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{66f459e1-4938-4330-b4b2-1a477fa71316}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ParamHasError := 	a<=0.0 
+			OR 	b<=0.0 
+			OR 	x1=x0 
+			OR 	y1=y0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="PCStoMSC" Id="{a0635d90-63b0-4493-bc51-beb1976968e1}">
+      <Declaration><![CDATA[METHOD PUBLIC PCStoMSC : booL //Return value = TRUE if execution finished successful / FALSE if finished with error
+VAR_INPUT
+	Xpcs : LREAL;	// X coordinate in product coordinate system
+	Ypcs : LREAL;	// Y coordinate in product coordinate system	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ParamHasError 
+THEN
+	Error 													:= TRUE; 
+	PCStoMSC												:= FALSE;
+ELSE                										
+	THIS^.Xpcs												:= Xpcs;	
+	THIS^.Ypcs												:= Ypcs;
+	
+	c 														:= SQRT(a*a + b*b);
+	diagonal												:= SQRT((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0));
+	
+	ratio													:= diagonal/c;
+	
+	alfa1 													:= ACOS((x1-x0) / diagonal);
+	alfa2													:= ACOS(a/c);
+	
+	alfa													:= alfa1-alfa2;
+	
+	Xmcs 													:= x0 + ratio * (Xpcs * COS(alfa) - Ypcs * SIN(alfa));
+	Ymcs 													:= y0 + ratio * (Xpcs * SIN(alfa) + Ypcs * COS(alfa));
+                    	
+	Error 													:= FALSE; 
+	PCStoMSC												:= TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CoordinateTransformation2D">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="CoordinateTransformation2D.diagonalMSC.Get">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="CoordinateTransformation2D.diagonalPCS.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="CoordinateTransformation2D.isParamValid.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="CoordinateTransformation2D.isParamValid.Set">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="CoordinateTransformation2D.MSCtoPCS">
+      <LineId Id="3" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="6" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="CoordinateTransformation2D.paramHasError.Get">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="CoordinateTransformation2D.PCStoMSC">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

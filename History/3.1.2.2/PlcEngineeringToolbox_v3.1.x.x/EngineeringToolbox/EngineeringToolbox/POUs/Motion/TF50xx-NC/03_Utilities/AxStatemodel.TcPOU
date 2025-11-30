@@ -1,0 +1,485 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="AxStatemodel" Id="{2bd9767e-382a-4cf7-aabe-8b598c1c1542}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//based on Statemodel instance
+//IMPORTANT call this functionblock after AxAdmin !!!!
+FUNCTION_BLOCK AxStatemodel EXTENDS Statemodel_Unit
+VAR_INPUT 
+	SafetyOK												:	BOOL := TRUE; //Drive safety card OK
+	ENDisableInAborting										:	BOOL := FALSE; //Disable the axis directly in aborting instead of executing MC_Stop with given emergency dynamics  
+	ENSoEReset												:	BOOL := TRUE; 
+	ErrorActive												:	BOOL := FALSE; //Axis in error	
+	EmergencyDec											:	LREAL := 0.0; //Emergency dec used in Aborting 
+	EmergencyJerk											:	LREAL := 0.0; //Emergency jekr used in Aborting 
+	rAxis													:	REFERENCE TO AXIS_REF := 0;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	MC_Stop													: 	MC_Stop;
+	MC_Reset												:	MC_Reset;
+	SOE_Reset												:	FB_SoEReset;
+	Mainstate												:	INT := 0;
+	Ton_Seq													:	TON;
+{attribute 'displaymode':='binary'}
+	MemAbortingStep											:	BYTE; //Show online reasons for the aporting steps
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Axis UnitStateCtrl				 		V1.3		*)
+	(*														*)
+	(********************************************************)
+
+(* check rAxis ************************************************)
+IF NOT __ISVALIDREF(rAxis) 
+THEN 
+(*	ErrorText			:= 'Pointer pAxis invalid (0)'; *)
+	RETURN;
+END_IF
+
+(* work local sub ****************************************)
+	unit.name			:= CONCAT('Unit Axis ID: ', UDINT_TO_STRING(rAxis.NcToPlc.AxisId));
+
+(* Call super ***************************************)
+	SUPER^(); //Execute generic unit
+		
+(*********************************************************)
+
+
+]]></ST>
+    </Implementation>
+    <Method Name="aborted" Id="{4b2c122a-9910-42d3-a638-ab88436e0779}">
+      <Declaration><![CDATA[METHOD PROTECTED aborted : BOOL //Return value = TRUE if execution finsihed
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rAxis.PlcToNc.ControlDWord.0 						:= FALSE; (* Enable *)
+rAxis.PlcToNc.ControlDWord.1 						:= FALSE; (* Enable_Positive *)
+rAxis.PlcToNc.ControlDWord.2 						:= FALSE; (* Enable_Negative *)
+
+MC_Stop(
+	Axis			:= rAxis,
+	Execute			:= 	MC_Stop.Execute 
+						AND F_AxisControlLoopClosed(stateDWord := rAxis.NcToPlc.stateDWord) 
+						AND rAxis.Status.PTPmode ,  (* Block new motion cmd *)
+	Deceleration	:= ,
+	Jerk			:= ,
+	Options			:= ,
+	Done			=> ,
+	Busy			=> ,
+	Active			=> ,
+	CommandAborted	=> ,
+	Error			=> ,
+	ErrorID			=> );
+	
+Aborted												:= MC_Stop.Done OR MC_Stop.Error OR NOT F_AxisControlLoopClosed(stateDWord := rAxis.NcToPlc.stateDWord);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="aborting" Id="{80292792-5bac-42aa-b005-e9b52f88c50d}">
+      <Declaration><![CDATA[METHOD PROTECTED aborting : BOOL //Return value = TRUE if execution finsihed
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE Mainstate OF
+		0: (* Step 1 -> start stopping *)
+			MemAbortingStep									:= 0;
+			IF NOT rAxis.Status.PTPmode
+				OR rAxis.Status.ProtectedMode
+				OR rAxis.Status.MotionCommandsLocked
+				OR NOT rAxis.Status.Operational
+			THEN (* axis is slave-axis *)
+				Mainstate									:= 99;
+				MemAbortingStep.7							:= TRUE; 
+			ELSIF ENDisableInAborting
+			THEN
+				rAxis.PlcToNc.ControlDWord.0 				:= FALSE; (* Enable *)
+				rAxis.PlcToNc.ControlDWord.1 				:= FALSE; (* Enable_Positive *)
+				rAxis.PlcToNc.ControlDWord.2 				:= FALSE; (* Enable_Negative *)
+				MemAbortingStep.2							:= TRUE;
+				Mainstate									:= 99;	
+			ELSE
+				IF NOT MC_Stop.busy      					
+				THEN                        					
+					MemAbortingStep.1						:= TRUE;
+					Mainstate								:= 99;
+				END_IF
+
+				MC_Stop(
+					Axis			:= rAxis,
+					Execute			:= Mainstate = 99 ,
+					Deceleration	:= EmergencyDec,(* NOT-HALT Parameter uebergeben *)
+					Jerk			:= EmergencyJerk, (* NOT-HALT Parameter uebergeben *)
+					Options			:= ,
+					Done			=> ,
+					Busy			=> ,
+					Active			=> ,
+					CommandAborted	=> ,
+					Error			=> ,
+					ErrorID			=> );
+			END_IF
+
+		99: (* Step 2 -> if stopped or safety signal = FALSE *) 
+			MC_Stop(
+				Axis			:= rAxis,
+				Execute			:= ,
+				Deceleration	:= ,
+				Jerk			:= ,
+				Options			:= ,
+				Done			=> ,
+				Busy			=> ,
+				Active			=> ,
+				CommandAborted	=> ,
+				Error			=> ,
+				ErrorID			=> );
+
+			IF NOT F_AxisControlLoopClosed(stateDWord := rAxis.NcToPlc.stateDWord)
+			THEN
+				MemAbortingStep.4							:= TRUE;
+				Unit.StateComplete();
+				Aborting									:= TRUE;			
+			ELSIF MC_Stop.Execute AND rAxis.Status.NotMoving AND (MC_Stop.Done OR MC_Stop.Error)	
+			THEN                        					
+				MemAbortingStep.3							:= TRUE;
+				Unit.StateComplete();
+				Aborting									:= TRUE;
+			END_IF
+		END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="clearing" Id="{3baf2a80-e0ad-4f32-bfa7-6cca143b19ff}">
+      <Declaration><![CDATA[METHOD PROTECTED clearing : BOOL //Return value = TRUE if execution finsihed
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE Mainstate OF
+0:
+	MC_Stop(
+		Axis			:= rAxis,
+		Execute			:= FALSE,
+		Deceleration	:= , 
+		Jerk			:= , 
+		Options			:= , 
+		Done			=> , 
+		Busy			=> , 
+		Active			=> , 
+		CommandAborted	=> , 
+		Error			=> , 
+		ErrorID			=> );
+		
+	IF NOT MC_Stop.Busy
+	THEN
+		Mainstate									:= 99;
+	END_IF
+				
+99:
+	IF NOT rAxis.PlcToNc.ControlDWord.0 (* Enable is already active *)
+		OR F_AxisControlLoopClosed(stateDWord := rAxis.NcToPlc.stateDWord)
+		OR ErrorActive
+	THEN
+		Clearing									:= TRUE;
+		Unit.StateComplete();
+	END_IF
+			
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="completing" Id="{191154ba-4d4b-4042-9f06-36462f1dce68}">
+      <Declaration><![CDATA[METHOD PROTECTED completing : Bool //Return value = TRUE if execution finsihed
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Fehler ausloesen *)
+IF UNit.InCompleting
+	AND NOT F_AxisHasJob(stateDWord := rAxis.NcToPlc.stateDWord)
+THEN
+	Unit.StateComplete();
+	Completing											:= TRUE;
+ELSE
+	Completing 											:= Executing();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="executing" Id="{56abf58f-e4fe-4b66-9840-21215acefa2f}">
+      <Declaration><![CDATA[METHOD PROTECTED executing : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Set statemodel to error if axis is in error *********)
+IF rAxis.NcToPlc.ErrorCode <> 0 OR ErrorActive 
+THEN
+	IF unit.optEnableFwdMachineErrorToMaster
+	THEN
+		Unit.SetMachineError();
+	ELSE
+		Unit.SetLocalError();
+	END_IF
+END_IF
+	
+Executing 												:= Unit.isStateActive(Unit.State);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resetting" Id="{15271aa7-e3f3-4640-bb3a-fae2d066ec3f}">
+      <Declaration><![CDATA[METHOD PROTECTED resetting : Bool //Return value = TRUE if execution finsihed
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[		CASE Mainstate OF
+		0:
+			Ton_Seq(IN := FALSE);
+			
+			MC_Reset(
+				Axis		:= rAxis,
+				Execute		:= FALSE);
+				
+			SOE_Reset(
+				Axis		:= rAxis,
+				Execute		:= FALSE);
+
+			IF SOE_Reset.Busy
+				OR MC_Reset.Busy
+			THEN
+				;
+			ELSIF SafetyOK
+			THEN
+				Mainstate									:= 10;
+			ELSE            								
+				Mainstate									:= 1;
+			END_IF          	
+
+		1: (* Wartezeit bis Safety OK *)
+			Ton_Seq(IN := TRUE, PT := T#3S);
+			IF SafetyOK	
+			THEN
+				Mainstate									:= 2;
+			ELSIF Ton_Seq.Q 
+			THEN (* Karten nicht resetbar .... *)
+				Ton_Seq(IN := FALSE);
+				Mainstate									:= 10;
+			END_IF
+			
+
+		2: (* Wartezeit nach Safety Reset *)
+			Ton_Seq(IN :=TRUE, PT := T#100MS);
+			IF Ton_Seq.Q
+			THEN
+				Ton_Seq(IN := FALSE);
+				Mainstate									:= 10;
+			END_IF
+
+		10: 
+			SOE_Reset(
+				Axis	:= rAxis,
+				Execute	:= ENSoEReset AND(rAxis.Status.Error OR rAxis.Status.DriveDeviceError));
+
+			Mainstate										:= 11;
+
+		11:
+			SOE_Reset(Axis	:= rAxis);
+			IF NOT SOE_Reset.Busy THEN
+				Mainstate			:= 20;
+			END_IF
+
+		20:
+			MC_Reset(
+				Axis	:= rAxis,
+				Execute	:= NOT rAxis.Status.ProtectedMode OR rAxis.Status.Error);
+
+			Mainstate										:= 21;
+
+		21:
+			MC_Reset( Axis	:= rAxis);
+			IF NOT MC_Reset.Busy 
+			THEN
+				Mainstate									:= 99;
+				Ton_Seq(IN := FALSE);
+			END_IF
+
+		99:
+			Ton_Seq(IN := TRUE, PT := T#3S);
+			MC_Reset(
+				Axis	:= rAxis,
+				Execute	:= FALSE);
+				
+			SOE_Reset(
+				Axis	:= rAxis,
+				Execute	:= FALSE);
+
+			IF NOT MC_Reset.Busy
+				AND NOT SOE_Reset.Busy
+				AND(Ton_Seq.Q OR NOT ErrorActive AND NOT rAxis.Status.Error) 
+			THEN
+				Unit.StateComplete();
+				Resetting									:= TRUE;
+			END_IF
+		END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="starting" Id="{2c023a19-ede5-4957-900c-5ee432a636b1}">
+      <Declaration><![CDATA[METHOD PROTECTED starting : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Unit.StateComplete();
+Starting													:= Executing();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="stateChanged" Id="{478380c3-889a-49c8-bda0-5765421260d8}">
+      <Declaration><![CDATA[METHOD PROTECTED stateChanged : BOOL 
+VAR_INPUT
+	mode											:	eMODE;
+	state											:	eSTATE;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MainState 										:= 0;										]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="stopped" Id="{e7792d3f-0904-48d5-b9ee-f11b25c45621}">
+      <Declaration><![CDATA[METHOD PROTECTED stopped : Bool //Return value = TRUE if execution finsihed
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[		MC_Stop(
+			Axis			:= rAxis,
+			Execute			:= FALSE,
+			Deceleration	:= ,
+			Jerk			:= ,
+			Options			:= ,
+			Done			=> ,
+			Busy			=> ,
+			Active			=> ,
+			CommandAborted	=> ,
+			Error			=> ,
+			ErrorID			=> );
+			
+		Stopped													:= MC_Stop.Done OR MC_Stop.Error;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="stopping" Id="{bd240512-7077-411e-a60e-dcf6cc44d2cf}">
+      <Declaration><![CDATA[METHOD PROTECTED stopping : BOOL //Return value = TRUE if execution finsihed
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[		CASE Mainstate OF
+		0:
+			IF NOT MC_Stop.busy
+			THEN
+				Mainstate									:= 1;
+			END_IF		
+
+			MC_Stop(
+				Axis			:= rAxis,
+				Execute			:= 	Mainstate <> 0 
+									AND NOT rAxis.Status.ProtectedMode 
+									AND rAxis.Status.PTPmode,
+				Deceleration	:= ,
+				Jerk			:= ,
+				Options			:= ,
+				Done			=> ,
+				Busy			=> ,
+				Active			=> ,
+				CommandAborted	=> ,
+				Error			=> ,
+				ErrorID		=> );
+
+		1:
+			MC_Stop(
+				Axis			:= rAxis,
+				Execute			:= 	MC_Stop.Execute 
+									AND NOT rAxis.Status.NotMoving 
+									AND rAxis.Status.ControlLoopClosed, (* Not Moving or not Operational *)
+				Deceleration	:= ,
+				Jerk			:= ,
+				Options			:= ,
+				Done			=> ,
+				Busy			=> ,
+				Active			=> ,
+				CommandAborted	=> ,
+				Error			=> ,
+				ErrorID			=> );
+
+			IF NOT MC_Stop.Execute AND NOT MC_Stop.Busy
+			THEN
+				Mainstate									:= 99;				
+			END_IF
+			
+		99:
+			Unit.StateComplete();
+			Stopping										:= TRUE;
+		END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxStatemodel">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.aborted">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.aborting">
+      <LineId Id="3" Count="62" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.clearing">
+      <LineId Id="3" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.completing">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.executing">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.resetting">
+      <LineId Id="3" Count="88" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.starting">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.stateChanged">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.stopped">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxStatemodel.stopping">
+      <LineId Id="3" Count="45" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

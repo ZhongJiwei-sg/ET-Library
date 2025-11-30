@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="CiA_DS402Statusword_Danfoss" Id="{d2ca5e88-4da8-4963-9294-31309809a690}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Statusword_Danfoss EXTENDS CiA_DS402Statusword
+VAR_INPUT
+END_VAR
+VAR_OUTPUT	
+	TargetReached				: BOOL; // Bit 10 in Velocity
+	Running						: BOOL; //Bit 14
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="readStatusword" Id="{05f62b00-e801-43b2-8257-843c71a4a64d}">
+      <Declaration><![CDATA[METHOD PUBLIC readStatusword : BOOL
+VAR_INPUT
+	Statusword 					:	UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+
+	TargetReached											:= Statusword.10;
+	Running													:= Statusword.14;
+
+	readStatusword											:= SUPER^.readStatusword(Statusword);
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Statusword_Danfoss">
+      <LineId Id="110" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Statusword_Danfoss.readStatusword">
+      <LineId Id="107" Count="2" />
+      <LineId Id="112" Count="2" />
+      <LineId Id="95" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

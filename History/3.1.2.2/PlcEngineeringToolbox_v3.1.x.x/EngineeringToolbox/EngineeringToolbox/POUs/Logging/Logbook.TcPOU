@@ -1,0 +1,298 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="Logbook" Id="{743c3bf0-038a-4cb4-bfec-c176fe15e4a4}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//PLC Logbook for debugging, records a number of "MAX_DATA" messages with timestamp.
+//The Logbook Puplisher can be used to forward messages from the logbook to several subscriber (Write into Logfile, display via EventLogger, send to Syslog Server)
+//
+//Parameter Timestamp needs to be updated externaly every cycle if needed
+//
+//Function "LogWithEventClass" is used inside
+FUNCTION_BLOCK Logbook IMPLEMENTS I_Logbook                 									
+VAR_OUTPUT CONSTANT     									
+//Parameter
+	MIN_DATA												:	INT := 1;
+	MAX_DATA												:	INT := PARAM.LOGBOOK_MAX_DATA; //see library parameter to customize parameter	
+                        									
+//option settings to modify the message string and behavior
+{attribute 'displaymode':='binary'}
+	OPTION_WRITE_TO_ADSLOG									: 	BYTE :=2#0000_0100; //Write entry directly to TwinCAT logger (shown in XAE output)
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_TIME_TO_MSG_STRING							: 	BYTE :=2#0000_1000;	//Add time stamp to message string 
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_DATE_TO_MSG_STRING							: 	BYTE :=2#0001_0000; //Add date to message string
+END_VAR                 									
+VAR_INPUT               									                       		
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 2#0000_0000;			(* option constants are alreay predefined, so they can accordingly be passed symbolically to the block
+																								Bit 0 = 
+																								Bit 1 = 
+																								Bit 2 = Send to TC Ads-Logger
+																								Bit 3 = Add time to message string
+																								Bit 4 = Add date to message string
+																								Bit 5 = 
+																								Bit 6 = 
+														 										Bit 7 =  								
+																								*)
+                        									
+// InputData         	
+	Timestamp												:	TIMESTRUCT; //Time stamp need to be updated cylic if it will be used
+	Msg														:	STRING(PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT) := ''; //Message string which will written into the DataMsg array by executing the Fb																							
+END_VAR             										
+VAR_OUTPUT
+	Data													:	ARRAY[MIN_DATA..MAX_DATA] OF LogbookData; // Recorded messages data
+	CntAddedMessages										:	INT;
+END_VAR
+VAR
+	TaskInterlock											:	BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* LogBook 									 *)
+(*********************************************)
+
+(* call method *********************************************)
+	_Write(Msg);
+(***********************************************************)	]]></ST>
+    </Implementation>
+    <Method Name="_write" Id="{cab82a80-9a48-4d63-abac-f8077da938e4}">
+      <Declaration><![CDATA[METHOD PROTECTED _write : BOOL
+VAR_IN_OUT
+	Msg														:	STRING(PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT);
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Write entry with every call ******************************)
+IF LEN(MSG) = 0
+THEN
+	_Write													:= FALSE;
+	RETURN;
+ELSIF TestAndSet(TaskInterlock)
+THEN	
+	MEMMOVE(ADR(Data[MIN(MIN_DATA + 1,MAX_DATA)]), 	ADR(Data), 	SIZEOF(Data) - SIZEOF(Data[MIN_DATA]));
+	
+	(* Datensatz oben eintragen *)
+	IF NOT Options.3 AND NOT Options.4
+	THEN
+		Data[MIN_DATA].Msg									:= Msg;
+	ELSIF Options.3 AND Options.4              
+	THEN                                                    
+		Data[MIN_DATA].Msg									:= SYSTEMTIME_TO_STRING(Timestamp);
+		Data[MIN_DATA].Msg									:= CONCAT(Data[MIN_DATA].Msg, ' | ');
+		Data[MIN_DATA].Msg									:= CONCAT(Data[MIN_DATA].Msg, Msg);
+	ELSIF Options.4                                   
+	THEN                                                    
+		Data[MIN_DATA].Msg									:= SYSTEMTIME_TO_STRING(Timestamp);
+		Data[MIN_DATA].Msg									:=	MID(Data[MIN_DATA].Msg, 12 , 12);
+		Data[MIN_DATA].Msg									:= CONCAT(Data[MIN_DATA].Msg, ' | ');
+		Data[MIN_DATA].Msg									:= CONCAT(Data[MIN_DATA].Msg, Msg);
+                                                            
+	ELSE (* Only Date to Msg String *)                      
+		Data[MIN_DATA].Msg									:= SYSTEMTIME_TO_STRING(Timestamp);
+		Data[MIN_DATA].Msg									:= MID(Data[MIN_DATA].Msg, 8 , 3);
+		Data[MIN_DATA].Msg									:= CONCAT(Data[MIN_DATA].Msg, ' | ');
+		Data[MIN_DATA].Msg									:= CONCAT(Data[MIN_DATA].Msg, Msg);
+	END_IF                                                  
+
+	//Coyp current options from logbook into message	                                                        
+	Data[MIN_DATA].Options									:= TO_WORD(Options);
+		
+	//Store time stamp
+	Data[MIN_DATA].Timestamp								:= Timestamp;
+	
+	CntAddedMessages										:= MIN(MAX_DATA, CntAddedMessages + 1); 
+	_Write													:= TRUE;
+	TaskInterlock											:= FALSE;
+END_IF
+
+(************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="delete" Id="{93908330-8485-4aa0-834e-108a3f5444dc}">
+      <Declaration><![CDATA[METHOD PUBLIC delete : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+CntAddedMessages											:= 0;
+MEMSET(ADR(Data),0,SIZEOF(Data));
+delete														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="getOldestMsg" Id="{0c2394ed-3b2a-4de7-bc1e-62f037062e3c}">
+      <Declaration><![CDATA[METHOD PUBLIC getOldestMsg : BOOL //Return value TRUE = if finished successful -> new message read
+VAR_IN_OUT
+	data													: LogbookData;								
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF CntAddedMessages >= MIN_DATA AND CntAddedMessages <= MAX_DATA
+	AND NOT TaskInterlock
+THEN
+	data													:= THIS^.Data[CntAddedMessages];
+	THIS^.Data[CntAddedMessages].Options.15					:= FALSE; //New message
+	CntAddedMessages										:= CntAddedMessages - 1;
+	getOldestMsg											:= TRUE;
+ELSE
+	getOldestMsg											:= FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optAddDateToMsgText" Id="{c4dd951b-cc61-4878-a0b9-b514c973540d}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAddDateToMsgText : BOOL]]></Declaration>
+      <Get Name="Get" Id="{7561c0dc-ad08-4a79-a0f5-085a88c564db}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAddDateToMsgText := Options.4;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{542f4760-039d-4b1a-90d3-2f4c78877d7b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.4 := optAddDateToMsgText;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optAddTimeToMsgText" Id="{e16d77cd-5328-4326-ba72-60df9a609594}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAddTimeToMsgText : BOOL]]></Declaration>
+      <Get Name="Get" Id="{bb2a098e-f076-4119-99c9-b633f2862e49}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAddTimeToMsgText := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{261a4089-750d-4a4c-aad0-36311ed629cf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optAddTimeToMsgText;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optWiteEntryToTcAdsLogger" Id="{80d32cb7-0055-4ab2-a5d5-9709982e7a8d}">
+      <Declaration><![CDATA[PROPERTY Public optWiteEntryToTcAdsLogger : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8f3c7958-b323-4d6e-a11a-3ee42f3f0217}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optWiteEntryToTcAdsLogger := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9bc2d287-879b-4fb1-808f-c642e1457f7d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.2 := optWiteEntryToTcAdsLogger;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="rCntAddedMessages" Id="{8700811b-0640-4158-b622-5916b1bd61ac}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC rCntAddedMessages : Reference to INT //Reference to variable showing no of added messages (Counter will be decreased by getOldestMsg)]]></Declaration>
+      <Get Name="Get" Id="{11852779-271a-4509-891d-7dbf93ee9583}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rCntAddedMessages REF= CntAddedMessages;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="readMsg" Id="{08f15d1f-7aee-43e4-bed8-26471e51099b}">
+      <Declaration><![CDATA[METHOD PUBLIC readMsg : REFERENCE TO LogbookData //Return value is a REFERENCE to the by Index selected entry.  
+VAR_INPUT
+	Index											:	INT;						
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+readMsg													REF= THIS^.Data[LIMIT(MIN_DATA,Index,MAX_DATA)];
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="write" Id="{169252df-e1a1-4a86-bbc0-d7264deeee64}">
+      <Declaration><![CDATA[METHOD PUBLIC write : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	Msg														:	STRING(PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT);
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+write														:= _Write(Msg);
+IF options.2 
+THEN
+	write 													:= write AND 0 = adsLogHint(Msg, '');
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Logbook">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook._write">
+      <LineId Id="62" Count="15" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="79" Count="3" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="84" Count="8" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="93" Count="2" />
+      <LineId Id="102" Count="2" />
+      <LineId Id="110" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.delete">
+      <LineId Id="3" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.getOldestMsg">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.optAddDateToMsgText.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.optAddDateToMsgText.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.optAddTimeToMsgText.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.optAddTimeToMsgText.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.optWiteEntryToTcAdsLogger.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.optWiteEntryToTcAdsLogger.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.rCntAddedMessages.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.readMsg">
+      <LineId Id="14" Count="1" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook.write">
+      <LineId Id="3" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

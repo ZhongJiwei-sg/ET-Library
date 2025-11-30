@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0275" Id="{2e8b12fa-35be-408e-afe6-3f574060dc53}">
+    <Declaration><![CDATA[TYPE AX5000_P_0275 EXTENDS ST_AX5000_P_0275: 
+	STRUCT
+(*		 {attribute 'GUID' := 'A39361D3-D4AC-4F67-8FEE-F366F3137B89'}
+		 {attribute 'Namespace' := 'AX5000'}
+		ActiveFeedbackAndMemory : E_AX5000_P_0275_ActiveFeedbackAndMemory;
+		InitializationErrorBehavior : BIT;
+		 {attribute 'hide'}
+		_reserved1 : BIT;
+		 {attribute 'hide'}
+		_reserved2 : BIT;
+		 {attribute 'hide'}
+		_reserved3 : BIT;
+		 {attribute 'hide'}
+		_reserved4 : BIT;
+		 {attribute 'hide'}
+		_reserved5 : BIT;
+		 {attribute 'hide'}
+		_reserved6 : BIT;
+		 {attribute 'hide'}
+		_reserved7 : BIT;
+*)
+	END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

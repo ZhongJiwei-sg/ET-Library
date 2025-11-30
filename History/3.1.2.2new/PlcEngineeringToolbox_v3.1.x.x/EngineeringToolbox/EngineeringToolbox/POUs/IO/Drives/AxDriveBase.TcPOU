@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxDriveBase" Id="{3d5d5ecc-04ba-4602-80b9-5abf2c607d74}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK AxDriveBase EXTENDS EcSlaveInfoDataExt IMPLEMENTS I_AxDriveBase
+VAR CONSTANT         	
+END_VAR  
+VAR_INPUT
+	rAxis													:	REFERENCE TO AXIS_REF := 0; //Reference to NC-Axis REF
+END_VAR                     					
+VAR_IN_OUT                  					
+END_VAR                     					
+VAR_OUTPUT                  					
+	Fault													:	BOOL; (* Drive Error *)
+	SwitchedOn												:	BOOL; (* Drive enabled *)
+	Ready													:	BOOL; (* Drive Ready *)
+{attribute 'displaymode':='binary'}    
+	Statusword										AT %I* 	:	UINT; //Link to the drive status word after linking the NC
+	Channel											AT %I*	:	USINT;
+END_VAR                     					                   					
+VAR                         				
+
+END_VAR
+VAR
+
+(* Cache *********************************************************************)
+	State													:	INT; //State machine 
+
+(* Timer ********************************************************************************)
+
+(* Trigger ******************************************************************************)
+
+(* Instance ****************************************************************************)
+	
+(* Dummy Speicher **********************************************************)
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Drive base information															*)
+	(************************************************************************************)
+	
+	SUPER^();
+]]></ST>
+    </Implementation>
+    <Property Name="rAxDrive" Id="{1fe46542-f8ae-4e3c-949f-8e4d0fd7a242}">
+      <Declaration><![CDATA[PROPERTY PUBLIC rAxDrive : REFERENCE TO AxDriveBase]]></Declaration>
+      <Get Name="Get" Id="{6592a583-77a1-4112-b887-94a74f6e784a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rAxDrive REF= This^;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="rInfoData" Id="{d5d38b8b-816d-4578-a893-bedfc8cf1f99}">
+      <Declaration><![CDATA[PROPERTY Public rInfoData : reference to EcSlaveInfoData]]></Declaration>
+      <Get Name="Get" Id="{7f7cebab-97b3-48cc-9ceb-80472c5a9d00}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rInfoData REF= THis^;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveBase">
+      <LineId Id="3" Count="2" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveBase.rAxDrive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveBase.rInfoData.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0207" Id="{4c5feb66-7b16-4352-8dc0-42aa2354ebca}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0207 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Resistance:UINT;
+	Continuous_Power:UINT;
+	Period_time_for_duty_cycle:UINT;
+	Break_resistor_protection:UINT;
+	Maximum_peak_energy_by_40Percent_duty_cycle:UDINT;
+	Maximum_peak_energy_by_20Percent_duty_cycle:UDINT;
+	Maximum_peak_energy_by_10Percent_duty_cycle:UDINT;
+	Maximum_peak_energy_by_1Percent_duty_cycle:UDINT;
+	Maximum_peak_energy_by_01Percent_duty_cycle:UDINT;
+	Rsvd:ARRAY[0..3] OF UDINT;
+
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="Pulse" Id="{2a50aa56-d732-42b9-9a11-566ccd23cd33}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Generates a pulse signal 
+FUNCTION_BLOCK Pulse
+VAR_INPUT
+	IN														: BOOL; //Start pulse generator
+	PT_ON													: TIME; //Time pulse on	
+	PT_OFF													: TIME; //Time pulse off 
+END_VAR             										
+VAR_OUTPUT          										
+	Q														: BOOL; 
+	RT														: BOOL; 
+	FT														: BOOL;
+END_VAR             										
+VAR                 	
+	TON_PULSE												: TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Pulse generator																*)
+	(********************************************************************************)
+
+(* Reset flag *)
+RT := FT													:= FALSE;
+(* logic *)
+IF 	Q AND(TON_PULSE.Q OR NOT IN)
+THEN
+	TON_PULSE(IN:=FALSE  , PT:= PT_OFF);
+	FT 														:= Q;
+	Q 														:= FALSE;
+ELSIF NOT Q AND TON_PULSE.Q
+	OR_ELSE In AND NOT TON_PULSE.IN 
+THEN
+	RT 														:= NOT Q;
+	TON_PULSE(IN:= FALSE , PT:= PT_ON) ;
+	Q 														:= TRUE;
+END_IF
+
+//Run timer
+TON_PULSE(IN:=IN);
+
+(***********************************************************************************************************************)]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="Pulse">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

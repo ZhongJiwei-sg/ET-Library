@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0072" Id="{9c6481b1-c826-409e-9a0a-d7ebf29353f6}">
+    <Declaration><![CDATA[TYPE AX5000_P_0072 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Holding_torque:UINT;
+	Elektrical_power:UINT;
+	Moment_of_inertia:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

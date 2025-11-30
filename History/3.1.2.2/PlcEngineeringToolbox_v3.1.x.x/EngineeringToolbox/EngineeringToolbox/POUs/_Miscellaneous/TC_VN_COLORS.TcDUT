@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="TC_VN_COLORS" Id="{055d3d77-5357-447d-9bf6-33a9a75df4ab}">
+    <Declaration><![CDATA[TYPE TC_VN_COLORS :
+STRUCT
+	// Colors
+	BLACK		: TcVnVector4_LREAL := [0, 0, 0, 255];
+	WHITE		: TcVnVector4_LREAL := [255, 255, 255, 255];
+	RED			: TcVnVector4_LREAL := [255, 0, 0, 255];
+	LIME		: TcVnVector4_LREAL := [0, 255, 0, 255]; //bright green
+	BLUE		: TcVnVector4_LREAL := [0, 0, 255, 255];
+	YELLOW		: TcVnVector4_LREAL := [255, 255, 0, 255];
+	CYAN		: TcVnVector4_LREAL := [0, 255, 255, 255];	
+	MAGENTA		: TcVnVector4_LREAL := [255, 0, 255, 255];
+	SILVER		: TcVnVector4_LREAL := [192,192,192, 255];
+	GRAY		: TcVnVector4_LREAL := [128,128,128, 255]; //darker than silver
+	MAROON		: TcVnVector4_LREAL := [128,0,0, 255];
+	OLIVE		: TcVnVector4_LREAL := [128,128,0, 255];
+	GREEN		: TcVnVector4_LREAL := [0,128,0, 255]; //darker green
+	PURPLE		: TcVnVector4_LREAL := [128,0,128, 255];
+	TEAL		: TcVnVector4_LREAL := [0,128,128, 255];
+	NAVY		: TcVnVector4_LREAL := [0,0,128, 255];
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="AxNcPTP" Id="{029282f8-0bc8-4352-aa48-cfeb8fcdebe9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxNcPTP EXTENDS AxNcBase implements I_AxNcPTP (* See Tc2_MC2 *)
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT
+	Motion													:	AxMotion;                                        
+END_VAR                           
+VAR_OUTPUT                  	
+END_VAR
+VAR
+
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Axis 																*)
+	(************************************************************************)
+
+	
+(********************************************************************************)
+(* Call AxNcBase																*)
+(********************************************************************************)
+	Super^();
+		
+(********************************************************************************)
+(* work moving ctrl 															*)
+(********************************************************************************)
+	Motion(rAxis := THIS^);
+	errorCheck(AxBase := Motion);
+	
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="noAction" Id="{4aa31de8-13f8-41da-809d-c5fabfa1225a}">
+      <Declaration><![CDATA[METHOD PUBLIC noAction : BOOL //Return value = TRUE if busy of home and motion 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+Motion.Execute	:= FALSE;
+Motion.JogBwd	:= FALSE;
+Motion.JogFwd	:= FALSE;
+
+NoAction 		:= 	Super^.noAction() and NOT Motion.Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="rMotion" Id="{9acdc345-943d-4dcc-8d8d-5031734f58d4}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rMotion : REFERENCE TO AxMotion]]></Declaration>
+      <Get Name="Get" Id="{6db80e0f-b7ca-4751-b5bb-2c6e7929d405}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMotion REF= Motion;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="AxNcPTP">
+      <LineId Id="3" Count="1" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="194" Count="2" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="218" Count="3" />
+      <LineId Id="217" Count="0" />
+      <LineId Id="222" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcPTP.noAction">
+      <LineId Id="2" Count="0" />
+      <LineId Id="19" Count="3" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcPTP.rMotion.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

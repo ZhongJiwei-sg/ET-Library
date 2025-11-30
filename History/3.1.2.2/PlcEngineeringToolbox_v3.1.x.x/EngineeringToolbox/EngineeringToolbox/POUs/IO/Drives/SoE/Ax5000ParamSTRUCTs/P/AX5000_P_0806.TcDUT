@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0806" Id="{6ca4ce25-be82-4976-ac09-0e64111865cc}">
+    <Declaration><![CDATA[TYPE AX5000_P_0806 :
+STRUCT
+	Amplifier_output_voltage_slope:INT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

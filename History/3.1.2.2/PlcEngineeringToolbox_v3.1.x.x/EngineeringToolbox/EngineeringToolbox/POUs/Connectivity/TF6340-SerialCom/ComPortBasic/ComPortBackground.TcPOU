@@ -1,0 +1,199 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="ComPortBackground" Id="{b899b104-34ea-40f2-88bb-a849ed595c7f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Wrapper for background communication of serial com ports like EL terminal or PC-COM-Port
+//based on TF6340 - SerialCommunication (Tc2_SerialCom)
+FUNCTION_BLOCK ComPortBackground
+VAR_INPUT
+	Enable													: BOOL ; // FB will be processed as long as enable is TRUE 
+	ResetTrig												: BOOL ; // The function block will be reset with a rising edge 
+	Mode													: ComSerialLineMode_t := SERIALLINEMODE_EL6_22B; //terminal parameter, see ComSerialLineMode_t at documentation of library
+	pComIn													: POINTER TO BYTE;	// COM-Port process image	%I*
+	pComOut													: POINTER TO BYTE;	// COM-Port process image  	%Q* 
+	SizeComIn												: UINT := 22; 	// Size of process data - depends on terminal type (3,5,22,64 Byte)
+	Cfg 													: ComSerialConfig := (Baudrate := 19200); // Cfg Structure for PC-com port
+	TXBuffer												: COMbuffer ;	// TX buffer used by ComPortSendRec
+END_VAR
+VAR_OUTPUT
+	RXBuffer												: COMbuffer ;	// RX buffer used by ComPortSendRec
+	PortOpened												: BOOL;	// Background communication etablished
+	Busy													: BOOL;	// Busy is TRUE at the rising edge of Enable and stays TRUE as long as the FB is performing any action. 
+	Error													: BOOL; // Rising edge of Error informs that an error occurred during the execution of the Function Block 
+{attribute 'displaymode':='hex'}
+	ErrorId													: UDINT;// Error identification - see ADS return codes and TF6340 documentation at Beckhoff infosys for further information
+	ComErrorId												: ComError_t ; 	// Serial com. error indentification - Tc2_SerialCom documentaion for further information
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR
+(* internally used variables ********************************************************)
+	MemErrorID												: UDINT := 0;
+	State													: INT := 0;
+	
+(* internal function-block instances for serial communication ***************************************************************)
+	_ClearComBuffer											: 	ClearComBuffer; // clears the internal communication buffer of the PLC
+	_SerLineControl											: 	SerialLineControl; // looks after backround-communication
+	_SerLineControlADS										: 	SerialLineControlADS; // looks after backround-communication
+	_Comreset												: 	ComReset; // Reset KL-Terminal
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*******************************************************************************)
+
+CASE state OF
+0:
+	IF NOT Enable AND NOT _SerLineControlADS.Busy
+		OR Error
+	THEN
+		Busy												:= FALSE;
+		PortOpened											:= FALSE;
+		
+		IF ResetTrig
+		THEN
+			reset();
+		END_IF
+
+	ELSIF Mode = ComSerialLineMode_t.SERIALLINEMODE_PC_COM_PORT
+	THEN
+		_SerLineControlADS(	Connect		:= Enable,
+							SerialCfg	:= Cfg,
+							NetId		:= '',
+							Timeout		:= ,
+							TxBuffer	:= TXBuffer,
+							RxBuffer	:= RXBuffer,
+							PortOpened	=> PortOpened,
+							Error		=> ,
+							ErrorID		=> ,
+							Busy		=> ,
+							TxBufCount	=> ,
+							RxBufCount	=> );
+		
+		Busy 												:= TRUE;
+
+		IF _SerLineControlADS.Error 
+		THEN
+			Error											:= TRUE;
+			ErrorId											:= _SerLineControlAds.ErrorId;
+//			ComErrorId										:= _SerLineControlAds.ErrorId; // missing cast !
+		END_IF
+
+	ELSIF Enable
+	THEN
+		_SerLineControl(
+			Mode		:= mode ,
+			pComIn		:= pComIn ,
+			pComOut		:= pComOut ,
+			SizeComIn	:= UINT_TO_INT(SizeComIn),
+			TxBuffer	:= TXBuffer ,
+			RxBuffer	:= RXBuffer ,
+			Error		=> ,
+			ErrorID		=> );
+		
+		Busy												:= TRUE;
+
+		IF _SerLineControl.Error 
+		THEN
+			Error											:= TRUE;
+			ErrorId											:= TO_UDINT(_SerLineControl.ErrorId);
+			ComErrorId										:= _SerLineControl.ErrorId;
+		ELSE
+			PortOpened										:= TRUE;
+		END_IF
+	END_IF
+
+20: (* Reset ******************************************)
+	_ComReset(	Execute		:= FALSE,
+				pComIn		:= pComIn,
+				pComOut		:= pComOut ,
+				SizeComIn	:= SizeComIn ,
+				Done		=> ,
+				Busy		=> ,
+				Error		=> ,
+				ErrorID		=> );
+
+	(* Buffer leeren *)
+	_ClearComBuffer(Buffer:= TXBuffer);
+	_ClearComBuffer(Buffer:= RXBuffer);
+
+	state 													:= 21;
+
+21:
+	_ComReset(	Execute		:= Mode <> ComSerialLineMode_t.SERIALLINEMODE_PC_COM_PORT,
+				pComIn		:= pComIn,
+				pComOut		:= pComOut ,
+				SizeComIn	:= SizeComIn ,
+				Done		=> ,
+				Busy		=> ,
+				Error		=> ,
+				ErrorID		=> );
+										
+	IF NOT _ComReset.Busy
+	THEN
+		IF _ComReset.Error
+		THEN
+			Error											:= TRUE;
+			ErrorId											:= INT_TO_UDINT(_ComReset.ErrorID);
+			ComErrorId										:= _ComReset.ErrorID;
+		END_IF
+		_ComReset(Execute := FALSE, pComIn	:= pComIn, pComOut := pComOut , SizeComIn := SizeComIn);
+		State 												:= SEL(Mode = ComSerialLineMode_t.SERIALLINEMODE_PC_COM_PORT, 0, 90);
+	END_IF
+
+90: (* Error ******************************************)
+	_SerLineControlADS(	Connect		:= FALSE,
+						SerialCfg	:= Cfg,
+						NetId		:= '',
+						Timeout		:= ,
+						TxBuffer	:= TXBuffer,
+						RxBuffer	:= RXBuffer,
+						PortOpened	=> PortOpened,
+						Error		=> ,
+						ErrorID		=> ,
+						Busy		=> ,
+						TxBufCount	=> ,
+						RxBufCount	=> );
+
+	IF NOT _SerLineControlADS.Busy
+	THEN
+		PortOpened											:= FALSE;
+		Busy												:= FALSE;
+		state												:= 0;
+	END_IF
+	
+END_CASE
+
+
+(***********************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{79ca1af7-0c6b-4907-b452-e3657ecba3d2}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Error OR NOT Enable
+THEN //jump to reset state
+	state 													:= SEL(state < 20 OR state > 21 ,state , 20);
+	Error													:= FALSE;
+	ErrorId													:= 0;
+	ComErrorId												:= ComError_t.COMERROR_NOERROR;
+	reset													:= TRUE;
+ELSE
+	reset													:= FALSE;
+END_IF
+	]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ComPortBackground">
+      <LineId Id="597" Count="124" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortBackground.reset">
+      <LineId Id="20" Count="5" />
+      <LineId Id="27" Count="2" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

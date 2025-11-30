@@ -1,0 +1,475 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="DataUdpLogger" Id="{c576b4ed-ebe0-4d5e-9d3e-3ad0e98f390c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+//Extension to FB "DoubleBuffer" to stream data continuously via UDP, max buffer size is 2 * Tc2_TCP.Param.TCPADS_MAXUDP_BUFFSIZE (2*8192)
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK DataUdpLogger EXTENDS DoubleBuffer
+VAR_OUTPUT CONSTANT 
+{attribute 'displaymode':='binary'}
+	OPTION_KEEP_PORT_OPEN_ON_ERROR							: 	BYTE := 2#0000_0001; //Keep file open in error case to be able to contine after reset
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_DATA_WHEN_DISABLED							:	BYTE := 2#0000_0010; //Allows to add data when disabled
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_DEBUG										:	BYTE := 2#1000_0000; //Creates ADS log entries for conection events and errors
+END_VAR                     								
+VAR_INPUT                   								
+	Enable													: 	BOOL; //Enable to write looked data cyclic into file  
+	ResetTrig												: 	BOOL; //Reset internal error 
+
+{attribute 'displaymode':='binary'}
+	Options													: 	BYTE := 2#00000000; // See outputs constant OPTION_xxx
+	LocalHost	 											: 	T_IPv4Addr;  	//Local (client) address. String containing an (Ipv4) Internet Protocol dotted address. 
+	LocalPort												:	UDINT := 515;	//Local (client) Internet Protocol (IP) port. (TCP Port = 1468) *)	
+	RemoteHost	 											: 	T_IPv4Addr;  	//Remote (server) address. String containing an (Ipv4) Internet Protocol dotted address. 
+	RemotePort												:	UDINT := 514;	//Remote (server) Internet Protocol (IP) port. (TCP Port = 1468) 
+END_VAR                     								
+VAR_IN_OUT                  								
+END_VAR                     								
+VAR_OUTPUT       
+	TimeSendData											:	TIME; //Elapsed time to send data package 
+	CounterSendData											:	UDINT; //Endless counter of packages sent 
+	MaxTimeSendData											:	TIME;
+	Online													:	BOOL; //TRUE if coonection is sucessful etablished
+	hSocket													: 	T_HSOCKET ; //UDP Socket handle
+	Busy													: 	BOOL; //Stream data active
+	Error													: 	BOOL;       
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT;	//See Beckhoff TF6310/ADS documentation for more information regarding error code
+	ErrorFnc												:	STRING(20); //Error source 
+	WinsockErrorId											:	E_WinsockError; //Winsocket error enum - see TF6310 documentation for further information
+END_VAR                     								
+VAR            
+//local ************************************************************************************
+
+	State													: 	INT;
+	SendErrorCnt											:	INT;
+	StartTimeSendData										:	TIME;			
+;
+
+//trigger *********************************************************************************
+
+//timer ***********************************************************************************
+
+//instances ***********************************************************************************             								
+	SocketClose												:	FB_SocketClose := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	SocketUdpCreate 										:	FB_SocketUdpCreate := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	SocketUdpSend											:	FB_SocketUdpSendTo := (tTimeout := T#10S);
+	
+//Dummys ****************************************************************************************
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Data logger via UDP stream based on two buffer concept			*)
+(********************************************************************)
+
+(* Server connection ************************************************)
+	CASE state OF
+	0:
+		IF Error
+		THEN
+			IF NOT Enable OR ResetTrig 
+			THEN //Reset error
+				Error										:= FALSE;
+				ErrorId										:= 0;
+				ErrorFnc									:= '';	
+				WinsockErrorId								:= WSOK;	
+
+				SocketUdpCreate(bExecute := FALSE);
+				SocketClose(bExecute := FALSE);
+				SocketUdpSend(bExecute := FALSE);		
+			END_IF		
+		ELSIF Online AND Enable
+		THEN	
+			IF hr <> S_OK
+			THEN //Method executed with error
+				Error										:= TRUE;
+				ErrorId										:= HRESULT_TO_ADSERROR(hr);
+		
+			ELSIF ReadyToRead //Buffer full or triggered by interval
+			THEN
+				StartTimeSendData							:= TIME();
+
+				SocketUdpSend(
+					sSrvNetId	:= , 
+					hSocket		:= hSocket, 
+					sRemoteHost	:= RemoteHost, 
+					nRemotePort	:= RemotePort, 
+					cbLen		:= SizeOfDataToRead, 
+					pSrc		:= pDataToRead, 
+					bExecute	:= TRUE, 
+					tTimeout	:= , 
+					bBusy		=> , 
+					bError		=> , 
+					nErrId		=> );
+													
+				state										:= 20;
+			END_IF
+		ELSIF Enable			
+		THEN
+			SocketUdpCreate(bExecute := FALSE);
+			SocketClose(bExecute := FALSE);
+			SocketUdpSend(bExecute := FALSE);
+			Online											:= FALSE;
+			Busy											:= TRUE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			ErrorFnc										:= '';	
+			WinsockErrorId									:= WSOK;
+			
+			IF NOT SocketUdpCreate.bBusy
+				AND NOT SocketClose.bBusy
+				AND NOT SocketUdpSend.bBusy
+			THEN
+				SocketUdpCreate(
+					sSrvNetId	:= , 
+					sLocalHost	:= LocalHost, 
+					nLocalPort	:= LocalPort, 
+					bExecute	:= TRUE, 
+					tTimeout	:= , 
+					bBusy		=> , 
+					bError		=> , 
+					nErrId		=> , 
+					hSocket		=> hSocket);
+				CounterSendData								:= 0;
+				SendErrorCnt								:= 0;
+				state										:= 10;
+			END_IF	
+		ELSE //Disabled
+			IF hSocket.handle <> 0
+			THEN //Close socket
+				IF NOT Empty 
+				THEN //Write rest of buffer
+					IF NOT ReadyToRead THEN setReadyToRead(TRUE); END_IF 
+					StartTimeSendData						:= TIME();
+					SocketUdpSend(
+						sSrvNetId	:= , 
+						hSocket		:= hSocket, 
+						sRemoteHost	:= RemoteHost, 
+						nRemotePort	:= RemotePort, 
+						cbLen		:= SizeOfDataToRead, 
+						pSrc		:= pDataToRead, 
+						bExecute	:= TRUE, 
+						tTimeout	:= , 
+						bBusy		=> , 
+						bError		=> , 
+						nErrId		=> );
+					State									:= 20;
+				ELSE
+					SocketClose(bExecute := hSocket.handle <> 0,  hSocket := hSocket);
+					State									:= 30;
+				END_IF			
+			END_IF
+		END_IF
+
+	(* Create Socket *******************************************************)
+	10: 
+		SocketUdpCreate(
+			sSrvNetId	:= , 
+			sLocalHost	:= LocalHost, 
+			nLocalPort	:= LocalPort, 
+			bExecute	:= TRUE, 
+			tTimeout	:= , 
+			bBusy		=> , 
+			bError		=> , 
+			nErrId		=> , 
+			hSocket		=> hSocket);
+			
+		IF NOT SocketUdpCreate.bBusy
+		THEN
+			IF SocketUdpCreate.bError
+			THEN
+				Error										:= TRUE;
+				ErrorId										:= SocketUdpCreate.nErrId;
+				ErrorFnc									:= 'SocketUdpCreate';
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(ErrorId);
+				
+				IF Options.7
+				THEN
+					AdsLogError(CONCAT('LogbookClientSysLog | SocketUdpCreate %s | error id 16#', DWORD_TO_HEXSTR(TO_DWORD(ErrorID),4,FALSE)) ,HSOCKET_TO_STRING(SocketUdpCreate.hSocket));
+				END_IF	
+
+				state										:= 30;
+			ELSE				
+				hSocket.remoteAddr.sAddr					:= RemoteHost;
+				hSocket.remoteAddr.nPort					:= RemotePort;
+				
+				IF Options.7
+				THEN
+					AdsLogError(CONCAT('LogbookClientSysLog | SocketUdpCreate %s done', '') , HSOCKET_TO_STRING(SocketUdpCreate.hSocket));
+				END_IF	
+				
+				Online 										:= TRUE;
+				IF ReadyToRead
+				THEN //Write request acitive
+					SocketUdpSend(
+						sSrvNetId	:= , 
+						hSocket		:= hSocket, 
+						sRemoteHost	:= RemoteHost, 
+						nRemotePort	:= RemotePort, 
+						cbLen		:= SizeOfDataToRead, 
+						pSrc		:= pDataToRead, 
+						bExecute	:= TRUE, 
+						tTimeout	:= , 
+						bBusy		=> , 
+						bError		=> , 
+						nErrId		=> );					
+					StartTimeSendData						:= TIME();
+					State									:= 20;
+				ELSE
+					State									:= 0;
+				END_IF		
+				
+			END_IF		
+			SocketUdpCreate(bExecute:= FALSE);
+		END_IF		
+		
+	(* Send message ****************************************************)
+	20:
+		SocketUdpSend(
+			sSrvNetId	:= , 
+			hSocket		:= hSocket, 
+			sRemoteHost	:= RemoteHost, 
+			nRemotePort	:= RemotePort, 
+			cbLen		:= SizeOfDataToRead, 
+			pSrc		:= pDataToRead, 
+			bExecute	:= TRUE, 
+			tTimeout	:= , 
+			bBusy		=> , 
+			bError		=> , 
+			nErrId		=> );
+					
+		IF NOT SocketUdpSend.bBusy
+		THEN
+			
+			IF SocketUdpSend.bError
+			THEN
+				IF SendErrorCnt >= 3
+				THEN
+					Error									:= TRUE;
+					ErrorId									:= SocketUdpSend.nErrId;
+					ErrorFnc								:= 'SocketUdpSend';
+					WinsockErrorId							:= ADSERROR_TO_WSERROR(ErrorId);
+	
+					IF Options.7
+					THEN
+						AdsLogError(CONCAT('LogbookClientSysLog | SocketUdpSend %s | error id 16#', DWORD_TO_HEXSTR(TO_DWORD(ErrorID),4,FALSE)) ,HSOCKET_TO_STRING(SocketUdpCreate.hSocket));
+					END_IF	
+					setReadyToRead(FALSE);
+					State									:= 30; //Close socket
+				ELSE //Try to send a second time
+					SendErrorCnt							:= SendErrorCnt + 1;
+				END_IF
+			ELSE		
+				TimeSendData								:= TIME() - StartTimeSendData;
+				MaxTimeSendData								:= MAX(MaxTimeSendData,TimeSendData);
+				setReadyToRead(FALSE);
+				CounterSendData								:= CounterSendData + 1;		
+				SendErrorCnt								:= 0;	
+				State										:= SEL(NOT Enable AND Options.1 , 0 ,30);	//Close socket when add data while disabled is allowed, otherwise empty buffer  		
+			END_IF 
+			
+			SocketUdpSend(bExecute := FALSE);
+		END_IF
+		
+	(* Close socket ***********************************************)
+	30:	
+		SocketClose(
+			sSrvNetId	:= , 
+			hSocket		:= hSocket, 
+			bExecute	:= hSocket.handle <> 0, 
+			tTimeout	:= , 
+			bBusy		=> , 
+			bError		=> , 
+			nErrId		=> );
+
+		IF NOT SocketClose.bBusy
+		THEN	
+			IF SocketClose.bError 
+			THEN
+				IF NOT Error
+				THEN
+					Error									:= TRUE;
+					ErrorId									:= SocketClose.nErrId;
+					ErrorFnc								:= 'SocketUdpClose';
+					WinsockErrorId							:= ADSERROR_TO_WSERROR(ErrorId);
+				END_IF
+				IF Options.7
+				THEN
+					AdsLogError( CONCAT('LogbookClientSysLog | SocketClose %s | error id 16#', DWORD_TO_HEXSTR(TO_DWORD(ErrorID),4,FALSE)) ,HSOCKET_TO_STRING(SocketClose.hSocket));
+				END_IF
+				state										:= 0;				
+			ELSE    
+				IF Options.7
+				THEN
+					AdsLogError( CONCAT('LogbookClientSysLog | SocketClose %s done', '') , HSOCKET_TO_STRING(SocketClose.hSocket));
+				END_IF	
+                             
+				state										:= 0;
+			END_IF		
+			Online											:= FALSE;      
+			hSocket.handle 									:= 0; 
+			SocketClose(bExecute := FALSE);
+		END_IF		
+			
+	END_CASE
+
+(* Status **********************************************************)
+	Busy 													:= State <> 0 OR hSocket.handle <> 0 AND NOT Error;
+(**************************************************************************)
+
+
+
+]]></ST>
+    </Implementation>
+    <Method Name="addData" Id="{48ea90ea-895c-4271-aac9-4f4f229abaf3}">
+      <Declaration><![CDATA[METHOD PUBLIC addData : HRESULT //Add data into write buffer and swap if if buffer is filled
+VAR_INPUT
+	pData													:	POINTER TO BYTE;
+	SizeofData												:	UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT Error AND(Enable OR Options.1)
+THEN 
+	IF SUPER^.addData(pData,SizeOfData) <> S_OK
+	THEN
+		ErrorId												:= HRESULT_TO_ADSERROR(hr);
+		Error												:= TRUE;
+	END_IF
+ELSE
+	addData													:= SEL(hr <> S_OK , E_HRESULTADSERR.INVALIDACCESS ,hr);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addString" Id="{80180b90-ccc9-4a5f-817e-eb29a8af1991}">
+      <Declaration><![CDATA[METHOD PUBLIC addString : HRESULT //Add string to write buffer and swap if buffer is filled
+VAR_INPUT
+	Data													:	T_MAXSTRING;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[addString := This^.addData(ADR(Data),TO_UDINT(LEN(Data)));]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optAddDataWhenDisabled" Id="{51fb302c-629e-408f-8f29-adee64585805}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAddDataWhenDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{fdcd3e58-e89b-45c1-b438-0be3e6b5f7b0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optKeepPortOpenOnError := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{5a1ff4bd-5e86-4969-a2c4-d3d50f003023}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1				:= optKeepPortOpenOnError;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableAdsErrorLog" Id="{56d66399-fe7e-4732-956f-26f91bc743fd}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableAdsErrorLog : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b2e38739-2f71-4ab4-aae3-798380cc4786}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableAdsErrorLog := Options.7;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{96acf27a-acfa-4111-a526-fb5115256a8f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.7				:= optEnableAdsErrorLog;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optKeepPortOpenOnError" Id="{e068742d-331f-44d7-8d0d-42e1c4f820bf}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optKeepPortOpenOnError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5eafabf9-5df2-40ab-a98d-46c09076122b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optKeepPortOpenOnError := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3129a793-d714-4651-a6ce-8f71ffb4733d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0				:= optKeepPortOpenOnError;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="reset" Id="{7a8de280-81ba-4efd-a9c9-c67c83bf735a}">
+      <Declaration><![CDATA[//Reset buffer 
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+MaxTimeSendData := T#0MS;
+reset := SUPER^.reset();]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="DataUdpLogger">
+      <LineId Id="2391" Count="201" />
+      <LineId Id="2711" Count="0" />
+      <LineId Id="2593" Count="33" />
+      <LineId Id="2628" Count="7" />
+      <LineId Id="2638" Count="0" />
+      <LineId Id="2712" Count="1" />
+      <LineId Id="2639" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.addData">
+      <LineId Id="300" Count="0" />
+      <LineId Id="295" Count="0" />
+      <LineId Id="299" Count="0" />
+      <LineId Id="309" Count="0" />
+      <LineId Id="312" Count="0" />
+      <LineId Id="311" Count="0" />
+      <LineId Id="310" Count="0" />
+      <LineId Id="297" Count="0" />
+      <LineId Id="296" Count="0" />
+      <LineId Id="256" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.addString">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.optAddDataWhenDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.optAddDataWhenDisabled.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.optEnableAdsErrorLog.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.optEnableAdsErrorLog.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.optKeepPortOpenOnError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.optKeepPortOpenOnError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DataUdpLogger.reset">
+      <LineId Id="2" Count="0" />
+      <LineId Id="38" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

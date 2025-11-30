@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="EC_MASTER_DEVICE_STATE" Id="{0013fa02-9c11-41fb-9796-f4dd129b64cc}">
+    <Declaration><![CDATA[TYPE EC_MASTER_DEVICE_STATE :
+STRUCT
+	NoError						: BOOL;//0x0000 = Link error 
+	LinkError 					: BOOL;//0x0001 = Link error
+	IOLockedAfterLinkError	    : BOOL;//0x0002 = I/O locked after link error (I/O reset required)
+	LinkErrorRedMode			: BOOL;//0x0004 = Link error (redundancy adapter)
+	MissingOneFrmInRedMode      : BOOL;//0x0008 = Missing one frame (redundancy mode)
+	OutOfSendResources          : BOOL;//0x0010 = Out of send resources (I/O reset required)
+	WatchdogTriggered 		    : BOOL;//0x0020 = Watchdog triggered
+	EthernetDriverNotFound 	    : BOOL;//0x0040 = Ethernet driver (miniport) not found
+	IOResetActive 			    : BOOL;//0x0080 = I/O reset active
+	AtLeastOneSlaveInINIT       : BOOL;//0x0100 = At least one device in 'INIT' 
+	AtLeastOneSlaveInPREOP      : BOOL;//0x0200 = At least one device in 'PRE-OP' 
+	AtLeastOneSlaveInSAFEOP     : BOOL;//0x0400 = At least one device in 'SAFE-OP' 
+	AtLeastOneSlaveInERROR     	: BOOL;//0x0800 = AT least one device indicates an error state 																	
+	DcNotInSync 		        : BOOL;//0x1000 = DC NOT in sync
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

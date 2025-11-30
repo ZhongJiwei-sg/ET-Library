@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0381" Id="{99a30bac-48e2-4be6-ab7b-32ca49f7f730}">
+    <Declaration><![CDATA[TYPE AX5000_S_0381 :
+STRUCT
+	DC_bus_current:DINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="CiA_DS402Statusword_StaeubliCS8" Id="{059bae0e-e4a8-4717-a4c9-962fb1dd2811}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Statusword_StaeubliCS8 EXTENDS CiA_DS402Statusword
+VAR_INPUT
+END_VAR
+VAR_OUTPUT	
+	FollowCmdValue			: bool;  //Bit 12: Drive follows command (CSP/CSV)
+	FollowingError			: BOOL; // Bit 13: Following error occured
+	Calibrated				: BOOL; // Bit 14: Motor calibrated
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="readStatusword" Id="{95b0b135-a7c4-4afe-9f0c-88a951cd1f2e}">
+      <Declaration><![CDATA[METHOD PUBLIC readStatusword : BOOL
+VAR_INPUT
+	Statusword 		:	UINT;
+
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FollowCmdValue												:= Statusword.12 ;
+FollowingError												:= Statusword.13 ;
+Calibrated													:= Statusword.14 ;
+
+readStatusword												:= SUPER^.readStatusword(Statusword);	
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Statusword_StaeubliCS8">
+      <LineId Id="110" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Statusword_StaeubliCS8.readStatusword">
+      <LineId Id="55" Count="0" />
+      <LineId Id="58" Count="2" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="52" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

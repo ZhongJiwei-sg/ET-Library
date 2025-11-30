@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorOnOff" Id="{a8aef601-0c88-4733-9ead-ab1b0ed39c2e}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorOnOff EXTENDS I_ActuatorBase
+]]></Declaration>
+    <Property Name="isOn" Id="{2c2ab8aa-eb5d-4a6b-aca6-cb4dcfad0572}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{39a518e0-fbc9-4fa3-8d62-b6c7981603a9}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="switchOn" Id="{9d2db45b-3b4c-4b66-baf8-8a9f37ad9c0a}">
+      <Declaration><![CDATA[METHOD public switchOn : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

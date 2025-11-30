@@ -1,0 +1,265 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EcFcDS402_DanfossVLT302" Id="{6a61ff79-e39c-4f94-854b-b9b27ee8042c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+// Control Danfoss frequency converter in FC mode
+FUNCTION_BLOCK EcFcDS402_DanfossVLT302 EXTENDS EcFcDS402_ComBase IMPLEMENTS I_ActuatorFwdRev
+VAR_INPUT
+	VeloReference											: 	LREAL := 0.0;  	//[RPM] reference velocity
+	RampUp													:	LREAL := 1.0;	//[s] sets slope of ramp
+	RampDown												:	LREAL := 1.0;	//[s] sets slope of ramp
+ 
+END_VAR                     							
+VAR_OUTPUT                  							
+	CiA_Control												:	CiA_DS402Controlword_Danfoss;
+	CiA_Status												:	CiA_DS402Statusword_Danfoss;
+	ErrorCode										AT  %I*	:	UDINT; 			//1690: see also Danfoss documentation
+	OpHours											AT  %I* : 	UDINT;			//1500: Operating Hours
+	ActPower												: 	LREAL;			//actual scaled Power of drive 
+	ActVelo													: 	LREAL;			//actual scaled velocity of drive
+	ActCurrent												: 	LREAL;			//actual current consumption of drive
+	Q_TargetVelo									AT  %Q* : 	INT;			//1682: Frequence converter set value velocity
+	Q_RampUp										AT  %Q* :	UDINT;			// 341: Frequence converter ramp time up
+	Q_RampDown										AT  %Q* :	UDINT;			// 342: Frequence converter ramp time down 
+END_VAR                 							
+VAR (* IO Internal *)   							
+                        							
+	_ActVelo										AT  %I* : 	INT; 			//1605: Frequence converter actual velocity in digits based on VeloReference
+	_ActCurrent										AT  %I* : 	DINT;			//1614: actual current consumption of drive
+	_Power											AT  %I* : 	DINT;			//1610: Power 
+END_VAR                 								
+VAR                     	
+END_VAR                 	
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Com Danfoss VLT302 over Ethercat Gateway MCA 124 	V1.0	 	*)
+// ******************************************************************
+{info 'FB EcFcDS402_DanfossVLT302: set parameter 4-10 to [2] both directions'}
+
+(* Protection Switch *******************************************)		
+	IF ResetTrig  
+	THEN 
+		REset(); 
+	END_IF
+	
+	ProtSwitchOK();	
+	FuseBrakeOK(); (* same parameter like ProtSwitch *)
+
+(* Contactor ***************************************************)
+	Q_Contactor 											:= Contactor AND ProtSwitchOK.Q AND FuseBrakeOK.Q;
+
+(* Read status *************************************************)
+	CiA_Status.readStatusword(Statusword);
+
+(* interpret status word ***************************************)
+	ActVelo													:= SCALE(_ActVelo, -16384, 16384, -VeloReference, VeloReference);	//16#F000 = -16384 | 16#4000 = 16384    
+	ActCurrent             									:= TO_LREAL(_ActCurrent) / 100.0;
+	ActPower												:= TO_LREAL(_Power) / 100.0;
+	
+	Ready													:= CiA_Status.ReadyToSwitchOn AND Q_Contactor;
+	Error													:= CiA_Status.Fault AND Q_Contactor;                       									
+	Busy													:= CiA_Status.OperationEnabled AND ActVelo <> 0; 
+	                                        
+// write contorlword DS 402  ****************************************
+	CiA_Control.SwitchOn									:= Enable AND Q_Contactor;
+	CiA_Control.EnableOperation								:= FeedBwd AND StartBwd AND NOT Start OR Feed AND Start AND NOT StartBwd;
+	CiA_Control.FaultReset									:= ResetIntern;
+	
+	CiA_Control.EnableRamp			 						:= TRUE;
+	CiA_Control.RunEnable									:= CiA_Control.SwitchOn;							       
+	CiA_Control.Start										:= CiA_Control.EnableOperation;						                     	
+	CiA_Control.Reversing			 						:= Start AND NOT StartBwd;	// 15 Reverse     
+			
+(* setvalue ***************************************************)
+	IF CiA_Control.EnableOperation
+	THEN
+		Q_TargetVelo										:= TO_INT(SCALE(Velo, 	0, VeloReference, 0, 16384));
+	ELSE
+		Q_TargetVelo										:= 0;
+	END_IF
+	
+	Q_RampUp 												:= TO_UDINT(RampUp*100);
+	Q_RampDown 												:= TO_UDINT(RampDown*100);
+	              
+// Reset FALSE ****************************************************
+	ResetIntern												:= FALSE;
+	
+(* HmiStatus **************************************************)
+	Status.0 												:= CiA_Status.OperationEnabled AND StartBwd; 	// counter-clockwise rotation
+	Status.1 												:= CiA_Status.OperationEnabled AND Start; 	// clockwise rotation
+	Status.2 												:= ActVelo < 0;
+	Status.3												:= ActVelo > 0;
+	Status.4 												:= FeedBwd;
+	Status.5 												:= Feed;
+	Status.6 												:= Ready;
+	Status.7 												:= Error;
+// ****************************************************************]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{761efc2e-f347-4cf1-90a1-ffce3ffce262}" />
+    <Folder Name="properties" Id="{4e300e6c-c6b8-4557-9c20-0d95ede8420a}" />
+    <Property Name="forwardStarted" Id="{10e691c6-bf76-4fe7-9842-4b57bf71fc38}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public forwardStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8f7cb92b-817e-4f1b-a186-6a75f1492bb2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[forwardStarted := CiA_Control.EnableOperation and Q_TargetVelo > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isDisabled" Id="{72d23790-b63e-4fea-8ce5-78bb38325b54}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{001a3371-7acb-4b24-a576-fc2bd325a8ee}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isDisabled := not CiA_Status.SwitchedOn and not CiA_Status.OperationEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isEnabled" Id="{fb874c7c-9a53-49fb-b149-22dfb83b4883}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isEnabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{bdd9d850-af82-490b-aa24-356fd5216ea9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isEnabled := CiA_Status.SwitchedOn or CiA_Status.OperationEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOff" Id="{62d4f402-a9a2-4830-91b8-30a15217694b}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9f9aa466-f1ec-479c-8b81-10f8b6f3a75b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOff := NOT CiA_Status.OperationEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOn" Id="{be36e746-fef8-40fa-b4b3-9f89cc48ad98}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a3119b9c-91b5-4855-9b94-5bd311b1e0e0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOn := CiA_Status.OperationEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="reverseStarted" Id="{0fe0b9c1-d27a-4872-94ba-5d1ada02be4b}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public reverseStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1c499a9d-f6ea-45cd-aee3-2ba1da2aa4ad}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[reverseStarted := CiA_Control.EnableOperation and Q_TargetVelo < 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="setDisable" Id="{2dbe58eb-2d50-40e4-b60a-db7b7cee9d7a}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD setDisable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+SetDisable													:= Super^.setDisable() AND NOT CiA_Status.SwitchedOn;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setEnable" Id="{d9765201-7122-48cc-8faf-b2abfa5d7164}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD setEnable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+SetEnable													:= SUPER^.setEnable() AND CiA_Status.SwitchedOn;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startForward" Id="{6497c166-77b9-42d7-91c7-3a202c067234}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC startForward : bool //Return busy flag
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= TRUE; 
+StartBwd 													:= FALSE;
+startForward												:= Busy and Q_TargetVelo > 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startReverse" Id="{232bb19d-4abe-47cd-b73d-758edf012b79}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC startReverse : bool //Return busy flag
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= FALSE; 
+StartBwd 													:= TRUE;
+startReverse												:= Busy and Q_TargetVelo < 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{253c23fc-239b-4ca4-b0e8-d1976a61e6e5}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC switchOn : BOOL  //True if motor is switched on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[switchOn := startForward();]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EcFcDS402_DanfossVLT302">
+      <LineId Id="763" Count="60" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.forwardStarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.isDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.isEnabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.isOff.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.isOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.reverseStarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.setDisable">
+      <LineId Id="6" Count="0" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.setEnable">
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.startForward">
+      <LineId Id="23" Count="1" />
+      <LineId Id="34" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.startReverse">
+      <LineId Id="29" Count="1" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_DanfossVLT302.switchOn">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

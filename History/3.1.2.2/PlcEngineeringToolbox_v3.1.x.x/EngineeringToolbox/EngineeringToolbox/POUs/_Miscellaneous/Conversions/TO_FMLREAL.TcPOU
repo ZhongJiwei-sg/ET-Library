@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="TO_FMLREAL" Id="{e0cd7bc5-3313-495a-b340-c8a18c038e8a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Limits the number of decimal places in a floating point variable 
+//or converts an integer number into a LREAL variable with with corresponding decimal places 
+FUNCTION TO_FMLREAL : LREAL
+VAR_INPUT
+	 In														:	ANY_NUM;	//Input value
+	 Digits													:	INT (1..32);	//number of digits to be shown
+END_VAR     												
+VAR         												
+	 Factor													:	LREAL;
+	 Value													:	LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+
+IF Digits <= 0
+THEN
+	TO_FMLREAL												:= 0.0;	
+ELSIF In.TypeClass = __SYSTEM.TYPE_CLASS.TYPE_LREAL
+THEN
+	Factor													:=EXPT(10,Digits);
+	TO_FMLREAL												:= LINT_TO_LREAL(LREAL_TO_LINT(PLREAL_TO_LREAL(IN.pValue) * Factor)) / Factor;
+ELSIF In.TypeClass = __SYSTEM.TYPE_CLASS.TYPE_REAL
+THEN
+	Factor													:=EXPT(10,Digits);
+	TO_FMLREAL												:= LINT_TO_LREAL(LREAL_TO_LINT(PREAL_TO_REAL(IN.pValue) * Factor)) / Factor;
+ELSE // Integer
+	Factor													:=EXPT(10,Digits);
+	CASE in.TypeClass OF		
+	__SYSTEM.TYPE_CLASS.TYPE_USINT:	Value					:= TO_LREAL(PUSINT_TO_USINT(IN.pValue));								
+	__SYSTEM.TYPE_CLASS.TYPE_UINT:	Value					:= TO_LREAL(PUINT_TO_UINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_UDINT:	Value					:= TO_LREAL(PUDINT_TO_UDINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_ULINT:	Value					:= TO_LREAL(PULINT_TO_ULINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_SINT:	Value					:= TO_LREAL(PSINT_TO_SINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_INT:	Value					:= TO_LREAL(PINT_TO_INT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_DINT:	Value					:= TO_LREAL(PDINT_TO_DINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_LINT:	Value					:= TO_LREAL(PLINT_TO_LINT(IN.pValue));	
+	ELSE
+		TO_FMLREAL											:= 0.0;
+		RETURN;
+	END_CASE
+
+	TO_FMLREAL												:= Value / Factor;
+END_IF
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="TO_FMLREAL">
+      <LineId Id="91" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="86" Count="1" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="82" Count="1" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="46" Count="1" />
+      <LineId Id="50" Count="4" />
+      <LineId Id="56" Count="1" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="42" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

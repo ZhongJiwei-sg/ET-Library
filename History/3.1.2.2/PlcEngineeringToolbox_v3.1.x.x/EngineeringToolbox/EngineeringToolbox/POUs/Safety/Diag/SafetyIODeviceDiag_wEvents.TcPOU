@@ -1,0 +1,896 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="SafetyIODeviceDiag_wEvents" Id="{16c4d4e2-00fb-47eb-ba7c-2a4527890360}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK SafetyIODeviceDiag_wEvents
+VAR CONSTANT
+	MIN_EVENT												:	INT := 1;
+	MAX_EVENT												:	INT := 10;
+	
+//Event conn diag code xxxx					| FB1 - Msg 1..15
+//Event conn diag code .4 					| FB2 - Msg 16
+//Event conn diag code .5 					| FB3 - Msg 17
+                                        	
+//Event internal error 						| FB1 - Msg 18
+                                        	
+//Event send TextId 						| FB4 - Msg 19
+                                        	
+//Event send AX5xxx Err Chn 1 				| FB5 - Msg 20
+//Event send AX5xxx Err Chn 1 				| FB6 - Msg 21
+                                        	
+//Event send Ex19 Err Debug 0x800E:0A 		| FB4 - Msg 22
+//Event send Ex19 Err Debug 0x800E:0B		| FB5 - Msg 23
+//Event send Ex19 Err Debug 0x800E:0C 		| FB6 - Msg 24
+//Event send Ex19 Err Debug 0x800E:0D 		| FB7 - Msg 25
+//Event send Ex19 Err Debug 0x800E:13 		| FB8 - Msg 26
+//Event send Ex19 Err Debug 0x800E:14 		| FB9 - Msg 27
+//Event send Ex19 Err Debug 0x800E:15		| FB10- Msg 28
+                                        	
+//Event send EL29 Err Debug 0x800E:0C 		| FB4 - Msg 30 (Querschluss bit 0..3)
+//Event send EL29 Err Debug 0x800E:0C 		| FB4 - Msg 31 (Open load bit 4..7)
+//Event send EL29 Err Debug 0x800E:0D		| FB5 - Msg 32
+//Event send EL29 Err Debug 0x800E:0E 		| FB6 - Msg 33
+//Event send EL29 Err Debug 0x800E:0E 		| FB7 - Msg 34
+//Event send EL29 Err Debug 0x800E:0E 		| FB8 - Msg 35
+
+                                        	
+//Event send EK19 Err Debug 0x800E:0A		| FB4 - Msg 22 
+//Event send EK19 Err Debug 0x800E:0B		| FB5 - Msg 23 
+//Event send EK19 Err Debug 0x800E:0C 		| FB6 - Msg 24 
+//Event send EK19 Err Debug 0x800E:0D 		| FB7 - Msg 25 
+//Event send EK19 Err Debug 0x800E:0E	 	| FB8 - Msg 36..45
+END_VAR
+VAR_INPUT
+	Enable													:	BOOL;	//FB will be processed as long as enable is TRUE 
+	ConfirmTrig												:	BOOL;	//Resets error with rising edge 
+	SourceId												:	UDINT;	//Multisource id 
+	EcMasterDevId											:	UINT;	//Map to EtherCAT Master DevId
+END_VAR                 									
+VAR_OUTPUT              									
+	Connected												:	BOOL;
+	{attribute 'displaymode':='binary'}
+	Status													:	DWORD;	//current status of event
+	NoOfActiveEvents										:	INT;
+END_VAR                 									
+
+VAR(* internal *)
+	state													:	INT := 0;
+	{attribute 'displaymode':='binary'}
+	ConnMsgDiagCode											:	BYTE;
+	Read													:	SafetyIODeviceDiagRead;
+   	Event													:	ARRAY [MIN_EVENT..MAX_EVENT] OF EventHandling; 
+	DevTypeAndAddr											:	STRING(30);
+    DebugData												:	 word;                 								                            	
+	i														:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Safety IO device diag with events		V2	*)
+(************************************************)
+
+(* Status connected ***************************************************)
+	Connected 												:= Read.AdsAddr.port <> 0;
+	
+(* Read adress and type ***********************************************)
+	IF Enable AND Connected AND Read.MsgInfoDiag <> 0 OR State <> 0
+	THEN
+		CASE State OF
+		0:	
+			IF Read.MsgInfoDiag <> 0
+			THEN
+				Read(Execute := FALSE);
+				Read(Execute := TRUE, EcMasterDevId := EcMasterDevId);
+				State										:= State + 1;
+			END_IF
+			
+		1: //Read diag data from device
+			Read(Execute := TRUE, EcMasterDevId := EcMasterDevId);
+			IF NOT Read.Busy
+			THEN
+	
+				IF Read.Error
+				THEN
+					Event[1].Text1							:= SEL(Read.Name = '',Read.Name , '<ERR_READ_DIAG>');
+					DevTypeAndAddr							:= SEL(Read.DevType = '', Read.DevType, '<Unknown>');
+					DevTypeAndAddr							:= CONCAT(DevTypeAndAddr, CONCAT(' (Ec Addr.', CONCAT(TO_STRING(Read.AdsAddr.port),')')));	
+					Event[1].Text2							:= CONCAT(' - ErrorID ', DWORD_TO_HEXSTR(TO_DWORD(Read.ErrorID),4,FALSE));
+					Event[1].Text2							:= CONCAT(Event[1].Text2 , CONCAT(' in state ', TO_STRING(Read.DiagMsgTextId)));
+					Event[1].SourceId						:= SourceId;
+					Event[1].Flag							:= TRUE;
+					State									:= 98;
+				ELSIF Event[1].SourceId = 0
+				THEN //Init device information 
+					FOR i := MIN_EVENT TO MAX_EVENT
+					DO
+						Event[i].Text1						:= Read.Name;
+						DevTypeAndAddr						:= CONCAT(Read.DevType, ' (FSOE Addr.');
+						DevTypeAndAddr						:= CONCAT(DevTypeAndAddr, CONCAT(TO_STRING(Read.FSOEAddr), ')'));	
+						Event[i].SourceId					:= SourceId;
+					END_FOR
+					State									:= 99;
+				ELSE
+					State									:= 99;
+				END_IF		
+				Read(Execute := FALSE);
+			END_IF
+			
+		98: //Show internal error
+			Event[1](
+				Flag	:= Event[1].Flag AND NOT Event[1].ConfirmTrig,
+				ConfirmTrig:= ConfirmTrig OR Read.MsgInfoDiag = 0, 
+				MsgId	:= 18, 
+				pText3	:= ADR(DevTypeAndAddr),
+				Status	=> Status);	
+			IF NOT Event[1].Status.31 
+			THEN
+				NoOfActiveEvents							:= 0;
+				state										:= 0;
+			ELSE
+				NoOfActiveEvents							:= 1;
+			END_IF
+			
+		99: //Fire events
+			IF Read.MsgInfoDiag = 0 AND NOT Status.31
+			THEN //Go back to 0 if messages cleared
+				State 										:= 0;
+			ELSE
+				//Show connection error events
+				_eventsConnDiag();
+				
+				//Fire device events
+				IF Read.pDebugData <> 0 
+				THEN //Safety devices without diag history object
+					IF Read.DebugDataMaxId = 16#08 AND_THEN FIND(Read.DevType, 'AX580') <> 0
+					THEN
+						_eventsAX580x(Read.MsgInfoDiag <> 0);
+					ELSIF Read.DebugDataMaxId = 16#10 AND_THEN Read.DevType = 'EL2904'
+					THEN
+						_eventsEL2904(Read.MsgInfoDiag <> 0);
+					ELSIF Read.DebugDataMaxId = 16#40 AND_THEN Read.DevType = 'EK1914' 
+					THEN
+						_eventsEK1914(Read.MsgInfoDiag <> 0);
+					ELSIF Read.DebugDataMaxId >= 16#10 
+					THEN//EL1904 or EP1908
+						_eventsEx190x(Read.MsgInfoDiag <> 0);		
+					ELSE //Show internal error 
+						Event[4](
+							Flag	:= Read.MsgInfoDiag <> 0,
+							ConfirmTrig:= ConfirmTrig OR Read.MsgInfoDiag = 0, 
+							MsgId	:= 18, 
+							Text2	:= CONCAT(' Invalid lenght of Coe object 0x800E for device ', TO_STRING(Read.DebugDataMaxId)),
+							pText3	:= ADR(DevTypeAndAddr));	
+					END_IF
+				ELSE //TwinSAFE terminal with diag history  
+					_eventsDiagHistory(Read.MsgInfoDiag <> 0);
+				END_IF			
+			END_IF		
+						   	
+			//Check whether one event is active **************************************
+			NoOfActiveEvents 		 						:= 0;			
+			Status											:= 0;						
+			FOR i := MIN_EVENT TO MAX_EVENT
+			DO 
+				IF Event[i].Status.31 THEN NoOfActiveEvents := NoOfActiveEvents + 1 ; END_IF
+				Status										:= Status OR Event[i].Status;
+			END_FOR
+		END_CASE
+	END_IF
+
+(*******************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="_eventsAX580x" Id="{aa86c1d6-9cd2-4939-9447-cac167df75e1}">
+      <Declaration><![CDATA[METHOD PRIVATE _eventsAX580x : BOOL
+VAR_INPUT
+	ShowEvent										:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Fire AX5000 events ***********************************)
+	//Send AX58xx diag code channel 1 
+	IF Read.pDebugData^[1] = 0
+	THEN
+		Event[5].Text2										:= CONCAT('0x',DWORD_TO_HEXSTR(TO_DWORD(Read.pDebugData^[7]),4,FALSE));
+	ELSE
+		Event[5].Text2										:= '<Set CoE object 0xFA10:01 = 0>';
+	END_IF
+ 
+	Event[5](
+		Flag	:= ShowEvent AND Read.msgSevyIsError ,
+		ConfirmTrig:= ConfirmTrig, 
+		MsgId	:= 20, 
+		eClass	:= ,
+		pText3	:= ADR(DevTypeAndAddr));	
+		
+	//Send AX58xx diag code channel 2
+	IF Read.pDebugData^[1] = 0
+	THEN
+		Event[6].Text2										:= CONCAT('0x',DWORD_TO_HEXSTR(TO_DWORD(Read.pDebugData^[8]),4,FALSE));
+	ELSE
+		Event[6].Text2										:=  '<Set CoE object 0xFA10:01 = 0>';
+	END_IF
+ 
+	Event[6](
+		Flag	:= ShowEvent AND Read.msgSevyIsError ,
+		ConfirmTrig:= ConfirmTrig, 
+		MsgId	:= 21, 
+		eClass	:= ,
+		pText3	:= ADR(DevTypeAndAddr));
+
+(******************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_eventsConnDiag" Id="{804ac96b-911c-4bbd-b9b9-a2d5b9849d5e}">
+      <Declaration><![CDATA[METHOD PRIVATE _eventsConnDiag : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Fire event for connection error code ************************************)
+	ConnMsgDiagCode											:= 16#0F AND Read.MsgInfoDiag; 
+	IF ConnMsgDiagCode <> 0 OR Event[1].Status.31
+	THEN
+		Event[1](
+			Flag	:= ConnMsgDiagCode <> 0 AND NOT (ConnMsgDiagCode = 2#1101 AND Read.MsgInfoDiag.5),
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= ConnMsgDiagCode,  //1..15 		
+			pText3	:= ADR(DevTypeAndAddr));	
+	END_IF
+	
+	//Fire event xxx1 xxxx FSoE Slave error detected
+	IF Read.MsgInfoDiag.4 OR Event[2].Status.31
+	THEN
+		Event[2](
+			Flag	:= Read.MsgInfoDiag.4,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 16,		
+			pText3	:= ADR(DevTypeAndAddr));	
+	END_IF
+
+(*
+	//Fire event xx1x xxxx FSoE Slave notifies Failsafe Value active
+	IF Read.MsgInfoDiag.5 OR Event[3].Status.31
+	THEN
+		Event[3](
+			Flag	:= Read.MsgInfoDiag.5,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 17,		
+			pText3	:= ADR(DevTypeAndAddr));		
+	END_IF
+*)	
+	(*
+	Tabelle 2-4: Diagnose-Informationen einer Connection
+	Wert Beschreibung
+	xxxx 0001 invalid command
+	xxxx 0010 unknown command
+	xxxx 0011 invalid connection ID
+	xxxx 0100 invalid CRC
+	xxxx 0101 Watchdog run out of time
+	xxxx 0110 invalid FSoE-Adress
+	xxxx 0111 invalid data
+	xxxx 1000 invalid length of communicatoin parameter Kommunikationsparameterlänge
+	xxxx 1001 invalid communicatoin parameter
+	xxxx 1010 invalid operator parameter length
+	xxxx 1011 invalid operator parameter
+	xxxx 1100 FSoE Master Reset
+	xxxx 1101 Module fault on slave detected with activated option "Modulfault is ComError"
+	xxxx 1110 Module fault on EL290x at activated with option "Error achnowledge active"
+	xxxx 1111 Slave not started or unexpected error argument
+	
+	*)
+		
+(***********************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_eventsDiagHistory" Id="{86221269-f2b4-4b08-8f05-807b064a1bca}">
+      <Declaration><![CDATA[METHOD PRIVATE _eventsDiagHistory : BOOL
+VAR_INPUT
+	ShowEvent										:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Send diag message textId ********************************************)
+	Event[4](
+		Flag	:= ShowEvent AND Read.msgSevyIsError ,
+		ConfirmTrig:= ConfirmTrig, 
+		MsgId	:= 19, 
+		Text2	:= CONCAT('0x',DWORD_TO_HEXSTR(TO_DWORD(Read.DiagMsgTextId),4,FALSE)),
+		pText3	:= ADR(DevTypeAndAddr));
+
+(******************************************************)	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_eventsEK1914" Id="{3e05d971-ea4e-4ad8-b252-138af2352c17}">
+      <Declaration><![CDATA[METHOD PRIVATE _eventsEK1914 : BOOL
+VAR_INPUT
+	ShowEvent										:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Fire events for of EK1914 ****************************************)
+
+		(* error during sensor-test *)
+		Event[4].Flag 										:= Read.pDebugData^[16#0A] <> 0;
+		IF Event[4].Flag OR Event[4].Status.31
+		THEN
+			DebugData										:= Read.pDebugData^[16#0A];
+			Event[4].Text2									:= '';
+			IF DebugData.0 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|1'); END_IF
+			IF DebugData.1 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|2'); END_IF
+		(*	IF DebugData.2 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|3'); END_IF
+			IF DebugData.3 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|4');  END_IF
+			IF DebugData.4 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|5'); END_IF
+			IF DebugData.5 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|6'); END_IF
+			IF DebugData.6 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|7'); END_IF
+			IF DebugData.7 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|8');  END_IF *)
+			Event[4].Text2 									:= CONCAT(Event[4].Text2, '|'); 			
+			
+			Event[4](
+				Flag	:= ShowEvent ,
+				ConfirmTrig:= ConfirmTrig, 
+				MsgId	:= 22, 
+				pText3	:= ADR(DevTypeAndAddr))	;
+		END_IF
+
+		(* Zweikanalauswertung fehlerhaft *)
+		Event[5].Flag 										:= Read.pDebugData^[16#0B] <> 0;
+		IF Event[5].Flag OR Event[5].Status.31
+		THEN
+			DebugData										:= Read.pDebugData^[16#0B];
+			Event[5].Text2									:= '';
+			IF DebugData.0 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|1+2'); END_IF
+		(*	IF DebugData.1 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|3+4'); END_IF
+			IF DebugData.2 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|5+6'); END_IF
+			IF DebugData.3 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|7+8');  END_IF *)
+			Event[5].Text2 									:= CONCAT(Event[5].Text2, '|'); 
+			
+			Event[5](
+				Flag	:= ShowEvent ,
+				ConfirmTrig:= ConfirmTrig, 
+				MsgId	:= 23, 
+				pText3	:= ADR(DevTypeAndAddr))	;
+		END_IF
+
+		(* Fehler Eingangspaar Trittmattenbetriebsart - Eingangspaar uneinig *)
+		Event[6].Flag 										:= Read.pDebugData^[16#0C] <> 0;
+		IF Event[6].Flag OR Event[6].Status.31
+		THEN
+			DebugData										:= Read.pDebugData^[16#0C];
+			Event[6].Text2									:= '';
+			IF DebugData.0 THEN Event[6].Text2 				:= CONCAT(Event[6].Text2, '|1+2'); END_IF
+		(*	IF DebugData.1 THEN Event[6].Text2 				:= CONCAT(Event[6].Text2, '|3+4'); END_IF
+			IF DebugData.2 THEN Event[6].Text2 				:= CONCAT(Event[6].Text2, '|5+6'); END_IF
+			IF DebugData.3 THEN Event[6].Text2 				:= CONCAT(Event[6].Text2, '|7+8');  END_IF *)
+			Event[6].Text2 									:= CONCAT(Event[6].Text2, '|'); 
+			
+			Event[6](
+				Flag	:= ShowEvent ,
+				ConfirmTrig:= ConfirmTrig, 
+				MsgId	:= 24, 
+				pText3	:= ADR(DevTypeAndAddr))	;
+		END_IF
+
+		(* Fehler Trittmattenbetriebsart Fremdeinspeisung *)
+		Event[7].Flag 										:= Read.pDebugData^[16#0D] <> 0;
+		IF Event[7].Flag OR Event[7].Status.31
+		THEN
+			DebugData										:= Read.pDebugData^[16#0D];
+			Event[7].Text2									:= '';
+			IF DebugData.0 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|1'); END_IF
+			IF DebugData.1 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|2'); END_IF
+		(*	IF DebugData.2 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|3'); END_IF
+			IF DebugData.3 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|4');  END_IF
+			IF DebugData.4 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|5'); END_IF
+			IF DebugData.5 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|6'); END_IF
+			IF DebugData.6 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|7'); END_IF
+			IF DebugData.7 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|8');  END_IF *)
+			Event[7].Text2 									:= CONCAT(Event[7].Text2, '|'); 
+			
+			Event[7](
+				Flag	:= ShowEvent ,
+				ConfirmTrig:= ConfirmTrig, 
+				MsgId	:= 25, 
+				pText3	:= ADR(DevTypeAndAddr))	;
+		END_IF
+		
+		(* Fehler Ausgänge *)
+		IF Read.pDebugData^[16#0E] <> 0 OR Event[8].Status.31 
+		THEN
+			DebugData										:= Read.pDebugData^[16#0E];
+			
+			CASE DebugData OF
+			5:		Event[8].MsgId							:= 36;
+			6:		Event[8].MsgId							:= 37;
+			10:		Event[8].MsgId							:= 38;
+			11:		Event[8].MsgId							:= 39;
+			21..27:	Event[8].MsgId							:= 40;
+			30..33:	Event[8].MsgId							:= 41;
+			101:	Event[8].MsgId							:= 42;
+			102:	Event[8].MsgId							:= 43;
+			103:	Event[8].MsgId							:= 44;
+			104:	Event[8].MsgId							:= 45;
+			ELSE
+				Event[8].MsgId								:= 0;
+			END_CASE
+				
+			Event[8](
+				Flag	:= ShowEvent AND Event[8].MsgId <> 0 ,
+				ConfirmTrig:= ConfirmTrig, 
+				MsgId	:= , 
+				pText3	:= ADR(DevTypeAndAddr))	;
+				
+		END_IF		
+(********************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_eventsEL2904" Id="{9a3479f8-3cb6-48fc-9732-9c8142797972}">
+      <Declaration><![CDATA[METHOD PRIVATE _eventsEL2904 : BOOL
+VAR_INPUT
+	ShowEvent										:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Fire events for EL2904
+
+	(* Fremeinspeisung oder Querschluss *)
+	Event[4].Flag 										:= (Read.pDebugData^[16#0C] AND 16#000F) <> 0;
+	IF Event[4].Flag OR Event[4].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#0C];
+		Event[4].Text2									:= '';
+		IF DebugData.0 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|1'); END_IF
+		IF DebugData.1 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|2'); END_IF
+		IF DebugData.2 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|3'); END_IF
+		IF DebugData.3 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|4');  END_IF
+		Event[4].Text2 									:= CONCAT(Event[4].Text2, '|'); 
+			
+		Event[4](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 30, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+
+	(* Open load oder Mindeststrom (20mA) unterschritten, oder Maximalstrom ueberschritten (500mA) *)
+	Event[5].Flag 										:= (Read.pDebugData^[16#0C] AND 16#00F0) <> 0;
+	IF Event[5].Flag OR Event[5].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#0C];
+		Event[5].Text2									:= '';
+		IF DebugData.4 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|1'); END_IF
+		IF DebugData.5 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|2'); END_IF
+		IF DebugData.6 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|3'); END_IF
+		IF DebugData.7 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|4');  END_IF
+		Event[5].Text2 									:= CONCAT(Event[5].Text2, '|'); 
+		
+		Event[5](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 31, 
+			pText3	:= ADR(DevTypeAndAddr));	
+	END_IF
+	
+	(* Fehler Feldspannung Power Kontakte *)
+	Event[6].Flag 										:= Read.pDebugData^[16#0D] <> 0;
+	IF Event[6].Flag OR Event[6].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#0D];
+		Event[6].Text2									:= '';
+		IF DebugData.0 THEN 
+			Event[6].Text2 								:= CONCAT(Event[6].Text2, '|Y'); 
+		ELSE                                                                       
+			Event[6].Text2 								:= CONCAT(Event[6].Text2, '|N'); 
+		END_IF                                                                     
+		IF DebugData.1 THEN                                                        
+			Event[6].Text2 								:= CONCAT(Event[6].Text2, '|Y'); 
+		ELSE                                                                       
+			Event[6].Text2 								:= CONCAT(Event[6].Text2, '|N'); 
+		END_IF
+		Event[6].Text2 									:= CONCAT(Event[6].Text2, '|'); 
+		
+		Event[6](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 32, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+	
+	(* Temperaturfehler *)
+	IF Read.pDebugData^[16#0E] <> 0 OR Event[7].Status.31 OR Event[8].Status.31 OR Event[9].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#0E];
+		
+		//Uebertemperatur
+		Event[7](
+			Flag	:= ShowEvent AND(DebugData.0 OR DebugData.1 OR DebugData.2),
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 33, 
+			pText3	:= ADR(DevTypeAndAddr));	
+			
+		//Untertemperatur
+		Event[8](
+			Flag	:= ShowEvent AND(DebugData.3 OR DebugData.4 OR DebugData.5),
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 34, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+			
+		//Temp. Differenz
+		Event[9](
+			Flag	:= ShowEvent AND(DebugData.6 OR DebugData.6),
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 35, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+		
+(***********************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_eventsEx190x" Id="{65d8abe4-a2b2-4a19-b19e-47ecb32273df}">
+      <Declaration><![CDATA[METHOD PRIVATE _eventsEx190x : BOOL
+VAR_INPUT
+	ShowEvent										:	BOOL;
+END_VAR
+VAR
+	DebugData												:	WORD;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Fire events for EL1904 and EP1908 errors
+
+	(* error during sensor-test *)
+	Event[4].Flag 										:= Read.pDebugData^[16#0A] <> 0;
+	IF Event[4].Flag OR Event[4].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#0A];
+		Event[4].Text2									:= '';
+		IF DebugData.0 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|1'); END_IF
+		IF DebugData.1 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|2'); END_IF
+		IF DebugData.2 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|3'); END_IF
+		IF DebugData.3 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|4');  END_IF
+		IF DebugData.4 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|5'); END_IF
+		IF DebugData.5 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|6'); END_IF
+		IF DebugData.6 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|7'); END_IF
+		IF DebugData.7 THEN Event[4].Text2 				:= CONCAT(Event[4].Text2, '|8');  END_IF
+		Event[4].Text2 									:= CONCAT(Event[4].Text2, '|'); 
+		
+		Event[4](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 22, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+
+	(* Zweikanalauswertung fehlerhaft *)
+	Event[5].Flag 										:= Read.pDebugData^[16#0B] <> 0;
+	IF Event[5].Flag OR Event[5].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#0B];
+		Event[5].Text2									:= '';
+		IF DebugData.0 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|1+2'); END_IF
+		IF DebugData.1 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|3+4'); END_IF
+		IF DebugData.2 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|5+6'); END_IF
+		IF DebugData.3 THEN Event[5].Text2 				:= CONCAT(Event[5].Text2, '|7+8');  END_IF
+		Event[5].Text2 									:= CONCAT(Event[5].Text2, '|'); 		
+	
+		Event[5](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 23, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+
+	(* Fehler Eingangspaar Trittmattenbetriebsart - Eingangspaar uneinig *)
+	Event[6].Flag 										:= Read.pDebugData^[16#0C] <> 0;
+	IF Event[6].Flag OR Event[6].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#0C];
+		Event[6].Text2									:= '';
+		IF DebugData.0 THEN Event[6].Text2 				:= CONCAT(Event[6].Text2, '|1+2'); END_IF
+		IF DebugData.1 THEN Event[6].Text2 				:= CONCAT(Event[6].Text2, '|3+4'); END_IF
+		IF DebugData.2 THEN Event[6].Text2 				:= CONCAT(Event[6].Text2, '|5+6'); END_IF
+		IF DebugData.3 THEN Event[6].Text2 				:= CONCAT(Event[6].Text2, '|7+8');  END_IF
+		Event[6].Text2 									:= CONCAT(Event[6].Text2, '|'); 
+				
+		Event[6](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 24, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+
+	(* Fehler Trittmattenbetriebsart Fremdeinspeisung *)
+	Event[7].Flag 										:= Read.pDebugData^[16#0D] <> 0;
+	IF Event[7].Flag OR Event[7].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#0D];
+		Event[7].Text2									:= '';
+		IF DebugData.0 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|1'); END_IF
+		IF DebugData.1 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|2'); END_IF
+		IF DebugData.2 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|3'); END_IF
+		IF DebugData.3 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|4');  END_IF
+		IF DebugData.4 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|5'); END_IF
+		IF DebugData.5 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|6'); END_IF
+		IF DebugData.6 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|7'); END_IF
+		IF DebugData.7 THEN Event[7].Text2 				:= CONCAT(Event[7].Text2, '|8');  END_IF
+		Event[7].Text2 									:= CONCAT(Event[7].Text2, '|'); 
+		
+		Event[7](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 25, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+	
+
+//Events for EP1908 ****************************************************************)
+IF Read.DebugDataMaxId > 16#10 THEN
+
+	(* Fehler der Drehzahlueberwachung:Ueberdrehzahl *)
+	Event[8].Flag 										:= Read.pDebugData^[16#13] <> 0;
+	IF Event[8].Flag OR Event[8].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#13];
+		Event[8].Text2									:= '';
+		IF DebugData.0 THEN Event[8].Text2 				:= CONCAT(Event[8].Text2, '|1'); END_IF
+		IF DebugData.1 THEN Event[8].Text2 				:= CONCAT(Event[8].Text2, '|2'); END_IF
+		IF DebugData.2 THEN Event[8].Text2 				:= CONCAT(Event[8].Text2, '|3'); END_IF
+		IF DebugData.3 THEN Event[8].Text2 				:= CONCAT(Event[8].Text2, '|4');  END_IF
+		IF DebugData.4 THEN Event[8].Text2 				:= CONCAT(Event[8].Text2, '|5'); END_IF
+		IF DebugData.5 THEN Event[8].Text2 				:= CONCAT(Event[8].Text2, '|6'); END_IF
+		IF DebugData.6 THEN Event[8].Text2 				:= CONCAT(Event[8].Text2, '|7'); END_IF
+		IF DebugData.7 THEN Event[8].Text2 				:= CONCAT(Event[8].Text2, '|8');  END_IF
+		Event[8].Text2 									:= CONCAT(Event[8].Text2, '|'); 
+		
+		Event[8](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 26, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+	
+	(* Fehler in der Betriebsart: Two Channel Sync Velocity *)
+	Event[9].Flag 										:= Read.pDebugData^[16#14] <> 0;
+	IF Event[9].Flag OR Event[9].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#14];
+		Event[9].Text2									:= '';
+		IF DebugData.0 THEN Event[9].Text2 				:= CONCAT(Event[9].Text2, '|1+2'); END_IF
+		IF DebugData.1 THEN Event[9].Text2 				:= CONCAT(Event[9].Text2, '|3+4'); END_IF
+		IF DebugData.2 THEN Event[9].Text2 				:= CONCAT(Event[9].Text2, '|5+6'); END_IF
+		IF DebugData.3 THEN Event[9].Text2 				:= CONCAT(Event[9].Text2, '|7+8');  END_IF
+		Event[9].Text2 									:= CONCAT(Event[9].Text2, '|'); 
+		
+		Event[9](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 27, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+	
+	(* Fehler in der Betriebsart: Two Channel Sync Velocity UND Two Channel Encoder Velocity Control*)
+	Event[10].Flag 										:= Read.pDebugData^[16#15] <> 0;
+	IF Event[10].Flag OR Event[10].Status.31
+	THEN
+		DebugData										:= Read.pDebugData^[16#15];
+		Event[10].Text2									:= '';
+		IF DebugData.0 THEN Event[10].Text2 			:= CONCAT(Event[10].Text2, '|1+2'); END_IF
+		IF DebugData.1 THEN Event[10].Text2 			:= CONCAT(Event[10].Text2, '|3+4'); END_IF
+		IF DebugData.2 THEN Event[10].Text2 			:= CONCAT(Event[10].Text2, '|5+6'); END_IF
+		IF DebugData.3 THEN Event[10].Text2 			:= CONCAT(Event[10].Text2, '|7+8');  END_IF
+		Event[10].Text2 								:= CONCAT(Event[10].Text2, '|'); 
+		
+		Event[10](
+			Flag	:= ShowEvent ,
+			ConfirmTrig:= ConfirmTrig, 
+			MsgId	:= 28, 
+			pText3	:= ADR(DevTypeAndAddr))	;
+	END_IF
+END_IF
+
+(************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="SafetyIODeviceDiag_wEvents">
+      <LineId Id="2816" Count="42" />
+      <LineId Id="2971" Count="0" />
+      <LineId Id="2973" Count="0" />
+      <LineId Id="2859" Count="9" />
+      <LineId Id="3039" Count="0" />
+      <LineId Id="3034" Count="1" />
+      <LineId Id="3040" Count="0" />
+      <LineId Id="3037" Count="0" />
+      <LineId Id="3041" Count="1" />
+      <LineId Id="3036" Count="0" />
+      <LineId Id="2869" Count="2" />
+      <LineId Id="2873" Count="18" />
+      <LineId Id="3104" Count="0" />
+      <LineId Id="2892" Count="0" />
+      <LineId Id="3109" Count="0" />
+      <LineId Id="3112" Count="3" />
+      <LineId Id="3124" Count="0" />
+      <LineId Id="3116" Count="0" />
+      <LineId Id="2893" Count="7" />
+      <LineId Id="3107" Count="0" />
+      <LineId Id="2901" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiag_wEvents._eventsAX580x">
+      <LineId Id="5" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="54" Count="1" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="13" Count="3" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="80" Count="4" />
+      <LineId Id="73" Count="6" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="36" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiag_wEvents._eventsConnDiag">
+      <LineId Id="9" Count="7" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="20" Count="8" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="31" Count="6" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="40" Count="1" />
+      <LineId Id="66" Count="18" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="60" Count="1" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiag_wEvents._eventsDiagHistory">
+      <LineId Id="9" Count="0" />
+      <LineId Id="13" Count="3" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiag_wEvents._eventsEK1914">
+      <LineId Id="10" Count="6" />
+      <LineId Id="212" Count="0" />
+      <LineId Id="17" Count="7" />
+      <LineId Id="217" Count="0" />
+      <LineId Id="25" Count="12" />
+      <LineId Id="213" Count="0" />
+      <LineId Id="38" Count="3" />
+      <LineId Id="218" Count="1" />
+      <LineId Id="42" Count="11" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="54" Count="3" />
+      <LineId Id="220" Count="1" />
+      <LineId Id="58" Count="11" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="70" Count="7" />
+      <LineId Id="222" Count="0" />
+      <LineId Id="78" Count="5" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="137" Count="3" />
+      <LineId Id="216" Count="0" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="197" Count="10" />
+      <LineId Id="196" Count="0" />
+      <LineId Id="193" Count="0" />
+      <LineId Id="143" Count="5" />
+      <LineId Id="161" Count="1" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiag_wEvents._eventsEL2904">
+      <LineId Id="101" Count="0" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="72" Count="3" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="76" Count="3" />
+      <LineId Id="179" Count="1" />
+      <LineId Id="80" Count="11" />
+      <LineId Id="176" Count="0" />
+      <LineId Id="92" Count="3" />
+      <LineId Id="181" Count="1" />
+      <LineId Id="96" Count="4" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="108" Count="4" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="127" Count="1" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="130" Count="1" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="183" Count="1" />
+      <LineId Id="117" Count="4" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="137" Count="1" />
+      <LineId Id="149" Count="1" />
+      <LineId Id="152" Count="4" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="159" Count="4" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="166" Count="4" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="134" Count="0" />
+      <LineId Id="102" Count="1" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiag_wEvents._eventsEx190x">
+      <LineId Id="86" Count="0" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="11" Count="3" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="16" Count="7" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="80" Count="3" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="24" Count="2" />
+      <LineId Id="91" Count="3" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="96" Count="3" />
+      <LineId Id="222" Count="1" />
+      <LineId Id="105" Count="4" />
+      <LineId Id="36" Count="2" />
+      <LineId Id="110" Count="3" />
+      <LineId Id="216" Count="0" />
+      <LineId Id="115" Count="3" />
+      <LineId Id="224" Count="1" />
+      <LineId Id="119" Count="4" />
+      <LineId Id="47" Count="2" />
+      <LineId Id="124" Count="3" />
+      <LineId Id="217" Count="0" />
+      <LineId Id="128" Count="8" />
+      <LineId Id="226" Count="0" />
+      <LineId Id="137" Count="4" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="232" Count="0" />
+      <LineId Id="230" Count="0" />
+      <LineId Id="233" Count="0" />
+      <LineId Id="231" Count="0" />
+      <LineId Id="144" Count="4" />
+      <LineId Id="218" Count="0" />
+      <LineId Id="149" Count="7" />
+      <LineId Id="227" Count="0" />
+      <LineId Id="157" Count="5" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="165" Count="4" />
+      <LineId Id="219" Count="0" />
+      <LineId Id="185" Count="2" />
+      <LineId Id="177" Count="1" />
+      <LineId Id="228" Count="0" />
+      <LineId Id="179" Count="4" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="188" Count="0" />
+      <LineId Id="190" Count="4" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="196" Count="4" />
+      <LineId Id="229" Count="0" />
+      <LineId Id="201" Count="4" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="234" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

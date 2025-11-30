@@ -1,0 +1,221 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="EcCoEReadNewestDiagMsg" Id="{ff71f0f7-7454-4ae8-aa62-6294944dbd5d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Read EtherCAT diag newest message from EtherCAT slave via CoE
+FUNCTION_BLOCK EcCoEReadNewestDiagMsg EXTENDS fbBase      
+VAR CONSTANT
+	{attribute 'displaymode':='hexadecimal'} 
+	COE_DIAG_OBJECT											: WORD := 16#10F3;
+END_VAR                  						
+VAR_INPUT                           						
+	AdsAddr													: 	AMSADDR; //Terminal AMS Net Addr.
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	{attribute 'displaymode':='hexadecimal'}
+	Message													: ARRAY[0..63] OF BYTE; //Index A010 with a lenght of 27 or 32/64 bytes subindex
+	{attribute 'displaymode':='hexadecimal'}
+	DiagCode												: UDINT; // first 4 bytes of message
+
+	{attribute 'displaymode':='hexadecimal'}
+	TextId													: UINT; //xyzz -> X =Type | y = Source | zz = Message ID
+	Timestamp												: T_DCTIME64;	
+
+	MsgSeverity												: UINT; //Extracted from Flags ->  -> 0:Info | 1:Warning | 2:Error 
+	MsgTimestampLocal										: BOOL; //Extracted from Flags bit 4
+	MsgNoOfParameter										: UINT; //Extracted from Flags 
+
+	{attribute 'displaymode':='hexadecimal'}
+	MsgType													: UINT; //Extracted from TextId -> 0=SystemInfo | 1:Info | 2:reserved | 4:Warning | 8:Error
+	MsgSource												: UINT; //Extracted from TextId -> 0:System | 1:General | 2:Communication | 3:Encoder | 4:Drive | 5:Inputs | 6:IO | 7:Reserved 
+	{attribute 'displaymode':='hexadecimal'}
+	MsgId													: UINT; //Extracted from TextId 
+END_VAR                             						
+VAR
+
+END_VAR
+VAR
+(* Cache *********************************************************************)	
+	{attribute 'displaymode':='hexadecimal'}
+	SubIndexNewestMessage									: BYTE;
+
+	{attribute 'displaymode':='hexadecimal'}
+	Flags													: UINT; //Info (0) Warning (1) or Error (2)
+(* Timer ********************************************************************************)
+  	
+(* Trigger ******************************************************************************)
+
+
+(* Function blocks ****************************************************************************)
+	CoERead													: FB_EcCoeSdoReadEx;
+
+(* Dummy Speicher **********************************************************)
+	
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read newest diag message															*)
+	(************************************************************************************)
+
+(* Sequence *****************************************************************)
+	rtExecute(CLK := Execute);
+	CASE state OF
+	0: // Read subindex of the newest diagnosis message		
+		busy												:= FALSE;
+		IF rtExecute.Q
+		THEN
+			Busy											:= TRUE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			CoERead(bExecute := FALSE, sNetId := F_CreateAmsNetId(nIds := AdsAddr.netId),  nSlaveAddr := AdsAddr.port, bCompleteAccess:= FALSE ,nIndex := COE_DIAG_OBJECT , tTimeout := Timeout);
+			
+			MEMSET(ADR(Message),0,SIZEOF(Message));
+			DiagCode										:= 0;
+			Flags											:= 0;
+			TextId											:= 0;
+			Timestamp										:= 0;
+			MsgType											:= 0;
+			MsgSource										:= 0;
+			MsgId											:= 0;
+			
+			state											:= state + 1;
+		ELSIF NOT Execute
+		THEN
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+		END_IF
+	1: // read subindex of newest diagnosis message
+		CoERead(
+			bExecute	:= TRUE, //Diagnosis histroy object
+			nSubIndex	:= 16#02, // subindex newest message
+			pDstBuf		:= ADR(SubIndexNewestMessage), 
+			cbBufLen	:= SIZEOF(SubIndexNewestMessage) );
+				
+		IF NOT CoERead.bBusy
+		THEN
+			IF CoERead.bError
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= CoERead.nErrId;
+				state										:= 0;
+			ELSE		
+				state										:= state + 1;
+			END_IF			
+			CoERead(bExecute := FALSE );				
+		END_IF
+		
+	2: // Read newest diagnosis messages from sub index
+		CoERead(
+			bExecute	:= TRUE, 
+			nSubIndex	:= SubIndexNewestMessage, 
+			pDstBuf		:= ADR(Message), 
+			cbBufLen	:= SIZEOF(Message));
+			
+		IF NOT CoERead.bBusy
+		THEN
+			IF CoERead.bError
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= CoERead.nErrId;
+				state										:= 0;				
+			ELSE // Copy certain byte arrays of the diagnosis messages to lcoal variables
+				
+				MEMCPY(ADR(DiagCode), ADR(Message[0]), 4); 		// copy 4 bytes of diag code data
+				MEMCPY(ADR(Flags), ADR(Message[4]), 2); 		// copy 2 bytes of flag data
+				MEMCPY(ADR(TextID),ADR(Message[6]), 2);			// copy 2 bytes of TextId data
+				MEMCPY(ADR(Timestamp),ADR(Message[8]), 8);		// copy 8 bytes of 64bit DC time
+				
+				MsgType										:= SHR(TextId AND 16#F000, 12);
+				MsgSource									:= SHR(TextId AND 16#0F00, 8);
+				MsgId										:= TextId AND 16#00FF;
+				MsgSeverity									:= Message[4] AND 2#0000_1111;
+				MsgTimestampLocal							:= Message[4].4;
+				MsgNoOfParameter							:= Message[5];
+				
+				Done										:= TRUE;
+				state										:= 0;			
+			END_IF
+			CoERead(bExecute := False);		
+		END_IF
+	END_CASE
+
+
+(******************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="msgSevyIsError" Id="{8627de71-744e-4a66-b618-1c82e2311c33}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC msgSevyIsError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8c87320e-ac09-40d3-8b68-9401d4cc5ef3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[msgSevyIsError := MsgSeverity = 2;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="msgSevyIsInfo" Id="{c4cadd10-e094-4771-8da6-dff4023b5430}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC msgSevyIsInfo : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3f56e6bb-6eae-4566-9d95-64c6754cd1ba}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[msgSevyIsInfo := MsgSeverity = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="msgSevyIsWarning" Id="{eb6470d1-b0fd-462b-8878-eb35f46b88e6}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC msgSevyIsWarning : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f2bc9ec9-43ba-4816-aa74-fdead8e0c5e3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[msgSevyIsWarning := MsgSeverity = 1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="EcCoEReadNewestDiagMsg">
+      <LineId Id="3" Count="89" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcCoEReadNewestDiagMsg.msgSevyIsError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcCoEReadNewestDiagMsg.msgSevyIsInfo.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcCoEReadNewestDiagMsg.msgSevyIsWarning.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

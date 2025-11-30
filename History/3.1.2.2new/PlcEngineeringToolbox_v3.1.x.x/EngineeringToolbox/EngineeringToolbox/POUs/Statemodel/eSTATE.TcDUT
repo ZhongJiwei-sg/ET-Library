@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="eSTATE" Id="{9c677a58-1efd-4a70-a37c-8ad6b0c6cdb9}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+//Statemodel enum states 0 and 301-320
+{attribute 'to_string'}
+TYPE eSTATE :
+(
+	IDLE			:= 0,
+
+	STARTUP			:= 301,
+	ABORTING		:= 302,	
+	ABORTED			:= 303,
+	CLEARING		:= 304,
+
+	STOPPING		:= 305,
+	STOPPED			:= 306,
+	RESETTING		:= 307,
+
+	STARTING		:= 308,
+	STARTED			:= 309,
+	EXECUTE			:= 310,
+	COMPLETING		:= 311,
+	COMPLETE		:= 312,
+	
+	SUSPENDING		:= 313,
+	SUSPENDED		:= 314,
+	UNSUSPENDING	:= 315,
+	HOLDING			:= 316,
+	HELD			:= 317,
+	UNHOLDING		:= 318
+	);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

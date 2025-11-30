@@ -1,0 +1,320 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="SafetyGroupIO" Id="{7568bdaa-4be7-4835-b288-0c5866e226c0}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK SafetyGroupIO
+VAR_OUTPUT CONSTANT
+//Group State
+	STATE_UNKNOWN											: BYTE := 0;
+	STATE_RUN												: BYTE := 1;
+	STATE_STOP												: BYTE := 2;
+	STATE_SAFE												: BYTE := 3; //Only EL6900
+	STATE_ERROR												: BYTE := 4;
+	STATE_RESET												: BYTE := 5;
+	STATE_START												: BYTE := 6;
+	STATE_STOP_ERROR										: BYTE := 7;
+	STATE_DEACTIVE											: BYTE := 16;
+	STATE_WAIT_COM_ERROR									: BYTE := 17; 
+	
+//Group Diag
+	DIAG_OK													:	BYTE := 0;
+	DIAG_FB_ERROR											:	BYTE := 1;
+	DIAG_COM_ERROR											:	BYTE := 2;
+	DIAG_MODULE_ERROR										:	BYTE := 3;
+	DIAG_CMP_ERROR											:	BYTE := 4;
+	DIAG_DEACTIVE_ERROR										:	BYTE := 5;
+	DIAG_RESTART_ERROR										:	BYTE := 6;
+END_VAR
+VAR_INPUT
+	ErrAck											AT  %Q*	:	BOOL := FALSE;	//Resets safety group error with rising edge 
+	RunStop											AT  %Q* :	BOOL := TRUE;	//TRUE for run and FALSE for stop safety group 
+	ModuleFault										AT  %Q* :	BOOL := FALSE;	//
+
+END_VAR                     						
+VAR_OUTPUT                  						
+	ComErr											AT  %I* : 	BOOL;	//Safety group has a communication error
+	ComStartup										AT  %I* :	BOOL;	//Only for EL6910
+	FbDeactive										AT  %I* :	BOOL;	//Only for EL6910
+	FBErr											AT  %I* : 	BOOL;	//Safety group has a FB error
+	FbRun											AT  %I* :	BOOL;	//Only for EL6910
+	InRun											AT  %I* :	BOOL;	//Only for EL6910
+	OtherErr										AT  %I* :	BOOL;	//Only for EL6910
+	OutErr											AT  %I* :	BOOL;	//Safety group has an output error
+	
+//Only available if the Checkboxes "MapState" and "MapDiag" are selected
+	State											AT  %I* : USINT;	//Safety group state - 1=Run/2=Stop/3=Safe/4=Error/5=Reset
+	Diag											AT  %I* : USINT;	//Safety group diagnostic information
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* SafetyGroup IO											             *)
+(*************************************************************************)
+
+(*************************************************************************)
+]]></ST>
+    </Implementation>
+    <Folder Name="diagProperties" Id="{c3dd0b50-9f80-4ec9-8224-3a094a31f12b}" />
+    <Folder Name="stateProperties" Id="{686d0023-d6b1-4a41-bc81-5db3a19d106a}" />
+    <Property Name="diagCmpError" Id="{3d4a0a6e-4182-4a37-ad2e-2b97e58bff7c}" FolderPath="diagProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Public diagCmpError : bool]]></Declaration>
+      <Get Name="Get" Id="{9ea252a8-9560-4d13-87ba-fca61b13b493}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DiagCmpError:= Diag = DIAG_CMP_ERROR;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="diagComError" Id="{d77cb1ea-9d08-4ad6-90ab-ff0f9cab7516}" FolderPath="diagProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Public diagComError : bool]]></Declaration>
+      <Get Name="Get" Id="{48688bb8-7295-455f-b6c0-b7af8f929fce}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DiagComError:= Diag = DIAG_COM_ERROR;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="diagDeactiveError" Id="{fd19f574-434d-4972-a5b1-fca0e13fecfb}" FolderPath="diagProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Public diagDeactiveError : bool]]></Declaration>
+      <Get Name="Get" Id="{68d98fe0-d333-49ea-9844-fd787f4038d1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DiagDeactiveError:= Diag = DIAG_DEACTIVE_ERROR;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="diagFbError" Id="{a5b174fb-922d-4a5d-83d3-2874c1cd8904}" FolderPath="diagProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC diagFbError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{30ccd93c-1d55-428e-af99-c7006234be8a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DiagFbError:= Diag = DIAG_FB_ERROR;;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="diagModuleError" Id="{9352b11c-14ce-457d-adc5-8d97dc60927f}" FolderPath="diagProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Public diagModuleError : bool]]></Declaration>
+      <Get Name="Get" Id="{563dbc6c-ed5f-4216-8bad-221e9f875a7b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DiagModuleError:= Diag = DIAG_MODULE_ERROR;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="diagNoError" Id="{60ffc1a9-5cc4-468b-871e-af0c84f13655}" FolderPath="diagProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Public diagNoError : bool]]></Declaration>
+      <Get Name="Get" Id="{08ca089b-4e5b-40a2-8f87-5074c527b283}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DiagNoError := Diag = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="diagRestartError" Id="{8500988f-f62a-4067-9cf9-decc7197dd67}" FolderPath="diagProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Public diagRestartError : bool]]></Declaration>
+      <Get Name="Get" Id="{4b4cc8da-7d33-4a9c-94ee-4c7aac1cc8a7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DiagRestartError:= Diag = DIAG_RESTART_ERROR;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateDeactive" Id="{f33cf939-a65b-4ab9-9b62-f97b9c803157}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateDeactive : bool]]></Declaration>
+      <Get Name="Get" Id="{f797d126-6aad-421b-8c7a-b445148a074c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateDeactive := State = STATE_DEACTIVE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateError" Id="{e9751316-5ae2-4578-9f21-93c985f1fed4}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{826fa3b8-b429-4d08-8796-b2361d3e90f2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateError :=	State = STATE_ERROR;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateReset" Id="{fd650911-f964-44da-b37b-e347df261678}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateReset : Bool]]></Declaration>
+      <Get Name="Get" Id="{e6784e74-c58f-4a92-9855-f6b8cc5476ae}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateReset :=	State = STATE_RESET;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateRun" Id="{d95d7f1b-6f09-4f35-b900-b400444f9161}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateRun : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4528d8a1-5981-47f4-954d-7ad083a33fe6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateRun :=	State = STATE_RUN;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateSafe" Id="{4f5d8a17-cbf8-418a-b517-c588f318e173}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateSafe : Bool]]></Declaration>
+      <Get Name="Get" Id="{383000a2-62e6-4a51-a1c4-9bb65d114d0c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateSafe :=	State = STATE_SAFE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateStart" Id="{96a04223-ef79-4956-ad23-9e7c573ada57}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateStart : Bool]]></Declaration>
+      <Get Name="Get" Id="{30fe8693-ad2a-46b2-8595-2daaf531be5b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateStart :=	State = STATE_START;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateStop" Id="{02738129-dab2-4038-b0c4-79402adba674}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateStop : Bool]]></Declaration>
+      <Get Name="Get" Id="{c028d5c2-d5e2-4fd5-8a98-ab54ec7d6843}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateStop :=	State = STATE_STOP;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateStopError" Id="{ff76c2a7-c6bc-471f-9e86-26325a51b51f}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateStopError : bool]]></Declaration>
+      <Get Name="Get" Id="{48ff4716-3e49-432a-af1d-d2deb3f55c6d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateStopError := state = STATE_STOP_ERROR;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateUnknow" Id="{4fd00a6a-7fa1-4de2-9450-c0dbdeab5a39}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateUnknow : Bool]]></Declaration>
+      <Get Name="Get" Id="{89d690a3-6876-44b8-bd4e-bf693f65745d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateUnknow :=	State = STATE_UNKNOWN;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inStateWaitComError" Id="{7c6544ac-4cb6-4b93-9ef7-56c7207710af}" FolderPath="stateProperties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inStateWaitComError : bool]]></Declaration>
+      <Get Name="Get" Id="{aab1cdcd-9b96-4f82-98e3-624f99247209}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inStateWaitComError := State = STATE_WAIT_COM_ERROR;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="SafetyGroupIO">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="52" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.diagCmpError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.diagComError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.diagDeactiveError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.diagFbError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.diagModuleError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.diagNoError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.diagRestartError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateDeactive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateReset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateRun.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateSafe.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateStart.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateStop.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateStopError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateUnknow.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyGroupIO.inStateWaitComError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

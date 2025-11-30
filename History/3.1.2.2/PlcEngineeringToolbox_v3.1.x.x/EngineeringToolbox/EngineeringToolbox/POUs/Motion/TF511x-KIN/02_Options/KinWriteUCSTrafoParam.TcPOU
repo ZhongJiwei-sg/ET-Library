@@ -1,0 +1,338 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="KinWriteUCSTrafoParam" Id="{4a4dbf4d-2caf-45b5-bc69-7a4a1a135c06}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'hide'}
+(*==============================================================================*)
+(* Name:			KIN_WriteUCSTrafoParam							  	 		*)
+(* Desc:			THIS IS NOT A RELEASED IMPLEMENTATION AND    				*)
+(*  	           	SUBJECT TO CHANGE                            				*)
+(*     			 															    *)
+(* Author:	 	DS																*)
+(* Date:							     										*)
+(*==============================================================================*)
+FUNCTION_BLOCK KinWriteUCSTrafoParam
+VAR_INPUT
+	Execute													:	BOOL	:= FALSE;
+   oidTrafo													:	UDINT;
+	vTranslation 											:	VECTOR;
+ 	vRotation 												:	VECTOR;
+END_VAR
+VAR_OUTPUT
+	Busy													:	BOOL	:= FALSE;
+	Done													:	BOOL	:= FALSE;
+	Error													:	BOOL	:= FALSE;
+	ErrorId													:	UDINT	:= 0;
+END_VAR
+VAR
+	State													:	UDINT	:= 0;
+	ADSWRITE												:ADSWRITE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[CASE State OF
+0:
+	Done													:= FALSE;
+	Busy													:= FALSE;
+	Error													:= FALSE;
+	ErrorId													:= 0;
+	IF Execute 
+	THEN
+		AdsWrite(WRITE := FALSE);
+		AdsWrite(
+			NETID	:='',
+			PORT	:= 10,
+			IDXGRP	:=oidTrafo,
+			IDXOFFS	:=SEL(FALSE (* Lock *), 16#05030210, 16#0503020F),
+			LEN		:= 0,
+			SRCADDR	:=0 ,
+			WRITE	:= TRUE,
+			TMOUT	:= DEFAULT_ADS_TIMEOUT,
+			BUSY	=> ,
+			ERR		=> ,
+			ERRID	=> );
+
+		Busy												:= TRUE;
+		State												:= 1;
+	END_IF
+
+1: (* Start Translation X *)
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+		
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+		IF NOT AdsWrite.ERR 
+		THEN
+			AdsWrite(
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo,
+				IDXOFFS	:= 16#05010020,
+				LEN		:= SIZEOF(vTranslation.m[1]),
+				SRCADDR	:= ADR(vTranslation.m[1]),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE 	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+
+			State											:= 10;
+		ELSE (* Error unlock Param *)
+			IF NOT Execute 
+			THEN
+				State										:= 0;
+			ELSE
+				State										:= 99;
+			END_IF
+		END_IF
+	END_IF
+
+10: (* Translation Y *)
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+		
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+		
+		IF NOT AdsWrite.ERR 
+		THEN
+			AdsWrite(
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo,
+				IDXOFFS	:= 16#05010021,
+				LEN		:= SIZEOF(vTranslation.m[2]),
+				SRCADDR	:= ADR(vTranslation.m[2]),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE 	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+
+			State											:= 20;
+		ELSE            									
+			State											:= 90;
+		END_IF
+
+	END_IF
+
+20: (* Translation Z *)
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+		IF NOT AdsWrite.ERR 
+		THEN
+			AdsWrite(
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo,
+				IDXOFFS	:= 16#05010022,
+				LEN		:= SIZEOF(vTranslation.m[3]),
+				SRCADDR	:= ADR(vTranslation.m[3]),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE 	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+
+			State											:= 30;
+		ELSE
+			State											:= 90;
+		END_IF
+
+	END_IF
+
+30: (* Roation X *)
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+		IF NOT AdsWrite.ERR 
+		THEN
+			AdsWrite(
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo,
+				IDXOFFS	:= 16#05010060,
+				LEN		:= SIZEOF(VRotation.m[1]),
+				SRCADDR	:= ADR(VRotation.m[1]),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE 	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+
+			State											:= 40;
+		ELSE
+			State											:= 90;
+		END_IF
+	END_IF
+
+40: (* Roation Y *)
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+		IF NOT AdsWrite.ERR 
+		THEN
+			AdsWrite(
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo,
+				IDXOFFS	:= 16#05010061,
+				LEN		:= SIZEOF(VRotation.m[2]),
+				SRCADDR	:= ADR(VRotation.m[2]),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE 	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+			State											:= 50;
+		ELSE            									
+			State											:= 90;
+		END_IF
+
+	END_IF
+
+50: (* Roation Z *)
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+		IF NOT AdsWrite.ERR 
+		THEN
+			AdsWrite(
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo,
+				IDXOFFS	:= 16#05010062,
+				LEN		:= SIZEOF(VRotation.m[3]),
+				SRCADDR	:= ADR(VRotation.m[3]),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE 	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+
+			State											:= 60;
+		ELSE            									
+			State											:= 90;
+		END_IF
+	END_IF
+
+60:
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		State												:= 90;
+		AdsWrite(WRITE:=FALSE);
+	END_IF
+
+90: (* Start Lock-Param *)
+	AdsWrite(
+		NETID	:='',
+		PORT	:= 10,
+		IDXGRP	:=oidTrafo,
+		IDXOFFS	:=SEL(TRUE (* Lock *), 16#05030210, 16#0503020F),
+		LEN		:= 0,
+		SRCADDR	:=0 ,
+		WRITE	:= TRUE,
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=> ,
+		ERR		=> ,
+		ERRID	=> );
+
+	State													:= 91;
+
+91:
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>,
+		ERRID	=>);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		Busy 												:= FALSE;
+		IF NOT AdsWrite.ERR 
+		THEN
+			Done											:= NOT Error;
+		ELSIF NOT Error
+		THEN
+			Error 											:= AdsWrite.ERR;
+			ErrorId 										:= AdsWrite.ERRID;
+		END_IF
+		IF NOT Execute 
+		THEN
+			State											:= 0;
+		ELSE        										
+			State											:= 99;
+		END_IF
+		AdsWrite(WRITE:=FALSE);
+	END_IF
+
+99:
+	Busy 													:= FALSE;
+	IF NOT Execute 
+	THEN
+		State												:= 0;
+	END_IF
+
+END_CASE]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="KinWriteUCSTrafoParam">
+      <LineId Id="3" Count="282" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

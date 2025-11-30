@@ -1,0 +1,165 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="Fifo" Id="{aa1f044b-8eab-4938-891f-629e57b9ca73}" SpecialFunc="None">
+    <Declaration><![CDATA[//Fifo base control template with external memory based of FifoBase
+FUNCTION_BLOCK Fifo EXTENDS FifoBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;
+
+]]></ST>
+    </Implementation>
+    <Method Name="clear" Id="{fbbef430-ab0a-4417-ad82-366c7bad295c}">
+      <Declaration><![CDATA[//Clear out one entry from the Fifo buffer
+METHOD PUBLIC clear : BOOL //TRUE if method was successful
+VAR_INPUT
+	EntryNo													:	UDINT;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR             										
+VAR                 										
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Clear := SUPER^._Clear(EntryNo,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="clearByDataSet" Id="{9fe6205a-3ce0-4f76-90b0-837e52a3b6ee}">
+      <Declaration><![CDATA[//Clear out defined data set from the Fifo buffer
+METHOD PUBLIC clearByDataSet : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;										
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR             										
+VAR         
+	i														:	DINT;        										
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ClearByDataSet := SUPER^._ClearByDataSet(pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeue" Id="{59de4c4c-74b3-493f-aa4b-ade886aeb471}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Dequeue := SUPER^._Dequeue(pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueue" Id="{72027fe0-e175-4e5c-8ae6-cdfc0b7f1938}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enqueue := SUPER^._Enqueue(pData,SizeOfData,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isEnqueued" Id="{d93336e1-a542-40f1-8838-7b61766d3e75}">
+      <Declaration><![CDATA[//Check wheter a value already exist
+METHOD PUBLIC isEnqueued : uDINT //data exist in Fifo if reurn value <> 0, returns index of entry in buffer 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR	
+VAR
+	i 														: 	DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsEnqueued := SUPER^._IsEnqueued(pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isNextEntry" Id="{0bc44085-e9b8-4d57-bfa3-96cac1b10e91}">
+      <Declaration><![CDATA[//Check wheter a value will be the next output of the buffer
+METHOD PUBLIC isNextEntry : BOOL //Inputs value is the next output 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsNextEntry := SUPER^._IsNextEntry(pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readEntry" Id="{75efbd96-7f79-426c-910d-4b1d2a1b3a17}">
+      <Declaration><![CDATA[METHOD PUBLIC readEntry : BOOL //TRUE if method was successful
+VAR_INPUT
+	idx														:	UDINT;
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ReadEntry := SUPER^._ReadEntry(idx,pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{680644df-fa3c-4296-a961-c8c34a092629}">
+      <Declaration><![CDATA[//Reset complete Fifo
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset := SUPER^._reset(pMemory,SizeOfMemory);	]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Fifo">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fifo.clear">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fifo.clearByDataSet">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fifo.dequeue">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fifo.enqueue">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fifo.isEnqueued">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fifo.isNextEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fifo.readEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Fifo.reset">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

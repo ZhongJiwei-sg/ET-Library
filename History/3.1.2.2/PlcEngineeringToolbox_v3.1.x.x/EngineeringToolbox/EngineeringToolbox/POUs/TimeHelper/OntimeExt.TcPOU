@@ -1,0 +1,122 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="OntimeExt" Id="{17df5292-afda-4031-8c14-216fbda65900}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Ontime function with external counter variables via references 
+FUNCTION_BLOCK OntimeExt
+VAR_INPUT
+	IN														: 	BOOL := FALSE;		//Start ontime counting 
+	ResetTrig												: 	BOOL := FALSE;		//Reset all counter
+	rHour													:	REFERENCE TO UDINT;	//Ontime counter of total houres
+	rMinute													:	REFERENCE TO UDINT;	//Ontime counter of minutes until one hour expired
+	rSecond													:	REFERENCE TO UDINT; //Ontime counter of seconds until one minute expired
+END_VAR
+VAR_OUTPUT
+	Error													:	BOOL;				//Invalid input references 
+END_VAR
+VAR
+	txSys													: 	TIME;
+	tx														: 	DWORD := 0;
+	last													: 	DWORD := 0;
+	ms														:	DWORD := 0;
+	Init													:	BOOL := FALSE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF NOT __ISVALIDREF(rHour)
+	OR NOT __ISVALIDREF(rMinute)
+	OR NOT __ISVALIDREF(rSecond)
+THEN
+	Error													:= TRUE;
+	RETURN;                 								
+ELSE                        									
+	Error 													:= FALSE;
+END_IF                      	
+
+(* read system time *)
+txSys 														:= TIME();
+tx 															:= TIME_TO_DWORD(txSys);
+        													
+(* make sure the first cycle works correctly *)
+IF ResetTrig 
+THEN
+	reset();
+ELSIF IN 
+	AND Init 
+THEN
+	(* add the current milliseconds *)
+	ms 														:= (tx - last) + ms;
+	IF ms >= 1000 
+	THEN
+		rSecond 											:= rSecond + 1;
+		IF rSecond >= 60
+		THEN
+			rSecond											:= 0;
+			rMinute											:= rMinute + 1;
+			IF rMinute >= 60
+			THEN
+				rMinute										:= 0;
+				rHour										:= rHour + 1;
+			END_IF
+	  	END_IF
+		ms 													:= ABS(ms - 1000);
+	END_IF;
+ELSE
+	;
+END_IF
+
+Init 														:= TRUE;
+last 														:= tx;]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{8c97675a-d7a9-4368-93f1-acc445c8d7b2}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	last 													:= tx;
+	rHour 													:= rMinute := rSecond := 0;
+	reset													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="POUImageProperty">
+            <n n="ImageData" />
+            <v n="TransparencyColor">"White"</v>
+            <v n="MakeTransparent">false</v>
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Boolean">System.Boolean</Type>
+          <Type n="POUImageProperty">{bb741845-1ec5-4be9-bb0d-2cf7058af574}</Type>
+          <Type n="String">System.String</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="OntimeExt">
+      <LineId Id="129" Count="42" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="OntimeExt.reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

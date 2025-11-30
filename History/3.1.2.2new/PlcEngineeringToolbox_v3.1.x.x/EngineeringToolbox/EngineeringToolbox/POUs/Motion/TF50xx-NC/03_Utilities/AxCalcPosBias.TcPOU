@@ -1,0 +1,187 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AxCalcPosBias" Id="{27bba9f5-04e6-48ef-95f3-4923b6d7dc84}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Calculates (new) NC axis position bias  
+FUNCTION_BLOCK AxCalcPosBias EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+//option settings 
+	{attribute 'displaymode':='binary'}
+	OPTION_WRITE_TO_NC										: 	BYTE :=2#0000_0001; //New position offset (bias) will directly written into the NC
+END_VAR
+VAR_INPUT
+	{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 2#0000_0000; (* option constants are predefined, so they can accordingly be passed symbolically to the block *)
+	SetPos													: 	LREAL := 0.0; //New actual positon of axis 
+END_VAR
+VAR_IN_OUT
+	Axis													:	AXIS_REF;
+END_VAR
+VAR_OUTPUT
+	RawPos													: LREAL; // Uncorrected axis position (Offset = 0.0)	
+	Offset													: LREAL; // New postition offset (Position bias) 
+
+END_VAR
+VAR
+(*  Memory *****************************************************)
+	LastErrorId												:	UDINT;
+	LastErrorState											:	INT;
+
+(*  Timer ******************************************************)
+
+
+(*  Trigger ****************************************************)
+
+(*  Blocks *****************************************************)
+	ReadAdsPara												: ADSREAD := (NetID:= '' , Port:=AMSPORT_R0_NC,TmOut := DEFAULT_ADS_TIMEOUT );
+	WriteAdsPara											: ADSWRITE := (NetID:= '' , Port:=AMSPORT_R0_NC,TmOut := DEFAULT_ADS_TIMEOUT );
+
+(*  Error ******************************************************)
+(*  Dummys *****************************************************)
+	{attribute 'hide' := ''}
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Calculate new pos bias (position offset)			 	 *)
+	(*********************************************************)
+	
+(* Sequence ********************************************************)
+
+	rtExecute(CLK := Execute);
+	CASE state OF
+	0 : 
+		Busy 												:= FALSE;
+		IF NOT Execute THEN
+			Done 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorID 										:= 0;
+		END_IF
+		IF rtExecute.Q THEN
+			ReadAdsPara( Read := FALSE ); 
+			WriteAdsPara(Write := FALSE);
+			Busy											:= TRUE;
+			Offset											:= 0.0;
+			RawPos											:= 0.0;
+			Done 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorID 										:= 0;
+			state 											:= state + 1;
+		END_IF
+		
+		
+	(* Read current pos. bias **********************************************)
+	1:
+		ReadAdsPara(Read:= TRUE,	IDxGrp:=(16#5000+Axis.NcToPlc.AxisId) , IDxOffs:=16#7,LEN:=SIZEOF(Offset), DestAddr:=ADR(Offset));	
+		IF NOT ReadAdsPara.BUSY
+		THEN
+			IF ReadAdsPara.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= ReadAdsPara.ERRID;
+				LastErrorState								:= state;
+				LastErrorId									:= ErrorId;
+				state										:= 0;
+			ELSE //Calculate new Pos bias
+				RawPos										:= Axis.NcToPlc.ActPos - Offset;	
+				Offset										:= SetPos - RawPos;
+				IF (OPTION_WRITE_TO_NC AND Options) > 0
+				THEN
+					state									:= state + 1;
+				ELSE
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 0;					
+				END_IF
+			END_IF
+		END_IF
+		
+	2:
+		WriteAdsPara(Write:= TRUE,	IDxGrp:=(16#5000+Axis.NcToPlc.AxisId) , IDxOffs:=16#7,LEN:=SIZEOF(Offset), SrcAddr:=ADR(Offset));	
+		IF NOT WriteAdsPara.BUSY
+		THEN
+			IF WriteAdsPara.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= WriteAdsPara.ERRID;
+				LastErrorId									:= ErrorId;
+				LastErrorState								:= state;
+				state										:= 0;
+			ELSE			
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				state										:= 0;					
+			END_IF
+		END_IF		
+	END_CASE
+
+(****************************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="optWritePosBiasToNC" Id="{b156570e-6c86-4afb-8d75-ddd849bf0954}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optWritePosBiasToNC : BOOL]]></Declaration>
+      <Get Name="Get" Id="{36c8ac72-3acd-42e3-9484-0d4b07d358bb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optWritePosBiasToNC := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{06fbad78-a567-4211-a263-d8708c592db2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optWritePosBiasToNC;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="AxCalcPosBias">
+      <LineId Id="3" Count="2" />
+      <LineId Id="118" Count="1" />
+      <LineId Id="125" Count="6" />
+      <LineId Id="133" Count="4" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="251" Count="0" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="142" Count="2" />
+      <LineId Id="147" Count="0" />
+      <LineId Id="149" Count="1" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="151" Count="2" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="160" Count="1" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="166" Count="1" />
+      <LineId Id="171" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="297" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="248" Count="0" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="175" Count="3" />
+      <LineId Id="181" Count="0" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="182" Count="10" />
+      <LineId Id="298" Count="0" />
+      <LineId Id="193" Count="1" />
+      <LineId Id="200" Count="2" />
+      <LineId Id="204" Count="1" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxCalcPosBias.optWritePosBiasToNC.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxCalcPosBias.optWritePosBiasToNC.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

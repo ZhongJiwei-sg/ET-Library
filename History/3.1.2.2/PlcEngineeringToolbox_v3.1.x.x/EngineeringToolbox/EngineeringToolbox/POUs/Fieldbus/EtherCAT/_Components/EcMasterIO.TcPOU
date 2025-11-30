@@ -1,0 +1,210 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="EcMasterIO" Id="{b18db89e-2ce9-46a1-ae01-d07b9d60ef3a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EtherCAT Master Device IOs
+FUNCTION_BLOCK EcMasterIO
+VAR CONSTANT
+	DELAY_LINK_OK											:	TIME := T#1S;
+END_VAR
+VAR_OUTPUT CONSTANT
+	MIN_FRAMES												:	INT := 0;
+	MAX_FRAMES												:	INT := PARAM.ETHERCAT_MASTER_DEV_IO_MAX_FRAMES; 
+END_VAR	            							
+VAR_INPUT           							                 							
+(* Outputs *)       							
+	FrmCtrl											AT %Q*	:	ARRAY [MIN_FRAMES..MAX_FRAMES] OF UINT;	//Link to EtherCAT Master "FrmCtrlXXX" under Outputs, e.g. 0x0001 = prevent 1. EtherCAT command from sending (request NOP)
+	FrmWcCtrl										AT %Q*	:	ARRAY [MIN_FRAMES..MAX_FRAMES] OF UINT;	//Link to EtherCAT Master "FrmWcCtrlXXX" under Outputs, e.g. 0x0001 = copy data with wrong working counter of 1. EtherCAT command
+	                							
+	DevCtrl											AT %Q*	:	UINT := 0; //Link to EtherCAT Master "DevCtrl" under Outputs
+END_VAR             							
+VAR_OUTPUT          							    
+	Name													:	STRING(30) := '';
+								
+	LinkOK_PortA											:	BOOL;		//TRUE when link is OK on port A
+	LinkOK_PortB											:	BOOL;		//TRUE when link is OK on port B - Redundancy port 
+
+	{attribute 'displaymode':='hex'}  
+	DevState										AT %I*	:	UINT; (*	Link to EtherCAT Master "DevState" under Inputs,
+																				0x0001 = Link error
+																				0x0002 = I/O locked after link error (I/O reset required)
+																				0x0004 = Link error (redundancy adapter)
+																				0x0008 = Missing one frame (redundancy mode)
+																				0x0010 = Out of send resources (I/O reset required)
+																				0x0020 = Watchdog triggered
+																				0x0040 = Ethernet driver (miniport) not found
+																				0x0080 = I/O reset active
+																				0x0100 = At least one device in 'INIT' state
+																				0x0200 = At least one device in 'PRE-OP' state
+																				0x0400 = At least one device in 'SAFE-OP' state
+																				0x0800 = At least one device indicates an error state
+																				0x1000 = DC not in sync *)
+	DevStateText											:	T_MAXSTRING;		//shows string of device state
+	DevStateBits											:	EC_MASTER_DEVICE_STATE;
+	DevStateChanged											:	BOOL; //TRUE if device state changed compared to previous cylce								
+   	ResetRequired											:	BOOL;		//TRUE when a reset is requested
+	MinOneSlaveNotInOP										:	BOOL;		//TRUE when at least one slave is available but not in OP state
+    
+	NoOfFrames												:	INT;		//No of frames configured
+	FrmState										AT %I*	:	ARRAY [MIN_FRAMES..MAX_FRAMES] OF UINT;	//Link to EtherCAT Master "FrmStateXXX" under Inputs, e.g. 0x0001 = 1. EtherCAT command not sent (NOP requested)
+	FrmWcState										AT %I*	:	ARRAY [MIN_FRAMES..MAX_FRAMES] OF UINT;	//Link to EtherCAT Master "FrmWcStateXXX" under Inputs, e.g. 0x0001 = wrong working counter of 1. EtherCAT command received
+	FrmInputToggle									AT %I*	:	ARRAY [MIN_FRAMES..MAX_FRAMES] OF UINT;	//Link to EtherCAT Master "FrmInputToggleXXX" under Inputs, e.g. 0x0001 = Toggle Bit: 1. EtherCAT command received new inputs
+	AllFramesMissing										:	BOOL;		//TRUE if all frames are missing 
+	FramesWCState											:	BOOL;		//TRUE if WC state in at least one frame is <> 0
+	FramesWcStateChanged									:	BOOL;		//TRUE if WC state of at least one frame changed compared to previous cylce	
+	
+	SlaveCount										AT %I*	:	UINT;	//Link to EtherCAT Master "SlaveCount" under Inputs, show actual numer of slaves 
+	SlaveCount2										AT %I*	:	UINT;	//Link to EtherCAT Master "SlaveCount2" under Inputs, show actual numer of slaves in redunance mode
+	SlaveCountTotal											:	UINT; 		//Slave count 1 and 2
+	RedundanceActive										:	BOOL;		//Redundance active 		
+            																				                    	
+(* InfoData *)      	
+	ChangeCount										AT %I*	:	UINT;					//Link to EtherCAT Master "ChangeCount" under InfoData, shows how often the image of content has changed
+	DevId											AT %I*	:	UINT;					//Link to EtherCAT Master "DevId" under InfoData 
+ 	AmsNetId										AT %I*	:	ARRAY[0..5] OF BYTE; 	//Link to EtherCAT Master "AmsNetId" under InfoData
+	AmsNetIdStr												:	T_AmsNetId;	//EtherCAT Master AmsNetId in string format
+	CfgSlaveCount									AT %I*	:	UINT;					////Link to EtherCAT Master "CfgSlaveCount" under InfoData, reports configured no of EtherCAT slaves
+         
+(* DC timestamp *)
+	DCTime													:	T_DCTIME64; // RealtimeTick in DC time 64, refreshed once per cycle*)             					
+						
+END_VAR
+
+VAR
+	MemDevState												:	UINT := 9999;	
+	MemFrmWcState											:	ARRAY [MIN_FRAMES..MAX_FRAMES] OF UINT;	
+
+	IOF_GetDeviceName										: 	IOF_GetDeviceName := (TMOUT	:= DEFAULT_ADS_TIMEOUT);
+	EcMasterFrameCount										:	FB_EcMasterFrameCount := (tTimeout	:= DEFAULT_ADS_TIMEOUT);
+	TON_LinkOK_PortA										:	TON := (PT := DELAY_LINK_OK);
+	TON_LinkOK_PortB										:	TON := (PT := DELAY_LINK_OK);
+	i														:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EcMaster IOs *)
+DevStateChanged												:= DevState <> MemDevState;
+IF DevStateChanged
+THEN
+	DevStateBits.NoError									:= DevState = 0;
+	DevStateBits.LinkError 									:= DevState.0;
+	DevStateBits.IOLockedAfterLinkError	    				:= DevState.1;
+	DevStateBits.LinkErrorRedMode							:= DevState.2;
+	DevStateBits.MissingOneFrmInRedMode     				:= DevState.3;
+	DevStateBits.OutOfSendResources         				:= DevState.4;
+	DevStateBits.WatchdogTriggered 		    				:= DevState.5;
+	DevStateBits.EthernetDriverNotFound 					:= DevState.6;
+	DevStateBits.IOResetActive 			    				:= DevState.7;
+	DevStateBits.AtLeastOneSlaveInINIT      				:= DevState.8;
+	DevStateBits.AtLeastOneSlaveInPREOP     				:= DevState.9;
+	DevStateBits.AtLeastOneSlaveInSAFEOP    				:= DevState.10;
+	DevStateBits.AtLeastOneSlaveInERROR     				:= DevState.11;																
+	DevStateBits.DcNotInSync 		        				:= DevState.12;
+	DevStateText 											:= F_ConvMasterDevStateToString(DevState);
+	ResetRequired 											:= DevStateBits.IOLockedAfterLinkError OR DevStateBits.OutOfSendResources;
+	MinOneSlaveNotInOP										:= DevStateBits.AtLeastOneSlaveInINIT OR DevStateBits.AtLeastOneSlaveInPREOP OR  DevStateBits.AtLeastOneSlaveInSAFEOP OR DevStateBits.AtLeastOneSlaveInERROR;
+	MemDevState												:= DevState;
+END_IF
+
+RedundanceActive 											:= SlaveCount2 <> 0 AND SlaveCount <> 0;
+SlaveCountTotal												:= SlaveCount2 + SlaveCount;
+
+TON_LinkOK_PortA(IN:= NOT DevStateBits.LinkError 		, Q=> LinkOK_PortA );
+TON_LinkOK_PortB(IN:= NOT DevStateBits.LinkErrorRedMode	, Q=> LinkOK_PortB );
+
+AllFramesMissing 											:= TRUE;
+FramesWCState												:= FALSE;	
+FramesWcStateChanged										:= FALSE;
+FOR i := MIN_FRAMES TO LIMIT(0,NoOfFrames -1, MAX_FRAMES) DO
+	IF FrmWcState[i] <> 0 THEN
+		FramesWCState										:= TRUE;
+		IF FrmWcState[i].15 OR FrmWcState[i] = 16#7FFF THEN
+			;
+		ELSE
+			AllFramesMissing 								:= FALSE;
+		END_IF
+	ELSE
+		AllFramesMissing 									:= FALSE;
+	END_IF
+	
+	IF MemFrmWcState[i] <> FrmWcState[i] 
+	THEN
+		FramesWcStateChanged								:= TRUE;
+		MemFrmWcState[i]									:= FrmWcState[i]; 
+	END_IF
+END_FOR
+
+//Get DC time 
+DCTime														:= F_GetCurDcTickTime64();
+
+(* Get Master Name *)
+IF Name = ''
+	AND DevId <> 0
+	OR IOF_GetDeviceName.BUSY
+	OR IOF_GetDeviceName.START
+THEN
+	AmsNetIdStr 											:= F_CreateAmsNetId(nIds := AmsNetId);
+	IOF_GetDeviceName(
+		NETID		:= '',
+		DEVICEID	:= DevId,
+		START		:= Name = '' AND NOT IOF_GetDeviceName.BUSY,
+		TMOUT		:= ,
+		BUSY		=> ,
+		ERR			=> ,
+		ERRID		=> ,
+		DEVICENAME=> name);
+END_IF
+
+//No of config slaves 
+IF EcMasterFrameCount.nFrames = 0
+	AND DevId <> 0 
+	OR EcMasterFrameCount.bBusy
+	OR EcMasterFrameCount.bExecute
+THEN
+	EcMasterFrameCount(
+		sNetId	:= AmsNetIdStr, 
+		bExecute:= EcMasterFrameCount.nFrames = 0 AND NOT EcMasterFrameCount.bBusy, 
+		tTimeout:= , 
+		bBusy=> , 
+		bError=> , 
+		nErrId=> , 
+		nFrames=> );
+	NoOfFrames												:= TO_INT(EcMasterFrameCount.nFrames);
+END_IF
+
+(********************************************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="EcMasterIO">
+      <LineId Id="395" Count="0" />
+      <LineId Id="410" Count="0" />
+      <LineId Id="562" Count="1" />
+      <LineId Id="547" Count="13" />
+      <LineId Id="546" Count="0" />
+      <LineId Id="566" Count="0" />
+      <LineId Id="568" Count="0" />
+      <LineId Id="570" Count="0" />
+      <LineId Id="561" Count="0" />
+      <LineId Id="412" Count="0" />
+      <LineId Id="415" Count="0" />
+      <LineId Id="473" Count="0" />
+      <LineId Id="416" Count="2" />
+      <LineId Id="421" Count="0" />
+      <LineId Id="577" Count="0" />
+      <LineId Id="732" Count="0" />
+      <LineId Id="780" Count="0" />
+      <LineId Id="422" Count="1" />
+      <LineId Id="731" Count="0" />
+      <LineId Id="425" Count="7" />
+      <LineId Id="777" Count="0" />
+      <LineId Id="781" Count="0" />
+      <LineId Id="783" Count="0" />
+      <LineId Id="785" Count="1" />
+      <LineId Id="784" Count="0" />
+      <LineId Id="433" Count="0" />
+      <LineId Id="651" Count="0" />
+      <LineId Id="435" Count="0" />
+      <LineId Id="652" Count="1" />
+      <LineId Id="436" Count="34" />
+      <LineId Id="178" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

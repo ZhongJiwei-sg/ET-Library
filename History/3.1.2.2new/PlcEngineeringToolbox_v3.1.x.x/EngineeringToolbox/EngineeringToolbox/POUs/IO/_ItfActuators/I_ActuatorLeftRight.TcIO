@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorLeftRight" Id="{9368650c-3cf5-460f-88e3-a1983b984127}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorLeftRight EXTENDS I_ActuatorBase
+]]></Declaration>
+    <Property Name="leftOk" Id="{3f4df3b8-23c1-4781-b59a-8391e2d92380}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public leftOk : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ccc850b2-dc49-40c9-bd79-a90f670c7781}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="rightOk" Id="{4519aa7e-24dc-45bd-9ad8-819f5b8862cb}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public rightOk : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ffe09f00-adda-4120-92b0-b58f41975e55}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="toTheLeft" Id="{f101f148-5fe7-4664-a45f-10c8281df8fb}">
+      <Declaration><![CDATA[METHOD public toTheLeft : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="toTheRight" Id="{a80bbd77-0f93-4064-a024-3a79428d4c7c}">
+      <Declaration><![CDATA[METHOD public toTheRight : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

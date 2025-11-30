@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0255" Id="{1c57d889-2965-44b3-aa71-f1dd744a003c}">
+    <Declaration><![CDATA[TYPE AX5000_P_0255 :
+STRUCT
+	Probe_1_timer_difference_reference_switch_to_index:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

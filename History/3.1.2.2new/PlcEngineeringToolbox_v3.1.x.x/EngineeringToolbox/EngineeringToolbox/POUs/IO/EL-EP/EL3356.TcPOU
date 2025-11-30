@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EL3356" Id="{cf7101d6-3b87-4f3e-babb-afb08e318558}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EL3356 load cell analysis (resistor bridge) process image
+//Mode of operation = Standard (Real or INT32)
+FUNCTION_BLOCK EL3356 EXTENDS EcSlaveInfoDataExt
+VAR_INPUT
+//RMB Control
+	StartCalib										AT  %Q* : 	BOOL; 
+	DisableCalib									AT  %Q* : 	BOOL;
+	InputFreeze										AT  %Q* : 	BOOL;
+	SampleMode										AT  %Q* : 	BOOL; //1=High speed and low latency / only on EL3356-0010
+	Tara											AT  %Q* : 	BOOL;				
+END_VAR                     			    					
+VAR_OUTPUT                      					
+//RMB Status
+	Overrange										AT  %I*	:	BOOL;
+	DataInvalid										AT  %I*	:	BOOL;
+	Error											AT  %I*	:	BOOL;
+	CalibInProgress									AT  %I*	:	BOOL;
+	SteadyState										AT  %I*	:	BOOL;
+	SyncError										AT  %I*	:	BOOL;
+	TxPDOToggle										AT  %I* : 	BOOL;
+	
+//RMB Value
+	InReal											AT  %I* : 	REAL; //RMP Value Real 32		
+	InInt32											AT  %I* : 	DINT; //RMB Value INT32
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EL3356 IOs											             	 		*)
+(********************************************************************************)
+
+(* ******************************************************************************)
+	Super^();
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="inError" Id="{d75d9581-3d2a-4fa5-85dd-9ce5affabb4e}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ed613275-0d58-4a90-aa81-b36ac781c140}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inError													:= Error OR SyncError OR WcState OR InfoDataState <> Tc2_EtherCAT.EC_DEVICE_STATE_OP;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Q" Id="{651deb2c-dafe-4190-bf0f-b5537ac8439b}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Q : LREAL]]></Declaration>
+      <Get Name="Get" Id="{be13110d-4495-41ad-970b-0826e7efded5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF InInt32 <> 0
+THEN
+	Q 														:= TO_LREAL(InInt32);
+ELSE
+	Q 														:= TO_LREAL(InReal);
+END_IF
+	]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Q_GramToNewton" Id="{1984eb02-6b8d-48f3-9df5-352bd4b92454}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Q_GramToNewton : LREAL]]></Declaration>
+      <Get Name="Get" Id="{37f5f8a4-b6b0-4bdd-82a4-ac3835a79bb6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Q_GramToNewton := GF_TO_N(Q);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Q_NewtonToGram" Id="{fd191490-ab0a-446e-9b17-fdb91b0fe8ff}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Q_NewtonToGram : LREAL]]></Declaration>
+      <Get Name="Get" Id="{40a8fc4a-85e3-4271-9e20-c75f3172a67b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Q_NewtonToGram := N_TO_GF(Q);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="EL3356">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3356.inError.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3356.Q.Get">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3356.Q_GramToNewton.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3356.Q_NewtonToGram.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

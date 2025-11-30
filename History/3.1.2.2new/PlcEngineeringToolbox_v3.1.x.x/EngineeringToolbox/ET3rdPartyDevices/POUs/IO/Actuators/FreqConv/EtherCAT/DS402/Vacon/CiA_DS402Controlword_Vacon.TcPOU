@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="CiA_DS402Controlword_Vacon" Id="{d02ce510-914f-4cac-b1b9-479dfed1a7a7}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Controlword_Vacon EXTENDS CiA_DS402Controlword
+VAR_INPUT
+	AlarmReset				:	BOOL; //Manufacturere specific Bit 12 
+
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="createControlword" Id="{c9a9f519-efce-464e-b494-2e367d76e912}">
+      <Declaration><![CDATA[METHOD PUBLIC createControlword : BOOL
+VAR_INPUT
+	StatusState												: eCiA_DS402_STATUS_STATE;
+END_VAR
+VAR_IN_OUT
+	Controlword												:	UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	
+	createControlword									:= SUPER^.createControlword(StatusState,Controlword);
+	Controlword.11										:= AlarmReset;	
+	
+	
+(*****************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Controlword_Vacon">
+      <LineId Id="54" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Controlword_Vacon.createControlword">
+      <LineId Id="153" Count="2" />
+      <LineId Id="164" Count="1" />
+      <LineId Id="60" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="Ringbuffer" Id="{ccee53e0-b810-4fb4-b922-15033dd7c662}" SpecialFunc="None">
+    <Declaration><![CDATA[//Ringbuffer based on external memory
+FUNCTION_BLOCK Ringbuffer EXTENDS RingbufferBase
+VAR_INPUT	
+END_VAR
+VAR_OUTPUT
+END_VAR    
+VAR
+END_VAR 												
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="dequeue" Id="{028d91d5-af0a-461f-be4e-0cb72e01894b}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE ;
+	SizeOfData												: 	UDINT ;
+	pMemory													: 	POINTER TO BYTE ;
+	SizeOfMemory											: 	UDINT ;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Dequeue := SUPER^._Dequeue(pData,SizeOfData,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeueStream" Id="{4a9aa85f-4a0a-4ab9-8fd5-d91a6b76ebd9}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE ;
+	SizeOfStream											:	UDINT ; //n * Size of last entry and not greater than SizeOfMemory
+	pMemory													: 	POINTER TO BYTE;
+	SizeOfMemory											: 	UDINT ;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[DequeueStream := SUPER^._DequeueStream(pData,SizeOfStream,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueue" Id="{1ab5c15d-5039-4e9f-81a8-ab992352573d}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE ;
+	SizeOfData												: 	UDINT ;
+	pMemory													: 	POINTER TO BYTE ;
+	SizeOfMemory											: 	UDINT ;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enqueue := SUPER^._Enqueue(pData,SizeOfData,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueueStream" Id="{bd1b8eb8-44d3-4247-bf4b-260794092130}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueueStream : BOOL
+VAR_INPUT
+	pData													: 	POINTER TO BYTE ;
+	SizeOfData												: 	UDINT ; //Size of one entry
+	SizeOfStream											:	UDINT ; //n * SizeofData and not greater than SizeOfMemory
+	pMemory													: 	POINTER TO BYTE ;
+	SizeOfMemory											: 	UDINT ;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[EnqueueStream := SUPER^._EnqueueStream(pData,SizeOfData,SizeOfStream,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{8bea5c06-226a-4dd6-8f8f-a166fcbca032}">
+      <Declaration><![CDATA[//Reset complete ring buffer
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset := SUPER^._reset(pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Ringbuffer">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Ringbuffer.dequeue">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Ringbuffer.dequeueStream">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Ringbuffer.enqueue">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Ringbuffer.enqueueStream">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Ringbuffer.reset">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

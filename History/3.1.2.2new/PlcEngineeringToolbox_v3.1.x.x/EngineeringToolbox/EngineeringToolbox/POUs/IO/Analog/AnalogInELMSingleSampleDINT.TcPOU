@@ -1,0 +1,109 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AnalogInELMSingleSampleDINT" Id="{874e8ee8-2c34-4bae-8847-e048f33f4074}" SpecialFunc="None">
+    <Declaration><![CDATA[// AnalogIn FB to read and scale a single DINT (24bit) sample input from ELMxxxx terminal
+// Set bit 3 (Options.3) to true to enable scaling based on +/-7812500 instead of legacy range values +/-838860x
+FUNCTION_BLOCK AnalogInELMSingleSampleDINT EXTENDS AnalogInELMBase
+VAR_INPUT
+	Offset													:	LREAL := 0.0;
+
+END_VAR                 									
+VAR                                     	            	
+END_VAR                                 	            	
+VAR_OUTPUT                              	            	                                       	
+	Q														:	LREAL;	//scaled result value
+	In											AT  %I* 	: 	DINT; 	//Hardware Input 
+END_VAR                                 	
+VAR                                   	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Read single DINT sample value from ELM terminal and scale to user units									*)
+(************************************************************************************************************)
+
+(* evaluate statusword **************************************************************************************)
+	SUPER^();
+	
+(* Scaling ******************************************************************)
+	IF MaxValue <> MinValue 
+	THEN	
+		IF NOT Options.3
+		THEN
+			Q 	 											:= Offset + Scale(TO_LREAL(In) , -8388608.0, 8388607.0, MinValue , MaxValue);
+		ELSE
+			Q 	 											:= Offset + Scale(TO_LREAL(In), -7812500.0, 7812500.0, MinValue , MaxValue);
+		END_IF	
+		IF NoOfDigits > 0
+		THEN
+			Q												:= TO_FMLREAL(Q,NoOfDigits);
+		END_IF
+	
+	ELSIF NoOfDigits > 0 (* Bsp PT100 *)
+	THEN
+		Q													:= Offset + TO_FMLREAL(In,NoOfDigits);
+		
+	ELSE  													
+		Q 													:= 0.0;
+	END_IF
+
+	IF 	Error AND OutOnError <> 0.000000000000000001
+	THEN
+		Q													:= OutOnError;
+	END_IF
+(**********************************************************************************************************************)
+]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{743055e0-0b28-45aa-a2e2-749c00fa51eb}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode THEN
+	NoOfDigits 							:= 2;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optEnableScaleExtRangeMode" Id="{a804bb77-5564-4203-89fc-74ef894574d0}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableScaleExtRangeMode : bool]]></Declaration>
+      <Get Name="Get" Id="{ce574391-3258-41b9-a1a1-9393dc809273}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableScaleExtRangeMode := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3cb3852a-adb5-40dc-a44a-1b137145d47a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optEnableScaleExtRangeMode;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="AnalogInELMSingleSampleDINT">
+      <LineId Id="128" Count="2" />
+      <LineId Id="217" Count="0" />
+      <LineId Id="141" Count="1" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="307" Count="0" />
+      <LineId Id="260" Count="0" />
+      <LineId Id="263" Count="5" />
+      <LineId Id="272" Count="1" />
+      <LineId Id="275" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInELMSingleSampleDINT.FB_init">
+      <LineId Id="7" Count="2" />
+    </LineIds>
+    <LineIds Name="AnalogInELMSingleSampleDINT.optEnableScaleExtRangeMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInELMSingleSampleDINT.optEnableScaleExtRangeMode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,296 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AnalogIn32" Id="{39c0d933-4a22-4937-8cec-114fae35c7d8}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK AnalogIn32 extends EcSlaveInfoDataExt
+VAR_INPUT
+	MinValue												: 	LREAL 	:= 0.0;
+	MaxValue												: 	LREAL 	:= 0.0;
+	NoOfDigits												: 	INT 	(0..10)	:= 0; //number of decimal digits of scaled Q variable 
+	OutOnError												:	LREAL 	:= 0.000000000000000001;
+{attribute 'displaymode':='binary'}     	            	
+	Options													:	BYTE  := 2#0000_0010; (* .0 = FALSE Scale value from 0 to e.g. 32767 / TRUE scale singed value e.g. -32768 <-> 32767 , see Options .1 and .2 for more scaling Options 
+																						.1 = FALSE = 32 bit resolution / TRUE = value is based on 24 bit resolution e.g. -> -8388608.0 or 0.0 <-> 8388607.0 
+																						.2 = Right adjust of 32/24 bit value -> value will be shifted by 8 bits (divided bv 256)   
+																						.3 = TRUE = Enable extended range mode -> change scaling to +/-7812500 instead of r+/- 838860x *)
+	Offset													:	LREAL := 0.0;
+END_VAR                 									                                	            	
+VAR_OUTPUT                              	            	
+	Q														:	LREAL;	//scaled result value
+	In											AT  %I* 	: 	DINT; 	//Hardware Input 
+{attribute 'displaymode':='binary'}     	            	
+	Status										AT  %I*		:	WORD := 2#0100_0000_0000_0000;	//Terminal status word -> can also be linked with status byte
+END_VAR                                 	                         
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* read 32bit analog value 																				    *)
+(* resolution process image			e.g.				/ 0V = 0 / 10V = 2147483647 / -10V = - 2147483647 	*)
+(* or directly with NoOfDigits																	250 -> 25.0°*)
+(************************************************************************************************************)
+	
+(* Scaling ******************************************************************)
+	IF MaxValue <> MinValue 
+	THEN
+		IF Options.1 
+		THEN //24 bit resolution
+			IF NOT Options.3
+			THEN
+				Q 	 										:= Offset + Scale(SEL(Options.2 , In , In / 256.0 ) , SEL(Options.0, 0.0, -8388608.0), 8388607.0, MinValue , MaxValue);
+			ELSE
+		 		Q 	 										:= Offset + Scale(SEL(Options.2 , In , In / 256.0 ) , SEL(Options.0, 0.0, -7812500.0), 7812500.0, MinValue , MaxValue);
+			END_IF
+		ELSE //32 bit resolution 
+			Q 	 											:= Offset + Scale(SEL(Options.2 , In , In / 256.0 ) , SEL(Options.0, 0.0, -2147483648.0), 2147483647.0, MinValue , MaxValue);		
+		END_IF
+		IF NoOfDigits > 0
+		THEN
+			Q												:= TO_FMLREAL(Q,NoOfDigits);
+		END_IF
+	
+	ELSIF NoOfDigits > 0 (* Bsp PT100 *)
+	THEN
+		Q													:= Offset + TO_FMLREAL(In,NoOfDigits);
+		
+	ELSE  													
+		Q 													:= 0.0;
+	END_IF
+
+	IF 	Error AND OutOnError <> 0.000000000000000001
+	THEN
+		Q													:= OutOnError;
+	END_IF
+(**********************************************************************************************************************)
+]]></ST>
+    </Implementation>
+    <Property Name="Error" Id="{eddd7f1a-ba2f-4b86-9165-d648f7f689fd}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Error : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8237ebec-9f39-45e1-abcc-0db9a6081d56}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Error					:= Status.6 OR MinValue = MaxValue AND NoOfDigits = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Limit_1" Id="{26399fc7-0d76-4584-9cf5-401f5f81a614}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Limit_1 : BYTE]]></Declaration>
+      <Get Name="Get" Id="{187c5152-f42d-4146-aac4-5a69fe50abc0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Limit_1.0					:= Status.2;
+Limit_1.1					:= Status.3;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Limit_2" Id="{c46ec9df-cfa8-4529-b201-f3fa1fbf97a0}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Limit_2 : BYTE]]></Declaration>
+      <Get Name="Get" Id="{3730c942-326b-4051-9f0e-1fa51c5174ac}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Limit_2.0					:= Status.4;
+Limit_2.1					:= Status.5;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="optEnable24BitResolution" Id="{b1b6f60c-bed9-48f0-93fd-b00622f3536a}">
+      <Declaration><![CDATA[PROPERTY optEnable24BitResolution : BOOL //In value is provided as 32bit value instead if 24bit ]]></Declaration>
+      <Get Name="Get" Id="{d218bd59-9b88-4676-914f-f10ba86e02ac}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable24BitResolution := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e43b1410-2c4a-4029-8c90-dd3ae12578b4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optEnable24BitResolution;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableScaleExtRangeMode" Id="{f1adc00a-92cb-4b1b-bc60-3b5333db500e}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableScaleExtRangeMode : bool]]></Declaration>
+      <Get Name="Get" Id="{5d266bf1-62c3-439d-9ac4-ff8fc8d756e6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableScaleExtRangeMode := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{becf016e-4980-40eb-9922-24e74845b6cc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optEnableScaleExtRangeMode;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableScaleSignedValue" Id="{169cd6bf-e561-4827-960f-abcdfd40c809}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableScaleSignedValue : bool]]></Declaration>
+      <Get Name="Get" Id="{5f5657a1-af2d-4d5c-a27f-c17f2d24b92d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableScaleSignedValue := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{dca6ed0d-ea69-4d50-8b9b-897d7b6e5088}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableScaleSignedValue;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optShiftValueBy8Bits" Id="{6c0b024f-47fc-43b0-887e-2df4ceb6c46c}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optShiftValueBy8Bits : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ac84c3d6-8b4b-471f-8034-3d3b00b6d9f4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optShiftValueBy8Bits := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c05007ac-8329-4f2c-afe4-88307d95441d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.2 := optShiftValueBy8Bits;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="Overrange" Id="{3ef70eec-5774-47a3-8668-3372672eaeca}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Overrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{22908fd4-8877-454c-9f3c-234b3d92076c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Overrange					:= Status.1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="SyncError" Id="{65c518db-4f8c-4f3c-9db1-410bd0515c12}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC SyncError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d9eafa6e-2864-401e-b475-5fd4921d0578}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SyncError 			:= Status.13;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="TxPDOState" Id="{72d1fb20-1584-4c29-9d7a-86945c074f93}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC TxPDOState : BOOL]]></Declaration>
+      <Get Name="Get" Id="{7e1b982f-434b-40c3-968c-c1b210b20c48}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[TxPDOState					:= Status.14; //True if not valid]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="TxPDOToggle" Id="{2d6f014d-23d8-4638-9865-751e8d0ec135}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC TxPDOToggle : BOOL]]></Declaration>
+      <Get Name="Get" Id="{49ed1292-fa8e-46dc-907c-cc6337d6c7df}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[TxPDOToggle						:= Status.15;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Underrange" Id="{dc08f754-952b-43c5-8261-b64b8ccafc1c}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Underrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{89b18d98-f573-4ee8-9cc0-7aad8bec8939}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Underrange 					:= Status.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="AnalogIn32">
+      <LineId Id="3" Count="36" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.Error.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.Limit_1.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.Limit_2.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.optEnable24BitResolution.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.optEnable24BitResolution.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.optEnableScaleExtRangeMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.optEnableScaleExtRangeMode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.optEnableScaleSignedValue.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.optEnableScaleSignedValue.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.optShiftValueBy8Bits.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.optShiftValueBy8Bits.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.Overrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.SyncError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.TxPDOState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.TxPDOToggle.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn32.Underrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="AxNcBaseExt" Id="{3f34c48d-5096-4946-8bf3-ee0ade47832a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxNcBaseExt EXTENDS AxNcBase 
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT
+	State													:	AxStatemodel;                                               
+END_VAR                                             	
+VAR_OUTPUT                                          	
+END_VAR
+VAR
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Axis 																*)
+	(************************************************************************)
+
+	
+(********************************************************************************)
+(* Call super 																	*)
+(********************************************************************************)
+	SUPER^();
+
+(********************************************************************************)
+(* Execute unit state model														*)
+(********************************************************************************)
+	State(
+		Unit						:=  ,
+		rAxis						:= THIS^,
+		ENDisableInAborting			:= ,
+		SafetyOK					:= ,//NOT Drive.SafetyError,
+		ErrorActive					:= Event.ErrorId <> 0);
+
+	//Execute aller Bausteine zuruecknehmen
+	IF state.unit.InResetting 
+		AND State.unit.RT_StateChanged
+	THEN
+		NoAction();
+	END_IF
+
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="AxNcBaseExt">
+      <LineId Id="3" Count="1" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="194" Count="2" />
+      <LineId Id="181" Count="0" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="249" Count="1" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="260" Count="4" />
+      <LineId Id="266" Count="6" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="251" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,1614 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="Quicksort" Id="{7fba0bc5-b657-428d-915d-35048b862e77}" SpecialFunc="None">
+    <Declaration><![CDATA[// this funktionblock sorts an array of struct by an contained element with quicksort routine
+// Udpate: compare with static PivotElement
+// Find Explanation under https://www.youtube.com/watch?v=eNUM23f6g-s&ab_channel=Studyflix
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK Quicksort
+VAR CONSTANT
+	MAX_STRING_LENGTH										:	INT := PARAM.QUICKSORT_MAX_STRING_LENGTH;
+	MAX_WSTRING_LENGTH										:	INT := PARAM.QUICKSORT_MAX_WSTRING_LENGTH;
+END_VAR
+VAR_INPUT
+	SortInverse												:	BOOL := FALSE;//inverses order of content
+	IgnoreBlank												:	BOOL := FALSE;//sort blank characters at last			
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pElement_Tmp											:	POINTER TO BYTE;		// Copy Pointer 3 - allocated memory
+	MemSizeOfStruct											:	UDINT;
+END_VAR
+ ]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="allocate" Id="{34c11bca-1b42-48a7-9c9a-f8f0f62097d9}">
+      <Declaration><![CDATA[METHOD PROTECTED FINAL allocate : BOOL
+VAR_INPUT
+	SizeOfStruct											: 	UDINT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF SizeOfStruct = 0
+THEN
+	allocate												:= FALSE;
+ELSIF pElement_Tmp = 0 
+THEN
+	pElement_Tmp											:= __NEW(BYTE, SizeOfStruct);
+	MemSizeOfStruct											:= SizeOfStruct;
+	IF TRUE
+	THEN
+		AdsLogHint('EngineeringToolbox | FB Quicksort | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(MemSizeOfStruct));
+	END_IF
+	Allocate												:= TRUE;
+ELSIF SizeOfStruct > MemSizeOfStruct
+THEN
+	__DELETE(pElement_Tmp);	
+	pElement_Tmp											:= __NEW(BYTE, SizeOfStruct);
+	MemSizeOfStruct											:= SizeOfStruct;
+		IF TRUE
+	THEN
+		AdsLogWarn('EngineeringToolbox | FB Quicksort | SizeOfStruct increased and an instance has an additional %s bytes allocated from the dynamic memory of the ADS router memory pool', TO_STRING(MemSizeOfStruct));
+	END_IF
+	Allocate												:= TRUE;
+ELSE
+	Allocate												:= TRUE;	
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byDINT" Id="{a04f894a-2dd6-4aaf-9d16-606c25860202}">
+      <Declaration><![CDATA[METHOD byDINT : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].DINT)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                 
+VAR        
+	pPivotElement											: 	POINTER TO DINT;		// Pivot value
+	PivotElement											: 	DINT;					// Pivot value as DINT	
+	pCmpElement												:	POINTER TO DINT;		// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byDINT													:= FALSE;
+	RETURN;   
+ELSE
+	byDINT													:= TRUE;                          					
+END_IF                                  					
+          
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);   		
+			
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		PivotElement										:= pPivotElement^;
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate( SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byDINT									:= FALSE;
+					RETURN;	
+				END_IF
+	
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byDINT											:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byDINT_Bubble" Id="{b3c87530-cfd9-4377-b7cc-94a0921ecbed}">
+      <Declaration><![CDATA[METHOD byDINT_Bubble : BOOL // returns true if sort ends successfully 
+VAR_INPUT	
+	pData													:	POINTER TO BYTE;// ADR(Array) 			
+	SizeOfData												:	UDINT;			// SIZEOF(Array)
+	pCompareElement											:	POINTER TO BYTE;// ADR(Array[1].DINT)		
+	SizeOfStruct											:	UDINT;			// SIZEOF(Array[1]) 			
+END_VAR                                 					                
+VAR                                     					                
+	Run  													:	DINT;			// main loop
+  	Index													:	DINT;			// sub loop 	
+	ElementCount											:	DINT;			
+	                                    					
+	CompareElement_1										:	DINT;					
+	CompareElement_2										:	DINT;					
+	pCompareElement_1										:	POINTER TO DINT;		
+	pCompareElement_2										:	POINTER TO DINT;
+		                                					                        
+	pElement_1												:	POINTER TO BYTE;		
+	pElement_2												:	POINTER TO BYTE;		
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byDINT_Bubble											:= FALSE;
+	RETURN;   
+ELSE
+	byDINT_Bubble											:= TRUE;                          					
+END_IF    
+
+// Bubblesort Routine
+// Code saving 
+	
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);  
+
+// bubblesort 
+FOR Run := 1 TO TO_DINT(ElementCount) - 1 DO
+    FOR Index := ElementCount - 1 TO Run BY -1 DO
+		// get element x for compare 
+		pCompareElement_1				:=	pCompareElement + (SizeOfStruct * TO_UDINT(Index));
+		CompareElement_1				:=	pCompareElement_1^;
+		// get element x-1 for compare 
+		pCompareElement_2				:=	pCompareElement + (SizeOfStruct * TO_UDINT(Index-1));
+		CompareElement_2 				:=	pCompareElement_2^;
+		// switch by useing temporary memory 
+		IF ((	CompareElement_1 < CompareElement_2) AND NOT SortInverse)
+			OR((CompareElement_1 > CompareElement_2) AND SortInverse)
+		THEN
+			// get pointer for MEMCPY 
+			Allocate(SizeOfStruct);
+			pElement_1					:= pData + SizeOfStruct * TO_UDINT(Index);
+			pElement_2					:= pData + SizeOfStruct * TO_UDINT(Index-1);
+			
+	
+			IF pElement_Tmp = 0 
+				OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+				OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+				OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+			THEN
+				byDINT_Bubble		:= FALSE;
+				EXIT;												
+			END_IF
+
+      END_IF
+	END_FOR
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byINT" Id="{6bde736a-142f-4243-9acd-a9165ba6f025}">
+      <Declaration><![CDATA[METHOD byINT : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].INT)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                 
+VAR        
+	pPivotElement											: 	POINTER TO INT;			// Pivot value
+	PivotElement											: 	INT;					// Pivot value as INT	
+	pCmpElement												:	POINTER TO INT;			// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byINT													:= FALSE;
+	RETURN;   
+ELSE
+	byINT													:= TRUE;                          					
+END_IF                                    					
+        
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);   
+                                					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		PivotElement										:= pPivotElement^;
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byINT									:= FALSE;
+					RETURN;	
+				END_IF
+	
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byINT											:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byLREAL" Id="{7ec5409a-1ce0-4742-91e7-59f4bca58f6c}">
+      <Declaration><![CDATA[METHOD byLREAL : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].LREAL)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                 
+VAR        
+	pPivotElement											: 	POINTER TO LREAL;		// Pivot value	
+	PivotElement											: 	LREAL;					// Pivot value as LREAL
+	pCmpElement												:	POINTER TO LREAL;		// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byLREAL													:= FALSE;
+	RETURN;   
+ELSE
+	byLREAL													:= TRUE;                          					
+END_IF                                 					
+            
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);   
+                            					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1))); // divide by 2
+		PivotElement										:= pPivotElement^;
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byLREAL									:= FALSE;
+					RETURN;	
+				END_IF
+
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byLREAL											:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byLTIME" Id="{6e6cb206-7730-4e30-8a6f-95c759091e76}">
+      <Declaration><![CDATA[METHOD byLTIME : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].LTIME)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                 
+VAR        
+	pPivotElement											: 	POINTER TO LTIME;		// Pivot value	
+	PivotElement											: 	LTIME;					// Pivot value as LTIME	
+	pCmpElement												:	POINTER TO LTIME;		// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byLTIME													:= FALSE;
+	RETURN;   
+ELSE
+	byLTIME													:= TRUE;                          					
+END_IF                                    					
+             
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);   
+                           					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		PivotElement										:= pPivotElement^;
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byLTIME									:= FALSE;
+					RETURN;	
+				END_IF
+
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byLTIME											:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byREAL" Id="{437784e4-ecb3-41c1-b697-7155d64881c6}">
+      <Declaration><![CDATA[METHOD byREAL : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].REAL)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                 
+VAR        
+	pPivotElement											: 	POINTER TO REAL;		// Pivot value	
+	PivotElement											: 	REAL;					// Pivot value as REAL	
+	pCmpElement												:	POINTER TO REAL;		// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byREAL													:= FALSE;
+	RETURN;   
+ELSE
+	byREAL													:= TRUE;                          					
+END_IF                                   					
+          
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);   
+                              					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		PivotElement										:= pPivotElement^;
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byREAL									:= FALSE;
+					RETURN;	
+				END_IF
+
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byREAL											:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="bySTRING" Id="{683e7abd-e023-4e7d-a878-90cd4a8c40bb}">
+      <Declaration><![CDATA[METHOD bySTRING : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].STRING)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                                                        
+VAR        
+	pPivotElement											: 	POINTER TO STRING(MAX_STRING_LENGTH);	// Pivot value
+	pCmpElement												:	POINTER TO STRING(MAX_STRING_LENGTH);	// compare value
+	PivotElement											:	BYTE; 					// Pivot value	
+	CompareElement											:	BYTE; 					// compare value
+                               					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j,k								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	bySTRING												:= FALSE;
+	RETURN;   
+ELSE
+	bySTRING												:= TRUE;                          					
+END_IF                                 					
+          
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);   
+                              					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+					FOR k := 1 TO MAX_STRING_LENGTH DO // Find unequal char
+						// element 1,2 to upper char 	https://www.uni-due.de/hummell/infos/ascii/
+						IF pCmpElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							CompareElement					:= 127;
+						ELSE
+							CompareElement					:= SEL(pCmpElement^[k] >= 97(*a*)	AND_THEN pCmpElement^[k] <= 122(*z*), 	pCmpElement^[k],pCmpElement^[k] - 32);		// a --> A
+						END_IF						
+						IF pPivotElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							PivotElement					:= 127;
+						ELSE
+							PivotElement					:= SEL(pPivotElement^[k] >= 97(*a*) AND_THEN pPivotElement^[k] <= 122(*z*), pPivotElement^[k], 	pPivotElement^[k] - 32);// a --> A
+						END_IF
+						// Find unequal char
+						IF CompareElement <> PivotElement
+							OR CompareElement = 0
+							OR PivotElement = 0
+						THEN
+							EXIT;
+						END_IF
+					END_FOR
+				UNTIL (CompareElement <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+					FOR k := 0 TO MAX_STRING_LENGTH DO // Find unequal char
+						// element 1,2 to upper char 	https://www.uni-due.de/hummell/infos/ascii/
+						IF pCmpElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							CompareElement					:= 127;
+						ELSE
+							CompareElement					:= SEL(pCmpElement^[k] >= 97(*a*)	AND_THEN pCmpElement^[k] <= 122(*z*), 	pCmpElement^[k],pCmpElement^[k] - 32);		// a --> A
+						END_IF
+						IF pPivotElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							PivotElement					:= 127;
+						ELSE
+							PivotElement					:= SEL(pPivotElement^[k] >= 97(*a*) AND_THEN pPivotElement^[k] <= 122(*z*), pPivotElement^[k], 	pPivotElement^[k] - 32);// a --> A
+						END_IF
+						// Find unequal char
+						IF CompareElement <> PivotElement
+							OR CompareElement = 0
+							OR PivotElement = 0
+						THEN
+							EXIT;
+						END_IF
+					END_FOR
+				UNTIL (CompareElement >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+					FOR k := 0 TO MAX_STRING_LENGTH DO // Find unequal char
+						// element 1,2 to upper char 	https://www.uni-due.de/hummell/infos/ascii/
+						IF pCmpElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							CompareElement					:= 127;
+						ELSE
+							CompareElement					:= SEL(pCmpElement^[k] >= 97(*a*)	AND_THEN pCmpElement^[k] <= 122(*z*), 	pCmpElement^[k],pCmpElement^[k] - 32);		// a --> A
+						END_IF
+						IF pPivotElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							PivotElement					:= 127;
+						ELSE
+							PivotElement					:= SEL(pPivotElement^[k] >= 97(*a*) AND_THEN pPivotElement^[k] <= 122(*z*), pPivotElement^[k], 	pPivotElement^[k] - 32);// a --> A
+						END_IF
+						// Find unequal char
+						IF CompareElement <> PivotElement
+							OR CompareElement = 0
+							OR PivotElement = 0
+						THEN
+							EXIT;
+						END_IF
+					END_FOR
+				UNTIL (CompareElement >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+					FOR k := 0 TO MAX_STRING_LENGTH DO // Find unequal char
+						// element 1,2 to upper char 	https://www.uni-due.de/hummell/infos/ascii/
+						IF pCmpElement^[k] = 0 
+							AND IgnoreBlank
+						THEN	
+							CompareElement					:= 127;
+						ELSE
+							CompareElement					:= SEL(pCmpElement^[k] >= 97(*a*)	AND_THEN pCmpElement^[k] <= 122(*z*), 	pCmpElement^[k],pCmpElement^[k] - 32);		// a --> A
+						END_IF
+						IF pPivotElement^[k] = 0
+							AND IgnoreBlank 
+						THEN
+							PivotElement					:= 127;
+						ELSE
+							PivotElement					:= SEL(pPivotElement^[k] >= 97(*a*) AND_THEN pPivotElement^[k] <= 122(*z*), pPivotElement^[k], 	pPivotElement^[k] - 32);// a --> A
+						END_IF
+						// Find unequal char
+						IF CompareElement <> PivotElement
+							OR CompareElement = 0
+							OR PivotElement = 0
+						THEN
+							EXIT;
+						END_IF
+					END_FOR
+				UNTIL (CompareElement <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					bySTRING								:= FALSE;
+					RETURN;	
+				END_IF
+
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			bySTRING										:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byTIME" Id="{a7611a9a-c04d-446a-9d7b-1626c5356337}">
+      <Declaration><![CDATA[METHOD byTIME : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].TIME)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                 
+VAR        
+	pPivotElement											: 	POINTER TO TIME;		// Pivot value
+	PivotElement											: 	TIME;					// Pivot value as TIME	
+	pCmpElement												:	POINTER TO TIME;		// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byTIME													:= FALSE;
+	RETURN;   
+ELSE
+	byTIME													:= TRUE;                          					
+END_IF   
+
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);                                   					
+                                        					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		PivotElement										:= pPivotElement^;
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byTIME									:= FALSE;
+					RETURN;	
+				END_IF
+
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byTIME											:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byUINT" Id="{3948d13b-2dc9-4c98-ad09-a994d93d01a2}">
+      <Declaration><![CDATA[METHOD byUINT : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].UINT)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                 
+VAR        
+	pPivotElement											: 	POINTER TO UINT;		// Pivot value	
+	PivotElement											: 	UINT;					// Pivot value as UINT	
+	pCmpElement												:	POINTER TO UINT;		// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byUINT													:= FALSE;
+	RETURN;   
+ELSE
+	byUINT													:= TRUE;                          					
+END_IF     
+
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);                                 					
+                                        					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		PivotElement										:= pPivotElement^;
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byUINT									:= FALSE;
+					RETURN;	
+				END_IF
+
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byUINT											:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byUSINT" Id="{2905a765-3c05-4582-a654-a305a98423fb}">
+      <Declaration><![CDATA[METHOD byUSINT : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].USINT)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                 
+VAR        
+	pPivotElement											: 	POINTER TO USINT;		// Pivot value	
+	PivotElement											: 	USINT;					// Pivot value as USINT
+	pCmpElement												:	POINTER TO USINT;		// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byUSINT													:= FALSE;
+	RETURN;   
+ELSE
+	byUSINT													:= TRUE;                          					
+END_IF    
+
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);                               					
+                                        					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		PivotElement										:= pPivotElement^;
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+				UNTIL (pCmpElement^ >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+				UNTIL (pCmpElement^ <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byUSINT									:= FALSE;
+					RETURN;	
+				END_IF
+
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byUSINT											:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="byWSTRING" Id="{84d975ba-cc63-4f0d-b3bc-27ef7db75b51}">
+      <Declaration><![CDATA[METHOD byWSTRING : BOOL // returns true if sort ends successfully 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;	// ADR(Array) 	
+	SizeOfData												: 	UDINT := 0;				// SIZEOF(Array)
+	pCompareElement											: 	POINTER TO BYTE := 0;	// ADR(Array[1].WSTRING)		
+	SizeOfStruct											: 	UDINT := 0;				// SIZEOF(Array[1]) 	
+END_VAR                                                                                            
+VAR        
+	pPivotElement											: 	POINTER TO WSTRING(MAX_WSTRING_LENGTH);	// Pivot value	
+	pCmpElement												:	POINTER TO WSTRING(MAX_WSTRING_LENGTH);	// compare value
+	PivotElement											:	WORD; 					// Pivot value	
+	CompareElement											:	WORD; 					// compare value
+	                                					                            	
+	endMainLoop												:	BOOL;					// End of main loop reached
+	endSubLoop												:	BOOL;					// End of sub loop reached                                              
+	ElementCount											:	DINT;					// No of array elements
+	stackCount,left,right,i,j,k								:	DINT;					// running variables 	
+	stack													:	ARRAY[1..32] OF UDINT;	// stack size 32 => ~1 Mio elements *)	
+	                                					
+	pElement_1												:	POINTER TO BYTE;		// Copy Pointer 1		
+	pElement_2												:	POINTER TO BYTE;		// Copy Pointer 2
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// ends with true in case of no error	                                    					 					
+IF SizeOfStruct = 0 OR SizeOfData = 0
+	OR pData = 0 OR pCompareElement = 0
+THEN               					                                   					
+	byWSTRING												:= FALSE;
+	RETURN;   
+ELSE
+	byWSTRING												:= TRUE;                          					
+END_IF                                   					
+            
+// calculate no. of Elements                                
+ElementCount												:= TO_DINT(SizeOfData / SizeOfStruct);   
+                            					
+// Quicksort                            					
+// initial value of array size          					
+left 														:= 1;				// first element
+right 														:= ElementCount;	// last element 
+stackCount 													:= 1;				// running variable 
+                                        	
+WHILE NOT endMainLoop DO							
+	IF left < right THEN                	
+		pPivotElement										:= pCompareElement + (SizeOfStruct * TO_UDINT(SHR(right+left,1)));
+		i 													:= left -1;
+		j 													:= right +1;
+		endSubLoop 											:= FALSE;
+		REPEAT
+			IF SortInverse
+			THEN	// sort descending	
+				REPEAT	
+					i 										:= i+1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+					FOR k := 0 TO MAX_WSTRING_LENGTH DO // Find unequal char
+						// element 1,2 to upper char 	https://www.uni-due.de/hummell/infos/ascii/
+						IF pCmpElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							CompareElement					:= 127;
+						ELSE
+							CompareElement					:= SEL(pCmpElement^[k] >= 97(*a*)	AND_THEN pCmpElement^[k] <= 122(*z*), 	pCmpElement^[k],pCmpElement^[k] - 32);		// a --> A
+						END_IF
+						IF pPivotElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							PivotElement					:= 127;
+						ELSE
+							PivotElement					:= SEL(pPivotElement^[k] >= 97(*a*) AND_THEN pPivotElement^[k] <= 122(*z*), pPivotElement^[k], 	pPivotElement^[k] - 32);// a --> A
+						END_IF
+						// Find unequal char
+						IF CompareElement <> PivotElement
+							OR CompareElement = 0
+							OR PivotElement = 0
+						THEN
+							EXIT;
+						END_IF
+					END_FOR
+				UNTIL (CompareElement <= PivotElement) OR NOT (i < right)	END_REPEAT	
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+					FOR k := 0 TO MAX_WSTRING_LENGTH DO // Find unequal char
+						// element 1,2 to upper char 	https://www.uni-due.de/hummell/infos/ascii/
+						IF pCmpElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							CompareElement					:= 127;
+						ELSE
+							CompareElement					:= SEL(pCmpElement^[k] >= 97(*a*)	AND_THEN pCmpElement^[k] <= 122(*z*), 	pCmpElement^[k],pCmpElement^[k] - 32);		// a --> A
+						END_IF
+						IF pPivotElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							PivotElement					:= 127;
+						ELSE
+							PivotElement					:= SEL(pPivotElement^[k] >= 97(*a*) AND_THEN pPivotElement^[k] <= 122(*z*), pPivotElement^[k], 	pPivotElement^[k] - 32);// a --> A
+						END_IF
+						// Find unequal char
+						IF CompareElement <> PivotElement
+							OR CompareElement = 0
+							OR PivotElement = 0
+						THEN
+							EXIT;
+						END_IF
+					END_FOR
+				UNTIL (CompareElement >= PivotElement) OR NOT (j > left)	END_REPEAT		
+			ELSE	// sort ascending
+				REPEAT	
+					i 										:= i+1;
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(i-1));
+					FOR k := 0 TO MAX_WSTRING_LENGTH DO // Find unequal char
+						// element 1,2 to upper char 	https://www.uni-due.de/hummell/infos/ascii/
+						IF pCmpElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							CompareElement					:= 127;
+						ELSE
+							CompareElement					:= SEL(pCmpElement^[k] >= 97(*a*)	AND_THEN pCmpElement^[k] <= 122(*z*), 	pCmpElement^[k],pCmpElement^[k] - 32);		// a --> A
+						END_IF
+						IF pPivotElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							PivotElement					:= 127;
+						ELSE
+							PivotElement					:= SEL(pPivotElement^[k] >= 97(*a*) AND_THEN pPivotElement^[k] <= 122(*z*), pPivotElement^[k], 	pPivotElement^[k] - 32);// a --> A
+						END_IF
+						// Find unequal char
+						IF CompareElement <> PivotElement
+							OR CompareElement = 0
+							OR PivotElement = 0
+						THEN
+							EXIT;
+						END_IF
+					END_FOR
+				UNTIL (CompareElement >= PivotElement)	OR NOT (i < right)	END_REPEAT;				
+				REPEAT	
+					j 										:= j-1;	
+					pCmpElement								:= pCompareElement + (SizeOfStruct * TO_UDINT(j-1));
+					FOR k := 0 TO MAX_WSTRING_LENGTH DO // Find unequal char
+						// element 1,2 to upper char 	https://www.uni-due.de/hummell/infos/ascii/
+						IF pCmpElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							CompareElement					:= 127;
+						ELSE
+							CompareElement					:= SEL(pCmpElement^[k] >= 97(*a*)	AND_THEN pCmpElement^[k] <= 122(*z*), 	pCmpElement^[k],pCmpElement^[k] - 32);		// a --> A
+						END_IF
+						IF pPivotElement^[k] = 0 
+							AND IgnoreBlank
+						THEN
+							PivotElement					:= 127;
+						ELSE
+							PivotElement					:= SEL(pPivotElement^[k] >= 97(*a*) AND_THEN pPivotElement^[k] <= 122(*z*), pPivotElement^[k], 	pPivotElement^[k] - 32);// a --> A
+						END_IF
+						// Find unequal char
+						IF CompareElement <> PivotElement
+							OR CompareElement = 0
+							OR PivotElement = 0
+						THEN
+							EXIT;
+						END_IF
+					END_FOR
+				UNTIL (CompareElement <= PivotElement) OR NOT (j > left)	END_REPEAT;
+			END_IF
+			IF i >= j THEN
+				endSubLoop									:= TRUE;
+			ELSE                    					
+				Allocate(SizeOfStruct);
+				pElement_1									:= pData + (SizeOfStruct * TO_UDINT(j-1));
+				pElement_2									:= pData + (SizeOfStruct * TO_UDINT(i-1));
+				
+				IF pElement_Tmp = 0 
+					OR_ELSE MEMCPY(pElement_Tmp, pElement_1,	SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_1,	pElement_2,		SizeOfStruct) = 0
+					OR_ELSE MEMCPY(pElement_2,	pElement_Tmp,	SizeOfStruct) = 0
+				THEN
+					byWSTRING								:= FALSE;
+					RETURN;	
+				END_IF
+
+			END_IF
+		UNTIL endSubLoop END_REPEAT;		
+		stack[stackCount] 									:= TO_UDINT(right); 	// save right in stack			
+		IF stackCount < 32              					
+		THEN                            					
+			stackCount 										:= stackCount +1;
+		ELSE															// Error stack Limit    
+			endMainLoop 									:= TRUE;
+			byWSTRING										:= FALSE;			
+		END_IF                          					
+		right 												:= MAX(left, i-1);
+	ELSE                                
+		IF stackCount = 1 THEN          
+			endMainLoop 									:= TRUE;
+		ELSE                            					
+			left 											:= right+1;       
+			stackCount 										:= stackCount -1;	// load from stack
+			right											:= TO_DINT(stack[stackCount]);
+		END_IF
+	END_IF
+END_WHILE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_exit" Id="{8ce89ced-0b12-4c34-ad5a-2a489d7e0640}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode AND pElement_Tmp <> 0
+THEN //Release memory in case the PLC stopps
+	__DELETE(pElement_Tmp);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Quicksort">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.allocate">
+      <LineId Id="43" Count="1" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="30" Count="2" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byDINT">
+      <LineId Id="3" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="147" Count="0" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="14" Count="8" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="23" Count="26" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="51" Count="10" />
+      <LineId Id="66" Count="24" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byDINT_Bubble">
+      <LineId Id="90" Count="7" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="4" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="18" Count="13" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="32" Count="10" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="48" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byINT">
+      <LineId Id="113" Count="7" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="14" Count="8" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="23" Count="38" />
+      <LineId Id="66" Count="24" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byLREAL">
+      <LineId Id="111" Count="7" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="14" Count="8" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="23" Count="38" />
+      <LineId Id="66" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byLTIME">
+      <LineId Id="110" Count="7" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="14" Count="8" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="23" Count="38" />
+      <LineId Id="66" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byREAL">
+      <LineId Id="110" Count="7" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="14" Count="8" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="23" Count="38" />
+      <LineId Id="66" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.bySTRING">
+      <LineId Id="209" Count="7" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="207" Count="0" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="14" Count="143" />
+      <LineId Id="162" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byTIME">
+      <LineId Id="110" Count="7" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="108" Count="1" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="13" Count="9" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="23" Count="38" />
+      <LineId Id="66" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byUINT">
+      <LineId Id="110" Count="7" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="108" Count="1" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="13" Count="9" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="23" Count="38" />
+      <LineId Id="66" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byUSINT">
+      <LineId Id="110" Count="7" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="108" Count="1" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="13" Count="9" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="23" Count="38" />
+      <LineId Id="66" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.byWSTRING">
+      <LineId Id="207" Count="7" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="204" Count="0" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="14" Count="143" />
+      <LineId Id="162" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Quicksort.FB_exit">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

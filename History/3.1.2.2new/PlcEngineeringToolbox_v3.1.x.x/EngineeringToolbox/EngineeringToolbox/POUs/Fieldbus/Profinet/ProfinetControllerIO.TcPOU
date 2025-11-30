@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="ProfinetControllerIO" Id="{a173dd01-9b26-4654-b609-0b79a4b6228b}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EL6631 Profinet Controller IOs via EtherCAT
+FUNCTION_BLOCK ProfinetControllerIO EXTENDS EcSlaveInfoDataExt
+VAR_OUTPUT CONSTANT
+	MIN_BOX													:	INT := 1;
+	MAX_BOX													:	INT := PARAM.PROFINET_CONTROLLER_DEV_IO_MAX_BOX;
+END_VAR
+VAR_INPUT
+	DevCtrl			 								AT %Q*	:	UINT;
+	PnIoBoxCtrl										AT %Q*	:	ARRAY[MIN_BOX ..MAX_BOX] OF UINT;
+END_VAR
+VAR_OUTPUT
+//Device parameter
+	DevState		 								AT %I*	:	UINT;		//Link to master device state
+	PnIoError										AT %I*	:	UINT;		//Link to master IO error
+	PnIoDiag										AT %I*	:	UINT;		//Link to master IO Diag 
+                         				
+	AoeNetId										AT %I*	:	AMSNETID;		//Link to master AoeNetID
+//Box states	             	
+	PnIoBoxState									AT %I*	:	ARRAY[MIN_BOX ..MAX_BOX] OF UINT; //Link to box state
+	PnIoBoxDiag										AT %I*	:	ARRAY[MIN_BOX ..MAX_BOX] OF UINT; //Link to box diag	
+END_VAR                     					             	
+VAR       
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();
+]]></ST>
+    </Implementation>
+    <LineIds Name="ProfinetControllerIO">
+      <LineId Id="56" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

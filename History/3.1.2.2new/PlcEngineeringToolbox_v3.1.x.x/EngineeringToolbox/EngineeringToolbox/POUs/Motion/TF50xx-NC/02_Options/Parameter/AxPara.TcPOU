@@ -1,0 +1,883 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="AxPara" Id="{dc3022c8-5707-4db2-a43b-085c4a84ce72}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//FB to read and write NC axis parameter. 
+//The FB can be enherided and derivatived methods of SeqRead/SeqWrite used for application specific parameter.
+//The extended methods need to call the super class at the beginning and return true if execution will be finished. The allowed states for new parameter are 1..99
+FUNCTION_BLOCK AxPara EXTENDS AxRWParaBase
+VAR_OUTPUT CONSTANT
+END_VAR                                 					
+VAR_INPUT                               					                                   	                                        	
+	AxisID													: 	UDINT;				(* ID der Achse *)
+
+	(* zu schreibende Achparameter *)
+	SetLimitPosActive										: 	BOOL;
+	SetLimitNegActive										:	BOOL;
+	SetLimitPos												: 	LREAL;
+	SetLimitNeg												: 	LREAL;
+                                    						
+	SetRefFlag												:	BOOL;
+                                    						
+	SetTargetPosWindow										:	LREAL;
+	SetTargetPosWindowMonitoring							:	BOOL;
+	SetPosRangeWindow										: 	LREAL;
+	SetPosRangeWindowMonitoring								:	BOOL;
+
+	SetDynamicsRefVelocity									: 	LREAL;
+	SetDynamicsMaxVelocity									: 	LREAL;
+	SetG0Velocity											: 	LREAL;
+	SetRefVelocityPos										: 	LREAL;
+	SetRefVelocityNeg										: 	LREAL;
+	SetManVelocityFast										: 	LREAL;
+	SetManVelocitySlow										: 	LREAL;
+
+	SetKv													: 	LREAL;
+	SetJerk													: 	LREAL;
+	SetAcc													: 	LREAL;
+	SetDec													: 	LREAL;
+	SetMaxPosLagValue										: 	LREAL;
+	SetMaxPosLagFilterTime									: 	LREAL;
+	
+	SetMaxPosLagMonitoring									: 	BOOL;
+                                        					
+	SetModuloFactor 										:	LREAL;
+	SetToleranceWindowModuloStart							:	LREAL;
+	SetInvertEncCoutingDir									:	BOOL; //UINT;
+                                        					
+	SetEncScalingNumerator									:	LREAL; //Scaling idx 16#6 replaced by Numerator and Denominator
+	SetEncScalingDenominator								:	LREAL; //Scaling idx 16#6 replaced by Numerator and Denominator
+	SetPosBias												: 	LREAL; (* NC positon offset *)
+	SetReferenceSystem										:	UDINT; //incremental, absolute, abs modulo
+	SetCalibrationValue										: 	LREAL;	(* read/write only allowed for certain encoder types *)
+	SetCalibrationMode										:	UDINT; 
+	SetCalibrInvertDirForCamSearch							:	BOOL; (* TRUE=Cam search direction negative , read/write only allowed for certain encoder types *)
+	SetCalibrInvertDirForSyncImpSearch						:	BOOL; (* TRUE=Sync impuls (off cam) search direction negative, read/write only allowed for certain encoder types *)
+	
+	SetInvertMotorPolarity									: 	BOOL; //UINT;
+                                							  	
+	SetBreakingDistancePos									: 	LREAL;
+	SetBreakingDistanceNeg									: 	LREAL;
+END_VAR                                 					
+VAR_OUTPUT                              										
+	Name													: STRING(30) := '';
+	AxisType												: UDINT := 0; (* Nc axis type :
+																								0	NOT DEFINED
+																								1	Continuous axis (stepper motor)
+																								2	Diskrete Achse (Eil/Schleich)
+																								3	Continuous axis (stepper motor)
+																								5	Encoder axis/ simulation axis 
+																								6	NcAxisType_Hydraulic            
+																								7	NcAxisType_TimeGenerator       
+																								100	NcAxisType_Specific      *)
+                                        					
+	ChannelType												: UDINT := 1;(*  NC channel type:
+																								1	Stantard,
+																								2	Interpreter (CNC)
+																								3	FIFO 
+																								4	Kinematic *) 
+                                        					
+	EncType													: 	UDINT := E_NcEncoderType.NcEncoderType_undefined;(* Encoder type: - See property with E_NcEncoderType data type *)																																									
+	EncTypAbs												:	BOOL := 0; (* Encodertyp Abs = 1/ Rel = 0*)
+	
+	DriveType												:	UDINT := TO_UDINT(E_NcDriveType.NcDriveType_undefined);
+	
+	RefFlag													:	BOOL := 0; (* Axis is in reference *)
+                                							
+	LimitPosActive											: 	BOOL;
+	LimitNegActive											:	BOOL;
+	LimitPos												: 	LREAL;
+	LimitNeg												: 	LREAL;
+
+	TargetPosWindow											:	LREAL;
+	TargetPosWindowMonitoring								:	BOOL;
+	PosRangeWindow											: 	LREAL;
+	PosRangeWindowMonitoring								:	BOOL;
+                                							
+	DynamicsRefVelocity										: 	LREAL;
+	DynamicsMaxVelocity										: 	LREAL;
+	G0Velocity												: 	LREAL;
+	RefVelocityPos											: 	LREAL;
+	RefVelocityNeg											: 	LREAL;
+	ManVelocityFast											: 	LREAL;
+	ManVelocitySlow											: 	LREAL;
+                                							  	
+	Kv														: 	LREAL;
+	Jerk													: 	LREAL;
+	Acc														: 	LREAL;
+	Dec														: 	LREAL;
+	MaxPosLagValue											: 	LREAL;
+	MaxPosLagFilterTime										: 	LREAL;
+	MaxPosLagMonitoring										: 	BOOL;
+                                                              	
+	InvertEncCoutingDir										: 	BOOL;
+	ModuloFactor											: 	LREAL;
+	ToleranceWindowModuloStart								: 	LREAL;
+	EncScalingNumerator										:	LREAL;
+	EncScalingDenominator									:	LREAL;
+	EncScaling												: 	LREAL; //Factor of Numerator and Denominator
+	PosBias													: 	LREAL;  (* Actual NC position offset *)
+	ReferenceSystem											:	UDINT; //incremental, absolute
+	CalibrationMode											:	UDINT;
+	CalibrationValue										: 	LREAL;	(* read/write only allowed for certain encoder types  *)
+	RefFlagDistance											: 	LREAL;	(* read/write only allowed for certain encoder types *)
+	CalibrInvertDirForCamSearch								:	BOOL; (* TRUE=Cam search direction negative , read/write only allowed for certain encoder types *)
+	CalibrInvertDirForSyncImpSearch							:	BOOL; (* TRUE=Sync impuls (off cam) search direction negative, read/write only allowed for certain encoder types *)
+
+	InvertMotorPolarity										: 	BOOL;
+                                							  	
+	BreakingDistancePos										: 	LREAL;
+	BreakingDistanceNeg										: 	LREAL;
+	
+	PhysicalUnit											:	STRING[10+1];
+END_VAR                         	
+
+
+VAR
+(* Zwischenspeicher ************************************************************)
+	
+(* Deklaration Trigger **********************************************************)
+
+(* Zeiten ******************************************************************)
+
+(* Bausteine ***************************************************************)
+	ReadAdsPara												: ADSREAD := (NetId	:= '' , Port := AMSPORT_R0_NC, TmOut	:= DEFAULT_ADS_TIMEOUT);
+	WriteAdsPara											: ADSWRITE := (NetId:= '' , Port := AMSPORT_R0_NC, TmOut	:= DEFAULT_ADS_TIMEOUT);
+
+(* Dummy Speicher **********************************************************)
+
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(************************************************************************************)
+	(*																					*)
+	(*		B E C K H O F F   N E W   A U T O M A T I O N   T E C H N O L O G Y    		*)
+	(*																					*)
+	(*		Eiserstr.5	D-33415 Verl	Germany	phone:	+49-5246-0	www.Beckhoff.Com	*)
+    (*																					*)
+    (*		Bausteinbeschreibung	:	Read/Write axis parameter						*)
+	(*		TwinCAT-Version			:	3.x or higher									*)
+	(*																					*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	Super^();			
+	
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Property Name="deviceAddrIsValid" Id="{72cee6ad-c827-4922-b7f5-73e3827a3295}">
+      <Declaration><![CDATA[PROPERTY PROTECTED deviceAddrIsValid : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c749be33-845a-4a9f-80e7-30ed01f647ef}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[deviceAddrIsValid := AxisId > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="eAxisType" Id="{1dba6f09-2af5-46c0-922f-97b7d3a8ee76}">
+      <Declaration><![CDATA[PROPERTY PUBLIC eAxisType : E_NcAxisType]]></Declaration>
+      <Get Name="Get" Id="{412d1762-d636-4802-81d5-d14dc57199eb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eAxisType := AxisType;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="eDriveType" Id="{75367e1a-6f0d-4b47-9e10-e1f90d817639}">
+      <Declaration><![CDATA[PROPERTY PUBLIC eDriveType : E_NcDriveType]]></Declaration>
+      <Get Name="Get" Id="{a232b635-e231-4126-b99b-30dc20e5911b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eDriveType := DriveType;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="eEncType" Id="{d4d43d77-e715-4334-8f28-cbcaf71b510e}">
+      <Declaration><![CDATA[PROPERTY PUBLIC eEncType : E_NcEncoderType]]></Declaration>
+      <Get Name="Get" Id="{5d91f847-4b3e-4768-b33e-df0c7fa8751c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eEncType := EncType;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="getValue" Id="{1a91c73c-e20d-47d4-b52e-e12f85ed73c9}">
+      <Declaration><![CDATA[METHOD PROTECTED getValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	IDxGrp						:	UDINT;
+	IDxOffs						:	UDINT;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value
+	pSetValue					:	PVOID; //Address of variable for ser value variable, can be zero if no corresponding SetVariable exists
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+ReadAdsPara	(Read := TRUE, IDxGrp:=IDxGrp+AxisId, IDxOffs:=IDxOffs,LEN:=Len,DestAddr:=pActValue );
+IF NOT ReadAdsPara.BUSY
+THEN
+	IF NOT ReadAdsPara.ERR 
+	THEN 
+		IF pSetValue <> 0 THEN MEMCPY(pSetValue, pActValue, Len); END_IF			
+		state 												:= state + 1; 
+	ELSE 		
+		Busy												:= FALSE;
+		Error												:= TRUE;
+		ErrorId												:= ReadAdsPara.ERRID;
+		ErrorText											:= CONCAT('Error read parameter in state:' , TO_STRING(state * -1));
+		ErrorText											:= CONCAT(ErrorText , ' Id:');
+		ErrorText											:= CONCAT(ErrorText , TO_STRING(ErrorId));
+		State												:= 9999;
+	END_IF	
+	ReadAdsPara(Read := FALSE); 
+	getValue												:= TRUE;									
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqRead" Id="{33b4a15b-3da5-4850-92bc-8f75350ffdb9}">
+      <Declaration><![CDATA[METHOD PROTECTED seqRead : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	State							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Execute read axis parameter ************************************)
+	CASE state OF
+	1..99: //read application spec parameter 
+		seqRead												:= TRUE;
+		
+	1001: (* Name *************************************************************************************)
+		IF LEN(Name) > 0 AND NOT ReadAdsPara.BUSY
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#2,	LEN := SIZEOF(Name),		pActValue := ADR(Name),			pSetValue := 0);
+		END_IF
+
+	1002: (* Axis Type ( Für Beschreibung Typen siehe AxPara) **********************************)
+		IF AxisType <> 0 AND NOT ReadAdsPara.BUSY
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#3,	LEN := SIZEOF(AxisType),	pActValue := ADR(AxisType), 	pSetValue := 0);
+		END_IF
+
+	1003: (* NC Channel type ****************************************************************************************)
+		IF ChannelType <> 0 AND NOT ReadAdsPara.BUSY
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#53,	LEN := SIZEOF(ChannelType),	pActValue := ADR(ChannelType), 	pSetValue := 0);
+		END_IF
+
+	1004: (* EncType ****************************************************************************************)
+		IF EncType <> 0 AND NOT ReadAdsPara.BUSY
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#5000,	IDxOffs := 16#3,	LEN := SIZEOF(EncType),	pActValue := ADR(EncType), 		pSetValue := 0);
+		END_IF
+	
+	1005: (* Endlagenlimit pos. ***********************************************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#E,	LEN := SIZEOF(LimitPos),	pActValue := ADR(LimitPos),  pSetValue := ADR(SetLimitPos) );	
+	
+	1006: (* Endlagenlimit neg ***********************************************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#D,	LEN := SIZEOF(LimitNeg),	pActValue := ADR(LimitNeg),  pSetValue := ADR(SetLimitNeg) );
+		
+	1007: (* Endlagenlimit pos aktiv ? ***************************************************************)
+		IF getValue(IDxGrp:= 16#5000,	IDxOffs := 16#C,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetLimitPosActive :=LimitPosActive				:= TO_BOOL(_UINT);
+		END_IF
+
+	1008: (* Endlagenlimit neg aktiv ? ***************************************************************)
+		IF getValue(IDxGrp:= 16#5000,	IDxOffs := 16#B,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetLimitNegActive :=LimitNegActive				:= TO_BOOL(_UINT);
+		END_IF
+
+	1009: (* Zielfenster ******************************************************************************)
+		getValue(IDxGrp:= 16#4000,	IDxOffs := 16#16,	LEN := SIZEOF(TargetPosWindow),	pActValue := ADR(TargetPosWindow),  pSetValue := ADR(SetTargetPosWindow) );
+
+	1010: (* Positionsfenster ************************************************************************)
+		getValue(IDxGrp:= 16#4000,	IDxOffs := 16#10,	LEN := SIZEOF(PosRangeWindow),	pActValue := ADR(PosRangeWindow),  pSetValue := ADR(SetPosRangeWindow) );
+
+	1011: (* Bezugsgeschwindigkeit (siehe Typenschild)*************************************)
+		IF AxisType = 2 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#7000,	IDxOffs := 16#101,	LEN := SIZEOF(DynamicsRefVelocity),	pActValue := ADR(DynamicsRefVelocity),  pSetValue := ADR(SetDynamicsRefVelocity) );
+		END_IF
+	
+	1012: (* Max.Geschwindigkeit (ca. 90% der Bezugsgeschw.)***************************)
+		IF AxisType = 2 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#27,	LEN := SIZEOF(DynamicsMaxVelocity),	pActValue := ADR(DynamicsMaxVelocity),  pSetValue := ADR(SetDynamicsMaxVelocity) );
+		END_IF
+		
+	1013: (* G0 Geschwindigkeit ****************************************************************)
+		getValue(IDxGrp:= 16#4000,	IDxOffs := 16#A,	LEN := SIZEOF(G0Velocity),	pActValue := ADR(G0Velocity),  pSetValue := ADR(SetG0Velocity) );
+
+	1014: (* Ref.Geschwindigkeit Pos **********************************************************)
+		getValue(IDxGrp:= 16#4000,	IDxOffs := 16#6,	LEN := SIZEOF(RefVelocityPos),	pActValue := ADR(RefVelocityPos),  pSetValue := ADR(SetRefVelocityPos) );
+
+	1015: (* Ref.Geschwindigkeit Neg **********************************************************)
+		getValue(IDxGrp:= 16#4000,	IDxOffs := 16#7,	LEN := SIZEOF(RefVelocityNeg),	pActValue := ADR(RefVelocityNeg),  pSetValue := ADR(SetRefVelocityNeg) );
+
+	1016: (* Man. Verfahrgeschwindigkeit fast *************************************************)
+		getValue(IDxGrp:= 16#4000,	IDxOffs := 16#9,	LEN := SIZEOF(ManVelocityFast),	pActValue := ADR(ManVelocityFast),  pSetValue := ADR(SetManVelocityFast) );
+
+	1017: (* Man. Verfahrgeschwindigkeit slow ***********************************************)
+		getValue(IDxGrp:= 16#4000,	IDxOffs := 16#8,	LEN := SIZEOF(ManVelocitySlow),	pActValue := ADR(ManVelocitySlow),  pSetValue := ADR(SetManVelocitySlow) );
+
+	1018: (* Kv ************************************************************************************)
+		IF AxisType = 2
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#102,	LEN := SIZEOF(Kv),	pActValue := ADR(Kv),  pSetValue := ADR(SetKv) );
+		END_IF
+
+	1019: (* Ruck ************************************************************************************)
+		IF AxisType = 2 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#103,	LEN := SIZEOF(Jerk),	pActValue := ADR(Jerk),  pSetValue := ADR(SetJerk) );
+		END_IF
+		
+
+	1020: (* Beschleunigung ***********************************************************************)
+		IF AxisType = 2
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#101,	LEN := SIZEOF(Acc),	pActValue := ADR(Acc),  pSetValue := ADR(SetAcc) );
+		END_IF
+
+	1021: (* Verzoegerung ***************************************************************************)
+		IF AxisType = 2 
+		then
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#102,	LEN := SIZEOF(Dec),	pActValue := ADR(Dec),  pSetValue := ADR(SetDec) );
+		END_IF
+
+	1022: (* Schleppabstand ***********************************************************************)	
+		getValue(IDxGrp:= 16#6000,	IDxOffs := 16#12,	LEN := SIZEOF(MaxPosLagValue),	pActValue := ADR(MaxPosLagValue),  pSetValue := ADR(SetMaxPosLagValue) );
+
+	1023: (* Skalierung ******************************************************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#6,	LEN := SIZEOF(EncScaling),	pActValue := ADR(EncScaling),  pSetValue := 0 );		
+
+	1024: (* Positions Offset  ***********************************************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#7,	LEN := SIZEOF(PosBias),	pActValue := ADR(PosBias),  pSetValue := ADR(SetPosBias) );
+
+	1025: (* Referenzposition (Nicht bei Absolut Encoder lesen)*******************************)
+		IF EncType <> 2 AND EncType <> 5 AND EncType<> 7 AND EncType <> 11 AND EncType <> 12
+		THEN
+			getValue(IDxGrp:= 16#5000,	IDxOffs := 16#103,	LEN := SIZEOF(CalibrationValue),	pActValue := ADR(CalibrationValue),  pSetValue := ADR(SetCalibrationValue) );
+		ELSE
+			state											:= state +1;
+		END_IF
+
+	1026: (* Abstand Ref-Nocken Synchronimpuls (Nicht bei Absolut Encoder lesen) ****)
+		IF EncType <> 2 AND EncType <> 5 AND EncType <> 7 AND EncType <> 11 AND EncType <> 12
+		THEN
+			getValue(IDxGrp:= 16#5100,	IDxOffs := 16#101,	LEN := SIZEOF(RefFlagDistance),	pActValue := ADR(RefFlagDistance),  pSetValue := 0 );
+		ELSE
+			state											:= state +1;
+		END_IF
+
+	1027: (* Drive direction **************************************************************)
+		IF getValue(IDxGrp:= 16#7000,	IDxOffs := 16#6,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetInvertMotorPolarity :=InvertMotorPolarity	:= TO_BOOL(_UINT);
+			
+		END_IF
+
+	1028: (* Bremsweg positiv **********************************************************************)
+		IF AxisType <> 2
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#303,	LEN := SIZEOF(BreakingDistancePos),	pActValue := ADR(BreakingDistancePos),  pSetValue := ADR(SetBreakingDistancePos ));
+		END_IF
+
+	1029: (* Bremsweg negativ *********************************************************************)
+		IF AxisType <> 2 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#4000,	IDxOffs := 16#304,	LEN := SIZEOF(BreakingDistanceNeg),	pActValue := ADR(BreakingDistanceNeg),  pSetValue := ADR(SetBreakingDistanceNeg ));
+
+		END_IF
+
+	1030: (* Schleppueberwachung Aktiv *********************************************************************)
+		IF getValue(IDxGrp:= 16#6000,	IDxOffs := 16#10,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetMaxPosLagMonitoring :=MaxPosLagMonitoring	:= TO_BOOL(_UINT);
+			
+		END_IF
+
+	1031: (* Encodertyp Abs/Rel *********************************************************************)
+		IF getValue(IDxGrp:= 16#5000,	IDxOffs := 16#1D,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			EncTypAbs										:= TO_BOOL(_UINT);
+			
+		END_IF
+
+	1032: (* Referenzierflag *********************************************************************)
+		IF getValue(IDxGrp:= 16#5100,	IDxOffs := 16#9,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetRefFlag :=RefFlag							:= TO_BOOL(_UINT);
+		END_IF
+
+	1033: (* Zielfenster Aktiv ******************************************************************)
+		IF getValue(IDxGrp:= 16#4000,	IDxOffs := 16#15,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetTargetPosWindowMonitoring :=TargetPosWindowMonitoring := TO_BOOL(_UINT);
+			
+		END_IF
+
+	1034: (* Positionsfenster Aktiv ******************************************************************)
+		IF getValue(IDxGrp:= 16#4000,	IDxOffs := 16#F,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetPosRangeWindowMonitoring :=PosRangeWindowMonitoring := TO_BOOL(_UINT);
+			
+		END_IF
+
+	1035: (* ModuloFaktor ******************************************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#9,	LEN := SIZEOF(ModuloFactor),	pActValue := ADR(ModuloFactor),  pSetValue := ADR(SetModuloFactor ));
+
+	1036: (* Enc Zaehlrichtung ******************************************************************)
+		IF getValue(IDxGrp:= 16#5000,	IDxOffs := 16#8,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetInvertEncCoutingDir :=InvertEncCoutingDir := TO_BOOL(_UINT);
+			
+		END_IF
+
+	1037: (* Toleranzfenster Modulo Start *******************************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#1B,	LEN := SIZEOF(ToleranceWindowModuloStart),	pActValue := ADR(ToleranceWindowModuloStart),  pSetValue := ADR(SetToleranceWindowModuloStart ));
+		
+	1038: (* Calibration cam search direction inverted *******************************************************)
+		IF EncType <> 2 AND EncType <> 5 AND EncType<> 7 AND EncType <> 11 AND EncType <> 12
+		THEN
+			IF getValue(IDxGrp:= 16#5000,	IDxOffs := 16#101,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+			THEN
+				SetCalibrInvertDirForCamSearch :=CalibrInvertDirForCamSearch := TO_BOOL(_UINT);
+				
+			END_IF
+		ELSE
+			state											:= state +1;
+		END_IF		
+		
+	1039: (* Calibration impuls direction inverted (of cam) *******************************************************)
+		IF EncType <> 2 AND EncType <> 5 AND EncType<> 7 AND EncType <> 11 AND EncType <> 12
+		THEN
+			IF getValue(IDxGrp:= 16#5000,	IDxOffs := 16#102,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+			THEN
+				SetCalibrInvertDirForSyncImpSearch :=CalibrInvertDirForSyncImpSearch := TO_BOOL(_UINT);
+				
+			END_IF
+	
+		ELSE
+			state											:= state +1;
+		END_IF	
+		
+	1040: (* Calibration mode *******************************************************)
+		IF EncType <> 2 AND EncType <> 5 AND EncType<> 7 AND EncType <> 11 AND EncType <> 12
+		THEN
+			getValue(IDxGrp:= 16#5000,	IDxOffs := 16#107,	LEN := SIZEOF(CalibrationMode),	pActValue := ADR(CalibrationMode),  pSetValue := ADR(SetCalibrationMode));
+		ELSE
+			state											:= state +1;
+		END_IF
+		
+	1041: (* Scaling numerator **************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#23,	LEN := SIZEOF(EncScalingNumerator),	pActValue := ADR(EncScalingNumerator),  pSetValue := ADR(SetEncScalingNumerator) );	
+			
+	1042: (* Scaling denumerator **************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#24,	LEN := SIZEOF(EncScalingDenominator),	pActValue := ADR(EncScalingDenominator),  pSetValue := ADR(SetEncScalingDenominator) );	
+		
+	1043: (* Reference system **************************************)
+		getValue(IDxGrp:= 16#5000,	IDxOffs := 16#19,	LEN := SIZEOF(ReferenceSystem),	pActValue := ADR(ReferenceSystem),  pSetValue := ADR(SetReferenceSystem) );	
+
+	1044: (* Schleppabstand Filter Time ***********************************************************************)	
+		getValue(IDxGrp:= 16#6000,	IDxOffs := 16#13,	LEN := SIZEOF(MaxPosLagFilterTime),	pActValue := ADR(MaxPosLagFilterTime),  pSetValue := ADR(SetMaxPosLagFilterTime) );
+
+	1045: (* Physical unit ***********************************************************************)	
+		getValue(IDxGrp:= 16#4000,	IDxOffs := 16#5,	LEN := SIZEOF(PhysicalUnit),	pActValue := ADR(PhysicalUnit),  pSetValue := ADR(PhysicalUnit) );
+		IF PhysicalUnit[0] = 176 THEN PhysicalUnit := '°'; END_IF		
+		
+	1046: (*  Drive type ***********************************************************************)	
+		getValue(IDxGrp:= 16#7000,	IDxOffs := 16#3,	LEN := SIZEOF(DriveType),	pActValue := ADR(DriveType),  pSetValue := 0 );
+			
+	ELSE
+		state												:= 1;
+	END_CASE
+
+(*********************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqWrite" Id="{b3174a68-7c5b-4b2b-931a-5d0e3f42397a}">
+      <Declaration><![CDATA[METHOD PROTECTED seqWrite : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	State							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Write axis parameter ********************************************************************)
+	CASE state OF
+	1..99: //Wite application spec parameter 
+		seqWrite											:= TRUE;
+		
+	1001: (* Endlagenlimit pos.beschreiben ********************************************************)
+		setValue(IDxGrp:= 16#5000,	IDxOffs := 16#E,	LEN := SIZEOF(SetLimitPos),		pActValue := ADR(LimitPos),		pSetValue := ADR(SetLimitPos));
+
+	1002: (* Endlagenlimit neg.beschreiben ********************************************************)
+		setValue(IDxGrp:= 16#5000,	IDxOffs := 16#D,	LEN := SIZEOF(SetLimitNeg),		pActValue := ADR(LimitNeg),		pSetValue := ADR(SetLimitNeg));
+
+	1003: (* Endlagenlimit pos. aktiv ****************************************************************)
+		IF NOT (SetLimitPosActive XOR LimitPosActive)
+			AND NOT WriteAdsPara.BUSY
+		THEN 
+			state 											:= state + 1;
+		ELSE
+			_UINT											:= TO_UINT(SetLimitPosActive);
+			LimitPosActive									:= SetLimitPosActive;
+			setValue(IDxGrp:= 16#5000,	IDxOffs := 16#C,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT));
+		END_IF
+		
+	1004: (* Endlagenlimit neg.aktiv *****************************************************************)
+		IF NOT (SetLimitNegActive XOR LimitNegActive) 
+			AND NOT WriteAdsPara.BUSY
+		THEN 
+			state 											:= state + 1;
+		ELSE
+			_UINT											:= TO_UINT(SetLimitNegActive);
+			LimitNegActive									:= SetLimitNegActive; 
+			setValue(IDxGrp:= 16#5000,	IDxOffs := 16#B,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT));
+		END_IF
+
+	1005: (* Zielfenster setzen **********************************************************************)
+		setValue(IDxGrp:= 16#4000,	IDxOffs := 16#16,	LEN := SIZEOF(SetTargetPosWindow),		pActValue := ADR(TargetPosWindow),		pSetValue := ADR(SetTargetPosWindow));
+
+	1006: (* Positionsfenster setzen *****************************************************************)
+		setValue(IDxGrp:= 16#4000,	IDxOffs := 16#10,	LEN := SIZEOF(SetPosRangeWindow),		pActValue := ADR(PosRangeWindow),	pSetValue := ADR(SetPosRangeWindow));
+		
+	1007: (* Bezugsgeschwindigkeit setzen ********************************************************)
+		IF AxisType = 2
+		THEN 
+			state 											:= state +1;
+		ELSE
+			setValue(IDxGrp:= 16#7000,	IDxOffs := 16#101,	LEN := SIZEOF(SetDynamicsRefVelocity),pActValue := ADR(DynamicsRefVelocity),	pSetValue := ADR(SetDynamicsRefVelocity));
+		END_IF
+
+
+	1008: (* Max.Geschwindigkeit setzen ************************************************************)
+		IF AxisType = 2 
+		THEN 
+			state 											:= state +1;
+		ELSE
+			setValue(IDxGrp:= 16#4000,	IDxOffs := 16#27,	LEN := SIZEOF(SetDynamicsMaxVelocity),pActValue := ADR(DynamicsMaxVelocity),	pSetValue := ADR(SetDynamicsMaxVelocity));
+		END_IF
+
+	1009: (* G0 Geschwindigkeit setzen ****************************************************************)
+		setValue(IDxGrp:= 16#4000,	IDxOffs := 16#A,	LEN := SIZEOF(SetG0Velocity),	pActValue := ADR(G0Velocity),	pSetValue := ADR(SetG0Velocity));
+
+	1010: (* Ref.Geschwindigkeit fast setzen *******************************************************)
+		setValue(IDxGrp:= 16#4000,	IDxOffs := 16#6,	LEN := SIZEOF(SetRefVelocityPos),	pActValue := ADR(RefVelocityPos),	pSetValue := ADR(SetRefVelocityPos));
+
+	1011: (* Ref.Geschwindigkeit slow setzen *****************************************************)
+		setValue(IDxGrp:= 16#4000,	IDxOffs := 16#7,	LEN := SIZEOF(SetRefVelocityNeg),	pActValue := ADR(RefVelocityNeg),	pSetValue := ADR(SetRefVelocityNeg));
+
+	1012: (* Man.Geschwindigkeit fast setzen ******************************************************)
+		setValue(IDxGrp:= 16#4000,	IDxOffs := 16#9,	LEN := SIZEOF(SetManVelocityFast),	pActValue := ADR(ManVelocityFast),	pSetValue := ADR(SetManVelocityFast));
+		
+
+	1013: (* Man.Geschwindigkeit slow setzen ******************************************************)
+		setValue(IDxGrp:= 16#4000,	IDxOffs := 16#8,	LEN := SIZEOF(SetManVelocitySlow),	pActValue := ADR(ManVelocitySlow),	pSetValue := ADR(SetManVelocitySlow));
+
+	1014: (* Kv setzen **************************************************************************************)
+		IF AxisType = 2 
+		THEN 
+			state 											:= state +1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#102,	LEN := SIZEOF(SetKv),pActValue := ADR(Kv),	pSetValue := ADR(SetKv));
+		END_IF
+
+	1015: (* Ruck setzen ***********************************************************************************)
+		IF AxisType = 2 
+		THEN 
+			state 											:= state +1;
+		ELSE
+			setValue(IDxGrp:= 16#4000,	IDxOffs := 16#103,	LEN := SIZEOF(SetJerk),pActValue := ADR(Jerk),	pSetValue := ADR(SetJerk));
+		END_IF
+
+	1016: (* Beschleunigung setzen **********************************************************************)
+		IF AxisType = 2 
+		THEN 
+			state 											:= state +1;
+		ELSE
+			setValue(IDxGrp:= 16#4000,	IDxOffs := 16#101,	LEN := SIZEOF(SetAcc), pActValue := ADR(Acc),	pSetValue := ADR(SetAcc));
+		END_IF
+	
+	1017: (* Verzoegerung setzen ************************************************************************)
+		IF AxisType = 2 
+		THEN 
+			state 											:= state +1;
+		ELSE
+			setValue(IDxGrp:= 16#4000,	IDxOffs := 16#102,	LEN := SIZEOF(SetDec), pActValue := ADR(Dec),	pSetValue := ADR(SetDec));
+		END_IF
+		
+	1018: (* Schleppabstand setzen **********************************************************************)
+		setValue(IDxGrp:= 16#6000,	IDxOffs := 16#12,	LEN := SIZEOF(SetMaxPosLagValue),	pActValue := ADR(MaxPosLagValue),	pSetValue := ADR(SetMaxPosLagValue));
+
+	1019: (* Reserverd *****************************************************************************)
+		// Set scaling replaced by Num and Denum  setValue(IDxGrp:= 16#5000,	IDxOffs := 16#6,	LEN := SIZEOF(SetEncScaling),	pActValue := ADR(EncScaling),	pSetValue := ADR(SetEncScaling));
+		state 												:= state +1 ;
+		
+	1020: (* Positions Offset setzen ****************************************************************)
+		setValue(IDxGrp:= 16#5000,	IDxOffs := 16#7,	LEN := SIZEOF(SetPosBias),	pActValue := ADR(PosBias),	pSetValue := ADR(SetPosBias));
+		
+	1021: (* Referenzposition setzen ***************************************************************)
+		IF EncType <> 2  AND EncType <> 5 AND EncType <> 7 AND EncType <> 11  AND EncType <> 12 
+		THEN
+			setValue(IDxGrp:= 16#5000,	IDxOffs := 16#103,	LEN := SIZEOF(SetCalibrationValue),	pActValue := ADR(CalibrationValue),	pSetValue := ADR(SetCalibrationValue));
+		ELSE
+			state 											:= state +1 ;
+		END_IF
+
+	1022: (* Bremsweg positiv **********************************************************************)
+		IF AxisType = 2 
+		THEN 
+			state 											:= state +1;
+		ELSE
+			setValue(IDxGrp:= 16#4000,	IDxOffs := 16#303,	LEN := SIZEOF(SetBreakingDistancePos), pActValue := ADR(BreakingDistancePos),	pSetValue := ADR(SetBreakingDistancePos));
+		END_IF
+
+	1023: (* Bremsweg negativ *********************************************************************)
+		IF AxisType = 2
+		THEN 
+			state 											:= state +1;
+		ELSE
+			setValue(IDxGrp:= 16#4000,	IDxOffs := 16#304,	LEN := SIZEOF(SetBreakingDistanceNeg), pActValue := ADR(BreakingDistanceNeg),	pSetValue := ADR(SetBreakingDistanceNeg));
+		END_IF
+
+	1024: (* Schleppueberwachung ****************************************************************************)
+		IF SetMaxPosLagMonitoring = MaxPosLagMonitoring AND NOT WriteAdsPara.BUSY
+		THEN 
+			state 											:= state +1;
+		ELSE
+			_UINT											:= TO_UINT(SetMaxPosLagMonitoring);
+			MaxPosLagMonitoring								:= SetMaxPosLagMonitoring;					
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#10,	LEN := SIZEOF(_UINT),	pActValue := 0,	pSetValue := ADR(_UINT));
+		END_IF
+
+	1025: (* Referenzierflag ****************************************************************************)
+		IF RefFlag = SetRefFlag AND NOT WriteAdsPara.BUSY
+		THEN 
+			state 											:= state +1;
+		ELSE
+			_UINT											:= TO_UINT(SetRefFlag);
+			RefFlag											:= SetRefFlag;
+			setValue(IDxGrp:= 16#5100,	IDxOffs := 16#9,	LEN := SIZEOF(_UINT), pActValue := 0,	pSetValue := ADR(_UINT));
+		END_IF
+		
+	1026: (* PosfensterAktiv ****************************************************************************)
+		IF SetPosRangeWindowMonitoring = PosRangeWindowMonitoring AND NOT WriteAdsPara.BUSY
+		THEN 
+			state 											:= state +1;
+		ELSE
+			_UINT											:= TO_UINT(SetPosRangeWindowMonitoring);
+			PosRangeWindowMonitoring						:= SetPosRangeWindowMonitoring;
+			setValue(IDxGrp:= 16#4000,	IDxOffs := 16#F,	LEN := SIZEOF(_UINT), pActValue := 0,	pSetValue := ADR(_UINT));
+		END_IF
+
+	1027: (* ZielfensterAktiv ****************************************************************************)
+		IF SetTargetPosWindowMonitoring = TargetPosWindowMonitoring AND NOT WriteAdsPara.BUSY
+		THEN 
+			state 											:= state +1;
+		ELSE
+			_UINT											:= TO_UINT(SetTargetPosWindowMonitoring);
+			TargetPosWindowMonitoring						:= SetTargetPosWindowMonitoring;
+			setValue(IDxGrp:= 16#4000,	IDxOffs := 16#15,	LEN := SIZEOF(_UINT), pActValue := 0,	pSetValue := ADR(_UINT));
+		END_IF
+
+	1028: (* Modulofaktor ****************************************************************************)
+		setValue(IDxGrp:= 16#5000,	IDxOffs := 16#9,	LEN := SIZEOF(SetModuloFactor), pActValue := ADR(ModuloFactor),	pSetValue := ADR(SetModuloFactor));
+		
+	1029: (* Enc. Zaehlrichtung ****************************************************************************)
+		IF SetInvertEncCoutingDir = InvertEncCoutingDir AND NOT WriteAdsPara.BUSY
+		THEN 
+			state 											:= state +1;
+		ELSE
+			_UINT											:= TO_UINT(SetInvertEncCoutingDir);
+			InvertEncCoutingDir								:= SetInvertEncCoutingDir;
+			setValue(IDxGrp:= 16#5000,	IDxOffs := 16#8,	LEN := SIZEOF(_UINT), pActValue := 0,	pSetValue := ADR(_UINT));
+		END_IF
+
+	1030: (* Drive  ****************************************************************************)
+		IF SetInvertMotorPolarity = InvertMotorPolarity AND NOT WriteAdsPara.BUSY
+		THEN 
+			state 											:= state +1;
+		ELSE
+			_UINT											:= TO_UINT(SetInvertMotorPolarity);
+			InvertMotorPolarity								:= SetInvertMotorPolarity;
+			setValue(IDxGrp:= 16#7000,	IDxOffs := 16#6,	LEN := SIZEOF(_UINT), pActValue := 0,	pSetValue := ADR(_UINT));
+		END_IF
+		
+		
+	1031: (* Enc. Modulo start tolerance ****************************************************************************)
+		setValue(IDxGrp:= 16#5000,	IDxOffs := 16#1B,	LEN := SIZEOF(SetToleranceWindowModuloStart), pActValue := ADR(ToleranceWindowModuloStart),	pSetValue := ADR(SetToleranceWindowModuloStart));
+
+	1032: (* Set calibration cam search direction inverted ***************************************************************)
+		IF SetCalibrInvertDirForCamSearch = CalibrInvertDirForCamSearch	AND NOT WriteAdsPara.BUSY
+			OR_ELSE(EncType = 2  OR EncType = 5 OR EncType = 7 OR EncType = 11  OR EncType = 12)
+		THEN 
+			state 											:= state +1;
+		ELSE
+			_UINT											:= TO_UINT(SetCalibrInvertDirForCamSearch);
+			CalibrInvertDirForCamSearch						:= SetCalibrInvertDirForCamSearch;
+			setValue(IDxGrp:= 16#5000,	IDxOffs := 16#101,	LEN := SIZEOF(_UINT), pActValue := 0,	pSetValue := ADR(_UINT));
+		END_IF
+
+	1033: (* Set calibration impuls search direction inverted ***************************************************************)
+		IF SetCalibrInvertDirForSyncImpSearch = CalibrInvertDirForSyncImpSearch AND NOT WriteAdsPara.BUSY
+			OR_ELSE(EncType = 2  OR EncType = 5 OR EncType = 7 OR EncType = 11  OR EncType = 12)
+		THEN 
+			state 											:= state +1;
+		ELSE
+			_UINT											:= TO_UINT(SetCalibrInvertDirForSyncImpSearch);
+			CalibrInvertDirForSyncImpSearch					:= SetCalibrInvertDirForSyncImpSearch;
+			setValue(IDxGrp:= 16#5000,	IDxOffs := 16#102,	LEN := SIZEOF(_UINT), pActValue := 0,	pSetValue := ADR(_UINT));
+		END_IF
+		
+	1034: (* Set calibration mode ***************************************************************)
+		IF SetCalibrationMode = CalibrationMode  AND NOT WriteAdsPara.BUSY
+			OR_ELSE(EncType = 2  OR EncType = 5 OR EncType = 7 OR EncType = 11  OR EncType = 12)
+		THEN 
+			state 											:= state +1;		
+		ELSE
+			setValue(IDxGrp:= 16#5000,	IDxOffs := 16#107,	LEN := SIZEOF(SetCalibrationMode), pActValue := ADR(CalibrationMode),	pSetValue := ADR(SetCalibrationMode));
+		END_IF
+
+	1035: (* Scaling numerator **************************************)
+		setValue(IDxGrp:= 16#5000,	IDxOffs := 16#23,	LEN := SIZEOF(SetEncScalingNumerator),	pActValue := ADR(EncScalingNumerator),  pSetValue := ADR(SetEncScalingNumerator) );	
+			
+	1036: (* Scaling denumerator **************************************)
+		setValue(IDxGrp:= 16#5000,	IDxOffs := 16#24,	LEN := SIZEOF(SetEncScalingDenominator),	pActValue := ADR(EncScalingDenominator),  pSetValue := ADR(SetEncScalingDenominator) );
+		
+		//Calculate Act Scaling 
+		IF NOT Error THEN  EncScaling	:= EncScalingNumerator / EncScalingDenominator; END_IF
+		
+	1037: (* Reference system **************************************)
+		setValue(IDxGrp:= 16#5000,	IDxOffs := 16#19,	LEN := SIZEOF(SetReferenceSystem),	pActValue := ADR(ReferenceSystem),  pSetValue := ADR(SetReferenceSystem) );	
+	
+	1038: (* Schleppueberwachung Zeit ****************************************************************************)
+		setValue(IDxGrp:= 16#6000,	IDxOffs := 16#13,	LEN := SIZEOF(SetMaxPosLagFilterTime),	pActValue := ADR(MaxPosLagFilterTime),	pSetValue := ADR(SetMaxPosLagFilterTime));
+	
+	ELSE
+		state 												:= 1 ;
+	END_CASE
+	
+(***********************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setValue" Id="{7ebcda5b-7f60-4274-bc48-58700dabd39f}">
+      <Declaration><![CDATA[METHOD PROTECTED setValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	IDxGrp						:	UDINT;
+	IDxOffs						:	UDINT;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value, can be zero if no corresponding acual value variable exists
+	pSetValue					:	PVOID; //Address of variable for set value variable
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+IF pActValue <> 0 AND pSetValue <> 0 AND_THEN MEMCMP(pSetValue, pActValue, Len) = 0
+THEN //Skip write parameter if set and actual value are equel
+	state													:= state + 1;	
+	setValue												:= TRUE;
+ELSE
+	WriteAdsPara( Write := TRUE, IdxGrp :=IDxGrp+AxisId, IdxOffs:=IDxOffs, LEN:=Len, SrcAddr:=pSetValue );
+	IF NOT WriteAdsPara.BUSY
+	THEN
+		IF NOT WriteAdsPara.ERR
+		THEN
+			IF pActValue <> 0 THEN MEMCPY(pActValue, pSetValue, Len); END_IF	
+			state											:= state + 1;
+		ELSE
+			Busy											:= FALSE;
+			Error											:= TRUE;
+			ErrorId											:= WriteAdsPara.ERRID;
+			ErrorText										:= CONCAT('Error write parameter in state:' , TO_STRING(state * -1));
+			ErrorText										:= CONCAT(ErrorText , ' Id:');
+			ErrorText										:= CONCAT(ErrorText , TO_STRING(ErrorId));
+			State											:= 9999;
+		END_IF
+		WriteAdsPara (Write := FALSE);
+		setValue											:= TRUE;
+	END_IF		
+END_IF
+	
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="AxPara">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPara.deviceAddrIsValid.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPara.eAxisType.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPara.eDriveType.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPara.eEncType.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPara.getValue">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPara.seqRead">
+      <LineId Id="3" Count="268" />
+      <LineId Id="284" Count="0" />
+      <LineId Id="281" Count="0" />
+      <LineId Id="283" Count="0" />
+      <LineId Id="280" Count="0" />
+      <LineId Id="272" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPara.seqWrite">
+      <LineId Id="3" Count="207" />
+      <LineId Id="212" Count="10" />
+      <LineId Id="224" Count="10" />
+      <LineId Id="236" Count="24" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxPara.setValue">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="cutStrNumberToSeperator" Id="{9b79633a-536a-4657-9d54-26ecc62eb6cc}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Cut "number" from left site of string. Value will be written into LREAL Target variable in case found string is a valid number
+//Function return value will be S_OK if a number is found, S_FALSE if string is empty and E_HRESULTADSERR.ERROR in case found characters are not a number
+//Attention! do not use variables smaller then T_MaxString for Source parameter
+FUNCTION cutStrNumberToSeperator : HRESULT
+VAR_INPUT
+	Seperator									:	STRING(5);
+END_VAR
+VAR_IN_OUT
+	Source										:	T_MAXSTRING;
+	Target										:	LREAL;
+END_VAR
+VAR
+	tmpString									:	STRING;
+	pSource										:	POINTER TO 	T_MAXSTRING;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+	pSource										:= ADR(Source);
+	tmpString									:= cutStrToSeperator(Seperator, pSource^);
+	IF tmpString[0] = 0
+	THEN
+		cutStrNumberToSeperator					:= S_FALSE;				
+	ELSIF isStringNumeric(ADR(tmpString)) 
+	THEN 
+		Target 									:= TO_LREAL(tmpString); 
+	
+		cutStrNumberToSeperator					:= S_OK;
+	ELSE 
+		cutStrNumberToSeperator					:= E_HRESULTADSERR.ERROR;
+	END_IF
+					]]></ST>
+    </Implementation>
+    <LineIds Name="cutStrNumberToSeperator">
+      <LineId Id="51" Count="0" />
+      <LineId Id="15" Count="2" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

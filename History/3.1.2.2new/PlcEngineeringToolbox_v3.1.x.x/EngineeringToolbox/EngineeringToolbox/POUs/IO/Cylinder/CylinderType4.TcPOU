@@ -1,0 +1,112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="CylinderType4" Id="{7f600f9e-9a61-41ae-baae-dbe72733a48a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Cylinder with 2x inputs each for work and base position, extended from FB Cylinder
+FUNCTION_BLOCK CylinderType4 EXTENDS Cylinder
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT  
+END_VAR                                     			
+VAR_OUTPUT    
+{attribute 'displaymode':='binary'}
+	ErrInfo													:	BYTE; //.0 BP#1 | .1 BP#2 | .2 WP#1 | .3 WP#2 | .6 Logic Pair#1 | .7 Logic Pair#2 
+END_VAR
+VAR// IOs 
+	SensorBasePos2											: INPUT;
+	SensorWorkPos2											: INPUT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Cylinder	with two inputs for work and base pos each					      	*)
+	(* Includes functionblock "INPUT" 												*)
+	(********************************************************************************)
+
+(* Write Output *****************************************************)
+	IF ToBasePos 	
+	THEN
+		moveToBasePos();
+	ELSIF ToWorkPos AND NOT ToBasePos
+	THEN
+		moveToWorkPos();
+	ELSE
+		switchOff();
+	END_IF
+
+(* Reedkontakte lesen ***********************************************)
+	_readSensors();
+	
+(* Status *************************************************)
+	_writeStatus();
+                        	
+(* ack Error **********************************************************)
+	IF Quit  THEN  reset(); END_IF
+
+(* Timeout  ************************************************)
+	_runtimeChk();
+	
+(*********************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="_readSensors" Id="{c6740986-8719-4c54-b62a-ffbf01777f68}">
+      <Declaration><![CDATA[METHOD PROTECTED _readSensors : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Call super read sensors first *********************************)
+	SUPER^._readSensors();
+
+(* check inputs 2# ************************************************)
+	SensorBasePos2(
+		Force	:= SensorBasePos.Force ,
+		Invert	:= SensorBasePos.Invert,
+		PT_ON	:= SensorBasePos.PT_ON,
+		PT_OFF	:= SensorBasePos.PT_OFF,
+		Q_DIRECT=>,
+		Q		=> ,
+		Q_RT	=> ,
+		Q_FT	=> ,
+		IN		=> );
+
+
+	SensorWorkPos2(
+		Force	:= SensorWorkPos.Force,
+		Invert	:= SensorWorkPos.Invert,
+		PT_ON	:= SensorWorkPos.PT_ON,
+		PT_OFF	:= SensorWorkPos.PT_OFF,
+		Q_DIRECT=>,
+		Q		=> ,
+		Q_RT	=> ,
+		Q_FT	=> ,
+		IN		=> );
+		
+(* Write status ******************************************)
+	InBasePos 									:= SensorBasePos.Q AND SensorBasePos2.Q;
+	InWorkPos 									:= SensorWorkPos.Q AND SensorWorkPos2.Q;
+	
+(* Write error info ***************************************)
+	ErrInfo.0									:= TonErrBasePos.Q AND NOT SensorBasePos.Q;
+	ErrInfo.1									:= TonErrBasePos.Q AND NOT SensorBasePos2.Q;
+	ErrInfo.2									:= TonErrWorkPos.Q AND NOT SensorBasePos.Q;
+	ErrInfo.3									:= TonErrWorkPos.Q AND NOT SensorWorkPos2.Q;
+
+	ErrInfo.6									:= SensorBasePos.Q AND SensorWorkPos.Q;
+	ErrInfo.7									:= SensorBasePos2.Q AND SensorWorkPos2.Q;
+	
+(**************************************************************)
+	_readSensors								:= TRUE;
+	
+(*****************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CylinderType4">
+      <LineId Id="472" Count="2" />
+      <LineId Id="704" Count="23" />
+      <LineId Id="666" Count="0" />
+    </LineIds>
+    <LineIds Name="CylinderType4._readSensors">
+      <LineId Id="62" Count="42" />
+      <LineId Id="39" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

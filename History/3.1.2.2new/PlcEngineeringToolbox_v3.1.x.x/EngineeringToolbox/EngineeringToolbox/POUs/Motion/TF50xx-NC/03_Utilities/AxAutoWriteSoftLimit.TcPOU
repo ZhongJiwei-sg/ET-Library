@@ -1,0 +1,136 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="AxAutoWriteSoftLimit" Id="{6f1c5a0f-9aeb-4f14-861a-85f7af9cba01}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK AxAutoWriteSoftLimit
+VAR_INPUT
+	Enable													:	BOOL := FALSE; (* Enable Block *)
+	AxId													: 	DWORD; (* ID der Achse *)
+	SoftLimitPos											:	LREAL;
+	SoftLimitNeg											:	LREAL;
+END_VAR                         							
+VAR_IN_OUT                      							
+END_VAR                         							
+VAR_OUTPUT        
+	Busy													:	BOOL := FALSE;
+	Error													:	BOOL := FALSE;
+	{attribute 'displaymode':='hex'}  
+	ErrorID													:	UDINT := 0;
+END_VAR                         	
+VAR
+(* Cache **********************************************************************)
+	State													: 	INT;
+	MemLimitPos												:	LREAL;
+	MemLimitNeg												:	LREAL;
+	WriteReg												:	BYTE;
+
+(* Instances *******************************************************************)
+	WriteAdsPara											: 	ADSWRITE := (NetId	:= '' , Port := 500, TmOut	:= DEFAULT_ADS_TIMEOUT);
+
+(* Dummy  *********************************************************************)
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Easy soft limit change 																		*)
+	(************************************************************************************************)
+
+(* writing parameters *******************************************************************************)
+IF NOT Enable 
+THEN
+	MemLimitPos												:= SoftLimitPos;
+	MemLimitNeg												:= SoftLimitNeg;
+	                										
+	State 													:= 0;
+	Error													:= FALSE;
+	ErrorID													:= 0;
+	Busy 													:= FALSE;
+ELSIF Axid = 0 
+THEN
+	ErrorID													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Error													:= FALSE;
+	Busy													:= FALSE;
+ELSE
+	CASE State OF
+	0:	(* Init *)
+
+		Busy 												:= FALSE;
+
+		IF NOT WriteAdsPara.BUSY
+			AND NOT WriteAdsPara.WRITE
+		 	AND NOT Error
+		THEN
+			WriteReg.0										:= SoftLimitPos <> MemLimitPos;
+			WriteReg.1										:= SoftLimitNeg <> MemLimitNeg;
+			
+			IF WriteReg <> 0
+			THEN
+				Busy 										:= TRUE;
+				state										:= state + SEL(WriteReg.0, 2, 1); //Jump to 2 if only negative changed
+				MemLimitPos									:= SoftLimitPos;
+				MemLimitNeg									:= SoftLimitNeg;
+			END_IF
+		ELSE
+			WriteAdsPara	(Write := FALSE);
+		END_IF
+
+	1: (* Write positive limit to NC ****************************************************************)
+		WriteAdsPara( Write := WriteReg.0, IdxGrp	:=16#4000+AxID, IdxOffs	:=16#1000E, LEN	:=SIZEOF(MemLimitPos), SrcAddr	:=ADR(MemLimitPos));	
+		IF NOT WriteAdsPara.Busy
+		THEN
+			IF WriteAdsPara.Err 
+			THEN
+				ErrorId										:= WriteAdsPara.ERRID;
+				Error										:= TRUE;
+				Busy										:= FALSE;
+				state										:= 0;
+			ELSE           									
+				State 										:= State + 1;
+			END_IF   
+			WriteAdsPara(Write := FALSE);      	
+		END_IF
+
+
+	2: (* Write negative limit to NC ****************************************************************)
+		WriteAdsPara( Write := WriteReg.1, IdxGrp	:=16#4000+AxID, IdxOffs	:=16#1000D, LEN	:=SIZEOF(MemLimitNeg), SrcAddr	:=ADR(MemLimitNeg));	
+		IF NOT WriteAdsPara.Busy
+		THEN
+			IF WriteAdsPara.Err 
+			THEN
+				ErrorId										:= WriteAdsPara.ERRID;
+				Error										:= TRUE;
+				Busy										:= FALSE;
+				state										:= 0;
+			ELSE           									
+				State 										:= 0;
+			END_IF   
+			WriteAdsPara(Write := FALSE);      	
+		END_IF
+	END_CASE
+END_IF
+
+(************************************************************************************************************************)]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxAutoWriteSoftLimit">
+      <LineId Id="3" Count="76" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

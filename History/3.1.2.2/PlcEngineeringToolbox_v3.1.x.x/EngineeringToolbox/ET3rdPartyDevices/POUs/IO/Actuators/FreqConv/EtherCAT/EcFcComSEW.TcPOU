@@ -1,0 +1,390 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EcFcComSEW" Id="{679bc6c3-a34f-458a-b007-6cccbda43d27}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EcFcComSEW IMPLEMENTS I_ActuatorFwdBwd(* SEW *)
+VAR_INPUT
+	ResetTrig												:	BOOL := TRUE;	//Resets error with rising edge 
+	Start													:	BOOL := FALSE;	//motor rotates in right direction when TRUE
+	StartBwd												:	BOOL := FALSE; 	//motor rotates in left direction when TRUE
+	Contactor												:	BOOL := FALSE;	//if available
+	Enable													:	BOOL := FALSE;	//enables drive
+	Feed													:	BOOL := TRUE;	//enables feed in right direction and should be set to FALSE when right limit sensor is reached
+	FeedBwd													:	BOOL := TRUE;	//enables feed in left direction and should be set to FALSE when left limit sensor is reached
+	Velo													: 	LREAL := 0.0;  	//sets speed of rotation
+	Ramp													:	LREAL := 1.0;	//sets slope of ramp
+	ProtSwitchOK											: 	FUSE;			//monitors feeding protective device
+	FuseBrakeOK												: 	FUSE;			//monitors feeding circuit breaker 
+END_VAR                     							
+VAR_OUTPUT                  							
+{attribute 'displaymode':='binary'}
+	Status													:	BYTE; 			//for HMI
+{attribute 'displaymode':='binary'}
+	UnitStatus												:	BYTE; 			(* device status
+																				0x0 not ready
+																				0x1 controller locked
+																				0x2 not enabled
+																				0x3 standstill current acitve, not enabled
+																				0x4 enabled
+																				0x8 default factory settings active *)
+	ErrorCode												:	BYTE; 			//see also SEW-documentation
+{attribute 'displaymode':='hex'}
+	Statusword1										AT  %I* : 	INT;			//status word 1 contains state of drive
+	ActVelo													: 	LREAL;			//actual scaled velocity of drive
+	ActCurrent										AT  %I* : 	INT;			//actual current consumption of drive
+	Ready													:	BOOL;			//TRUE when drive is ready to operate
+	Warning													:	BOOL;			//TRUE when a warning is active 
+	Busy													:	BOOL;			//Busy is TRUE at the rising edge of Enable and stays TRUE as long as the FB is performing any action. 	
+	Error													:	BOOL;			//Rising edge of Error informs that an error occurred during the execution of the Function Block 	 	
+END_VAR                 							
+VAR (* IO Internal *)
+{attribute 'displaymode':='hex'}   							
+	Q_Controlword1									AT  %Q* : 	INT;			//Frequence converter controlword 1
+	Q_TargetVelo									AT  %Q* : 	INT;			//Frequence converter set target velocity in digits
+	Q_Ramp											AT  %Q* :	INT;			//Frequence converter ramp time in 
+                        							
+	Q_Contactor 									AT  %Q* :	BOOL;			//Hardware output 
+	_ActVeloDigit									AT  %I* : 	INT; 			//Frequence converter actual velocity in digits based on rpm 
+END_VAR                 								
+VAR    
+	QuitIntern												:	BOOL;                 	
+END_VAR                 	
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Com SEW MovitracB over Ethercat Gateway 		V2.0	*)
+(********************************************************)
+
+(* Protection Switch *****************************************)
+	IF ResetTrig 
+	THEN 
+		reset(); 
+	END_IF
+	
+	ProtSwitchOK();
+	FuseBrakeOK(); (* same parameter like ProtSwitch *)
+
+(* Contactor ********************************************************)
+	Q_Contactor 											:= Contactor AND ProtSwitchOK.Q AND FuseBrakeOK.Q;
+
+(* interpret status word *********************************)
+	(*EndstufeFRG											:= Statusword1.0; *)
+	Ready													:= Statusword1.1 AND Q_Contactor;
+	Warning													:= Statusword1.5 AND Ready ;
+	Error													:= Statusword1.5 AND NOT Ready AND Q_Contactor ;
+	(*EndlLinksAktiv 										:= Statusword1.6; *)
+	(*EndlLinksAktiv 										:= Statusword1.7; *)
+                        									
+	ActVelo													:= INT_TO_LREAL(_ActVeloDigit) * 0.2;
+	Busy													:= Ready AND Q_Controlword1.2 AND ActVelo > 5.0;
+                        	
+(* interpret HighByte status word 1 ********************)
+	(* Init *)
+	UnitStatus := ErrorCode 								:= 0;
+
+	IF Q_Contactor THEN
+		IF NOT Statusword1.5 THEN
+			UnitStatus.0 									:= Statusword1.8;
+			UnitStatus.1 									:= Statusword1.9;
+			UnitStatus.2 									:= Statusword1.10;
+			UnitStatus.3									:= Statusword1.11;
+			UnitStatus.4 									:= Statusword1.12;
+			UnitStatus.5 									:= Statusword1.13;
+			UnitStatus.6 									:= Statusword1.14;
+			UnitStatus.7 									:= Statusword1.15;
+		ELSE                								
+			ErrorCode.0 									:= Statusword1.8;
+			ErrorCode.1 									:= Statusword1.9;
+			ErrorCode.2 									:= Statusword1.10;
+			ErrorCode.3										:= Statusword1.11;
+			ErrorCode.4 									:= Statusword1.12;
+			ErrorCode.5 									:= Statusword1.13;
+			ErrorCode.6 									:= Statusword1.14;
+			ErrorCode.7 									:= Statusword1.15;
+		END_IF
+	END_IF
+
+(* write contorlword 1  *********************************)
+	Q_Controlword1.0 										:= FALSE; (* controller locked=1/0=enabled *)
+	Q_Controlword1.1 										:= Enable AND Q_Contactor; (* controller enabled=1/0=rapid stop *)
+	Q_Controlword1.2 										:= FeedBwd AND StartBwd AND NOT Start
+																OR Feed AND Start AND NOT StartBwd; (* enable start FU *)
+	Q_Controlword1.6 										:= QuitIntern;
+	Q_Controlword1.8 										:= NOT Start AND StartBwd; (* rotation direction 0=right/1=left *)
+                        									
+(* setvalue **************************************)
+	IF 	Start 
+		AND NOT StartBwd 
+		AND Feed 
+	THEN
+		Q_TargetVelo 										:= LREAL_TO_INT(Velo) * 5; (* 5 Digit = 1 rpm *)
+	ELSIF StartBwd 
+		AND NOT Start 
+		AND FeedBwd 
+	THEN
+		Q_TargetVelo 										:= (LREAL_TO_INT(Velo) * 5 ) * -1; (* 5 Digit = 1 rpm *)
+	ELSE
+		Q_TargetVelo 										:= 0;
+	END_IF
+
+(* set ramp ******************************************)
+	Q_Ramp	 												:= LREAL_TO_INT(Ramp);
+
+(* Ack FALSE **********************************************)
+	QuitIntern												:= FALSE;
+	
+(* HmiStatus **************************************************)
+	Status.0 												:= Q_Controlword1.2 AND Q_Controlword1.8 ; //counter-clockwise rotation
+	Status.1 												:= Q_Controlword1.2 AND NOT  Q_Controlword1.8; //clockwise rotation
+	Status.2 												:= FALSE;
+	Status.3												:= FALSE;
+	Status.4 												:= FeedBwd;
+	Status.5 												:= Feed;
+	Status.7 												:= Ready;
+	Status.7 												:= Error;
+	                    									
+
+(**************************************************************)]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{c5b6fc1f-dde2-40b8-b233-28dff58c433b}" />
+    <Folder Name="properties" Id="{19fa4e43-a7be-41df-8b18-bf96ea246790}" />
+    <Property Name="backwardStarted" Id="{10c9b2a9-61ec-42b0-9e8f-cbab0b5e8688}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public backwardStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0d45caf6-166a-48e7-b04c-ae79692da7f8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[backwardStarted := Q_Controlword1.2 and Q_TargetVelo < 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="forwardStarted" Id="{3f58d645-18c2-4fc8-88f7-349ac31212cd}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public forwardStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f0e9e8c1-8703-4f1f-8565-3c2b0589d697}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[forwardStarted := Q_Controlword1.2 and Q_TargetVelo > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inError" Id="{5049f148-7914-4b32-9c15-8f04f0023308}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public inError : bool]]></Declaration>
+      <Get Name="Get" Id="{850f8206-bb38-4254-a168-f575cd5f9963}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inError := Error or not ProtSwitchOK.Q or not FuseBrakeOK.Q;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isBusy" Id="{60d353b9-7cc6-4b1d-b480-e5afc199adf6}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isBusy : bool]]></Declaration>
+      <Get Name="Get" Id="{2dee6a60-f5a3-46b4-b717-7db0c0d914e4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy := Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOff" Id="{0f66e3bc-ce6c-4366-b9f3-e7e0114ef75e}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6693a001-69d8-4057-b23b-45f49090e2d7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOff := NOT Q_Contactor or Q_TargetVelo = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOn" Id="{2e2902df-2e27-45fc-b987-92f845e4010d}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f997b1de-5b8e-426c-80aa-49561934307d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOn := Q_Contactor and Q_TargetVelo <> 0 and not inError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="noFeed" Id="{47f74853-ffae-4f5f-8cac-36d58480df7b}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY noFeed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{db4bd5a0-5125-4376-a345-c6733161a257}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[noFeed := NOT Feed and not FeedBwd;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ok" Id="{d2b69421-394e-4f71-ab54-70cb27c7844f}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY ok : bool]]></Declaration>
+      <Get Name="Get" Id="{5c1172a3-ddac-4d80-91f3-0c62709cf514}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ok := isOn;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{26aa0d5c-8df9-46f1-aed8-07ce89504f66}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC reset : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[QuitIntern 	:= Q_Controlword1.6   							:= TRUE;
+ProtSwitchOK.reset();
+FuseBrakeOK.reset();
+reset													:= TRUE;
+															]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setContactorOFF" Id="{3e0d2cb1-c160-4dd4-a910-f84dfef7f4e6}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setContactorOFF : BOOL //Return true if contactor is off and not busy
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q_Contactor := Contactor 									:=FALSE;
+							
+SetContactorOFF 											:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setContactorON" Id="{2befef72-cf05-48c1-853e-4e3fe97c9bb9}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setContactorON : bool //return true if contactor on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q_Contactor := Contactor 									:= ProtSwitchOK.Q AND FuseBrakeOK.Q ;
+SetContactorON												:= Q_Contactor;
+															]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startBackward" Id="{3b3127dd-54c5-460c-ae28-d6f3a24f89f9}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC startBackward : bool //Return busy flag
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= FALSE; 
+StartBwd 													:= TRUE;
+Q_Controlword1.2 											:= FeedBwd AND ProtSwitchOK.Q; (* FRG Start FU *)
+Q_Controlword1.8 											:= Q_Controlword1.2 ; (* Drehrichtung 0=Rechts/1=Links *)
+Busy														:= Q_Controlword1.2;
+startBackward												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startForward" Id="{2894c96f-b2bf-45a5-aedd-51d99ee0f67b}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC startForward : bool //Return busy flag
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= TRUE; 
+StartBwd 													:= FALSE;
+Q_Controlword1.2 											:= Feed AND Start AND NOT StartBwd AND ProtSwitchOK.Q; (* FRG Start FU *)
+Q_Controlword1.8 											:= FALSE ; (* Drehrichtung 0=Rechts/1=Links *)
+Busy														:= Q_Controlword1.2;
+startForward												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOff" Id="{317a0205-d058-4f55-bcde-d5baf6125563}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC switchOff : BOOL //Return true if stopped / busy = false
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= FALSE;
+StartBwd													:= FALSE;
+Q_Controlword1.2 											:= FALSE;
+switchOff													:= NOT Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{d123cf3f-ea3a-4563-94ed-fef19fdb3fda}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC switchOn : BOOL  //True if motor is switched on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[switchOn := startForward();]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EcFcComSEW">
+      <LineId Id="1975" Count="91" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.backwardStarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.forwardStarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.inError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.isOff.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.isOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.noFeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.ok.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.reset">
+      <LineId Id="13" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.setContactorOFF">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.setContactorON">
+      <LineId Id="7" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.startBackward">
+      <LineId Id="21" Count="4" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.startForward">
+      <LineId Id="23" Count="1" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="34" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.switchOff">
+      <LineId Id="15" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcComSEW.switchOn">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

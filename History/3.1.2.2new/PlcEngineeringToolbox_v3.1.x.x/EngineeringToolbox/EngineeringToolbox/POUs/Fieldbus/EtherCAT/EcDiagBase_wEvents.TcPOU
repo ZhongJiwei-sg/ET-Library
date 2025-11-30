@@ -1,0 +1,175 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EcDiagBase_wEvents" Id="{95b9dcfe-0377-4d64-8925-00ba93b84399}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EcDiagBase_wEvents EXTENDS EcDiagBase
+VAR_OUTPUT CONSTANT         								
+END_VAR
+VAR_INPUT
+	ConfirmTrig												:	BOOL;
+	SourceId												: 	UDINT := 103000; //Multisource id 
+END_VAR                     								
+VAR_OUTPUT                  								
+	{attribute 'displaymode':='binary'}
+	EventStatus												:	DWORD;
+END_VAR
+VAR
+(* Local  ***********************************************************)
+
+	
+(* trigger ********************************************************)
+
+
+(* Timer **********************************************************)
+
+
+(* events *********************************************************)
+	Event													:	EventHandlingGrp10;
+	
+(* function-block *************************************************)
+
+	
+(* dummy **********************************************************)
+										
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Base diagnostic of EtherCAT with events		*)
+(************************************************)
+
+(* Call super  *************************************************)
+	SUPER^();
+	
+(* Fire events **********************************************************************)
+	_callEvents();
+	
+(**************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="_callEvents" Id="{4002b15b-dee6-4f75-800d-2f21b58aba57}">
+      <Declaration><![CDATA[METHOD PRIVATE _callEvents : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Events anzeigen ***************************************************)
+	(* Init events *)
+	IF Event.no[1].Text1 <> IO.Name
+	THEN
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT 
+		DO
+			Event.no[i].Text1								:= IO.Name;
+		END_FOR
+	END_IF 
+
+	(* Master Error Event *)
+	
+	Event.no[1].Flag										:= NOT IO.DevStateBits.NoError AND NOT IO.DevStateChanged AND NOT ConfirmTrig;
+	Event.no[1].pText3										:= ADR(IO.DevStateText);
+
+	(* Error Port Link *)
+	Event.no[2].Flag										:=(NOT IO.LinkOK_PortA OR NOT IO.LinkOK_PortB) AND NOT SlavesDiag.Busy AND NOT tonDelTrigDiag.IN;
+	IF Event.no[2].Flag
+	THEN
+		Event.no[2].Text2									:= TO_STRING(NoOfMissedSlaves);
+		Event.no[2].pText3									:= ADR(SlavesDiag.FirstErrorSlave.ConfigName);	
+	END_IF
+
+	(* No Slave Com *)
+	Event.no[3].Flag										:= IO.AllFramesMissing AND NoOfMissedSlaves = 0 AND NOT IO.DevStateChanged AND NOT SlavesDiag.Busy AND NOT tonDelTrigDiag.IN;
+	IF Event.no[3].Flag
+	THEN
+		Event.no[3].Text2									:= CONCAT(CONCAT('(',SlavesDiag.FirstErrorSlave.ConfigType), CONCAT(') , ',TO_STRING(NoOfMissedSlaves))) ;
+		Event.no[3].pText3									:= ADR(SlavesDiag.FirstErrorSlave.ConfigName);	
+	END_IF
+
+	(* Slave State Error *)
+	Event.no[4].Flag										:= NoOfSlavesNOK > 0 AND NOT IO.DevStateChanged AND NOT SlavesDiag.Busy AND NOT tonDelTrigDiag.IN;
+	IF Event.no[4].Flag
+	THEN
+		Event.no[4].Text2									:= CONCAT(SlavesDiag.FirstErrorSlave.DevStateText , CONCAT(', Name: ', SlavesDiag.FirstErrorSlave.ConfigName));
+		Event.no[4].pText3									:= ADR(SlavesDiag.FirstErrorSlave.ConfigTypeIdentity);	
+	END_IF
+	
+	(* Slave Count Error *)
+	Event.no[5].Flag										:= NoOfMissedSlaves <> 0 AND NoOfSlavesNOK > 0 AND NOT ConfirmTrig AND NOT SlavesDiag.Busy AND NOT tonDelTrigDiag.IN;
+	IF Event.no[5].Flag
+	THEN
+		Event.no[5].Text2									:= CONCAT('Cfg Slaves:',CONCAT(TO_STRING(IO.CfgSlaveCount),CONCAT(' | Found:',TO_STRING(IO.SlaveCountTotal))));
+		Event.no[5].pText3									:= ADR(SlavesDiag.FirstErrorSlave.ConfigName);
+	END_IF	
+		
+	(* Slaves diag error *)
+	Event.no[6].Flag										:= SlavesDiag.Error ;          									
+	IF Event.no[6].Flag 									
+	THEN    
+		Event.no[6].Text2									:= '';            									
+		Event.no[6].pText3									:= ADR(SlavesDiag.ErrorText);
+	END_IF	
+	
+	(* Watchdog triggered  *)
+	Event.no[7].Flag										:= io.DevStateBits.WatchdogTriggered;	
+	IF Event.no[7].Flag 
+	THEN 
+		Event.no[7].pText3									:= ADR(IO.DevStateText);
+	END_IF	
+	
+	(* DC not in sync  *)
+	Event.no[8].Flag										:= IO.DevStateBits.DcNotInSync;
+	IF Event.no[8].Flag 
+	THEN 
+		Event.no[8].pText3									:= ADR(IO.DevStateText);
+	END_IF	
+	
+	(* Out of send ressources  *)
+	Event.no[9].Flag										:= IO.DevStateBits.OutOfSendResources;
+	IF Event.no[9].Flag 
+	THEN 
+		Event.no[9].pText3									:= ADR(IO.DevStateText);
+	END_IF	
+
+	(* IO locked  *)
+	Event.no[10].Flag										:= IO.DevStateBits.IOLockedAfterLinkError;		
+	IF Event.no[10].Flag 
+	THEN 
+		Event.no[10].pText3									:= ADR(IO.DevStateText);
+	END_IF
+	
+	(* Work EventCtrl *)
+	Event(
+		ConfirmTrig	:= ConfirmTrig,
+		SourceId	:= SourceId ,
+		no			:= ,
+		Disable		:= NOT Enable,
+		AutoConfirm := ,
+		Status		=> EventStatus);
+		
+(*****************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="confirm" Id="{3e115011-3fd2-43f0-8cd0-5baea8a25729}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[confirm			:= Event.confirm();]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EcDiagBase_wEvents">
+      <LineId Id="769" Count="3" />
+      <LineId Id="781" Count="0" />
+      <LineId Id="1076" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="1043" Count="2" />
+    </LineIds>
+    <LineIds Name="EcDiagBase_wEvents._callEvents">
+      <LineId Id="150" Count="10" />
+      <LineId Id="241" Count="0" />
+      <LineId Id="161" Count="79" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcDiagBase_wEvents.confirm">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

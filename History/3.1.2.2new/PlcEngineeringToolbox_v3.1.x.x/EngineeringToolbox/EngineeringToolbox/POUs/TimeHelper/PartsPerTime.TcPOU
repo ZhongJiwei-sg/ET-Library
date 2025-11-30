@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="PartsPerTime" Id="{bed77664-6a65-4424-b53b-6ec77325c335}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//This function-block counts pieces/parts per selectable basetime 
+FUNCTION_BLOCK PartsPerTime
+VAR_INPUT
+	NewPartTrig												: 	BOOL	:= FALSE;	// event
+	ResetTrig												: 	BOOL	:= FALSE;	// reset counter
+	Basetime												:	TIME 	:= T#60S;	// basetime
+END_VAR             										
+VAR_OUTPUT          										
+	Forecast												: 	LREAL;				// calulated forecast for basetime
+	Counted													: 	DINT;				// counted impulses in last basetime period
+	CountAct												:	DINT;				// actual counter in basetime period
+	Q_RT													:	BOOL;				// rising event of trigger input
+END_VAR             										
+VAR                 										
+	rtTrigger												: 	R_TRIG;
+	TON														:	TON;
+	StartTime												: 	TIME;
+	StartTime_Old											: 	TIME;
+	TimeImpImp												: 	TIME;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[rtTrigger(CLK := NewPartTrig,Q => Q_RT);
+TON(IN := NOT TON.Q AND NOT ResetTrig, PT := Basetime);
+
+IF TON.Q 
+THEN
+	Counted 												:= CountAct;
+	CountAct 												:= 0;
+END_IF
+
+IF ResetTrig 
+THEN
+	reset();
+ELSIF rtTrigger.Q 
+THEN
+	addNewPart();
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="addNewPart" Id="{53b50b3b-8eb0-4b8e-a33c-f51a36b1db87}">
+      <Declaration><![CDATA[METHOD PUBLIC addNewPart : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	StartTime_Old 											:= StartTime;
+	StartTime 												:= TIME();
+	TimeImpImp	 											:= MAX(T#1MS ,StartTime - StartTime_Old);
+	Forecast	 											:= 1000.0 / (TIME_TO_LREAL(TimeImpImp));
+	Forecast 												:= Forecast * (TIME_TO_REAL(Basetime) * 0.001);
+	CountAct 												:= CountAct + 1;
+	addNewPart												:= TRUE;
+	Q_RT													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{d0b48fd0-273f-4156-aaf9-6fd6ad7e81da}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : bool //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	Forecast												:= 0;
+	Counted													:= 0;
+	CountAct												:= 0;
+	reset													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="PartsPerTime">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="PartsPerTime.addNewPart">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="PartsPerTime.reset">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

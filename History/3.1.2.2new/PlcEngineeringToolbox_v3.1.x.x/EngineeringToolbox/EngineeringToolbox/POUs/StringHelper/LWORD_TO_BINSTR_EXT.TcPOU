@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="LWORD_TO_BINSTR_EXT" Id="{0d2ccd10-40d1-4409-af68-19b73bdafae6}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+FUNCTION LWORD_TO_BINSTR_EXT : T_MaxString //This function converts a decimal number into a binary string (base 2), where the digits are separated according to the selected mode 
+//e.g. 1111000011110000 -> 1111_0000_1111_0000 
+VAR_INPUT
+	In														: LWORD;//The decimal number requiring conversion.
+	Precision												: INT; //Minimum number of displayed digits (digits), filled up with 0 from left if significant digits are less then that
+	Mode													: INT; //1=Separate high and low word / 2=Separate bytes / 3=Separate nibbles /ELSE no separation | Separator = Param.DOWRD_TO_XXXSTR_EXT_SEPARATOR
+END_VAR
+VAR													
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[LWORD_TO_BINSTR_EXT 										:= LWORD_TO_BINSTR(in,precision);
+
+CASE mode OF
+1:// Separate by low word and high word
+	LWORD_TO_BINSTR_EXT										:= INSERT_EXT(LWORD_TO_BINSTR_EXT,PARAM.XWORD_TO_XXXSTR_EXT_SEPARATOR,16);
+	
+2://Separate by bytes
+	LWORD_TO_BINSTR_EXT										:= INSERT_EXT(LWORD_TO_BINSTR_EXT,PARAM.XWORD_TO_XXXSTR_EXT_SEPARATOR,8);
+	
+3://Separate by nibble
+	LWORD_TO_BINSTR_EXT										:= INSERT_EXT(LWORD_TO_BINSTR_EXT,PARAM.XWORD_TO_XXXSTR_EXT_SEPARATOR,4);
+END_CASE
+]]></ST>
+    </Implementation>
+    <LineIds Name="LWORD_TO_BINSTR_EXT">
+      <LineId Id="127" Count="0" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="89" Count="1" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

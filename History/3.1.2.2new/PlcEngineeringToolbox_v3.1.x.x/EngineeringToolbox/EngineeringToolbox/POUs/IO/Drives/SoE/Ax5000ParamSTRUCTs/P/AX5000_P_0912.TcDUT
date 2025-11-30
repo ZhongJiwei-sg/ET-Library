@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0912" Id="{be50d25e-b592-4f53-8bb4-a06a89070799}">
+    <Declaration><![CDATA[TYPE AX5000_P_0912 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Calibration:UINT;
+	Calibration_type:UINT;
+	Calibration_point:UINT;
+	Calibration_current:UINT;
+	Calibration_phase:UINT;
+	Calibration_tolerance:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

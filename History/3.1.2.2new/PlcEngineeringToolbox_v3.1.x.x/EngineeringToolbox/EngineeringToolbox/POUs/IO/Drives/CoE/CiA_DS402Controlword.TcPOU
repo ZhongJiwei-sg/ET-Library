@@ -1,0 +1,278 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="CiA_DS402Controlword" Id="{a10ef42a-c64d-4e19-9c16-13d4d0845468}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Controlword
+VAR_INPUT
+	SwitchOn 				: BOOL;	// BIT 0 
+	EnableVoltage 			: BOOL := TRUE; // Bit 1  
+	QuickStopOK 			: BOOL := TRUE; // Bit 2 inverse signal / TRUE = RUN -
+	EnableOperation 		: BOOL; // Bit 3 
+//	Operation mode specific Bit 4 	: BOOL; // Bit 4
+//	Operation mode specific Bit 5 	: BOOL; // Bit 5
+//	Operation mode specific Bit 6 	: BOOL; // Bit 6
+	FaultReset 				: BOOL; // Bit 7 
+	Halt 					: BOOL; // Bit 8 - Pauses the drive in all modes
+//	Operation mode specific Bit 9 	: BOOL; // Bit 9 - 
+//	Reserved Bit 10 	: BOOL; // Bit 10
+//	Manufacturere specific Bit 11 	: BOOL; // Bit 11
+//	Manufacturere specific Bit 12 	: BOOL; // Bit 12
+//	Manufacturere specific Bit 13 	: BOOL; // Bit 13
+//	Manufacturere specific Bit 14 	: BOOL; // Bit 14
+//	Manufacturere specific Bit 15 	: BOOL; // Bit 15	
+END_VAR
+VAR_OUTPUT
+	Cmd						:	eCiA_DS402_CONTROL_CMD;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="createControlword" Id="{af09360e-7f59-4703-9767-f0a295d44be2}">
+      <Declaration><![CDATA[METHOD PUBLIC createControlword : BOOL
+VAR_INPUT
+	StatusState												: 	eCiA_DS402_STATUS_STATE;
+END_VAR
+VAR_IN_OUT
+	Controlword												:	UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* work local state machine for control ****************************************************)
+	CASE StatusState OF
+	eCiA_DS402_STATUS_STATE.NOT_READY_TO_SWITCH_ON:
+		Controlword.0										:= FALSE;
+		Controlword.1										:= FALSE;
+		Controlword.2										:= FALSE;
+		Controlword.3										:= FALSE;
+		Cmd													:= eCiA_DS402_CONTROL_CMD.DISABLE_VOLTAGE;
+		
+	eCiA_DS402_STATUS_STATE.SWITCH_ON_DISABLED:
+		IF EnableVoltage
+		THEN //back to "not ready to switch on"
+			Controlword.0									:= FALSE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= TRUE;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SHUTDOWN;
+		ELSE //To "Ready to switch on"
+			Controlword.0									:= FALSE;
+			Controlword.1									:= FALSE;
+			Controlword.2									:= FALSE;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.DISABLE_VOLTAGE;
+		END_IF
+		
+	eCiA_DS402_STATUS_STATE.READY_TO_SWITCH_ON:
+		IF NOT EnableVoltage
+		THEN //Back to switched on disabled
+			Controlword.0									:= FALSE;
+			Controlword.1									:= FALSE;
+			Controlword.2									:= FALSE;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.DISABLE_VOLTAGE;
+		ELSIF SwitchOn
+		THEN //To switched on
+			Controlword.0									:= TRUE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SWITCH_ON;	
+		ELSE
+			Controlword.0									:= FALSE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SHUTDOWN;			
+		END_IF	
+		
+	eCiA_DS402_STATUS_STATE.SWITCHED_ON:
+		IF NOT EnableVoltage
+		THEN //Back to switched on disabled
+			Controlword.0									:= FALSE;
+			Controlword.1									:= FALSE;
+			Controlword.2									:= FALSE;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.DISABLE_VOLTAGE;
+		ELSIF NOT SwitchOn
+		THEN
+			Controlword.0									:= FALSE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SHUTDOWN;
+
+		ELSIF EnableOperation
+		THEN // To operation enabled
+			Controlword.0									:= TRUE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= TRUE;
+			Cmd												:= SEL(QuickStopOK,eCiA_DS402_CONTROL_CMD.QUICK_STOP,eCiA_DS402_CONTROL_CMD.ENABLE_OPERATION);												
+		ELSE
+			Controlword.0									:= TRUE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SWITCH_ON;						
+		END_IF
+		
+	eCiA_DS402_STATUS_STATE.OPERATION_ENABLED:
+		IF NOT EnableVoltage
+		THEN //Back to switch on disabled
+			Controlword.0									:= FALSE;
+			Controlword.1									:= FALSE;
+			Controlword.2									:= FALSE;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.DISABLE_VOLTAGE;
+		ELSIF NOT SwitchOn		
+		THEN // back to ready to switch on 
+			Controlword.0									:= FALSE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SHUTDOWN;	
+		ELSIF NOT EnableOperation 
+		THEN //go back to switched on
+			Controlword.0									:= TRUE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SWITCH_ON;
+		ELSE
+			Controlword.0									:= TRUE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= TRUE;
+			Cmd												:= SEL(QuickStopOK,eCiA_DS402_CONTROL_CMD.QUICK_STOP,eCiA_DS402_CONTROL_CMD.ENABLE_OPERATION);												
+		END_IF
+		
+	eCiA_DS402_STATUS_STATE.QUICK_STOP_ACTIVE:
+		IF NOT EnableVoltage
+		THEN //Back to switch on disabled
+			Controlword.0									:= FALSE;
+			Controlword.1									:= FALSE;
+			Controlword.2									:= FALSE;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.DISABLE_VOLTAGE;
+		ELSIF NOT SwitchOn		
+		THEN // back to ready to switch on 
+			Controlword.0									:= FALSE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SHUTDOWN;		
+		ELSIF NOT EnableOperation 
+		THEN //go back to switched on
+			Controlword.0									:= TRUE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SWITCH_ON;
+		ELSE
+			Controlword.0									:= TRUE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= TRUE;
+			Cmd												:= SEL(QuickStopOK,eCiA_DS402_CONTROL_CMD.QUICK_STOP,eCiA_DS402_CONTROL_CMD.ENABLE_OPERATION);												
+		END_IF
+		
+	eCiA_DS402_STATUS_STATE.FAULT_ACTIVE:
+		IF NOT EnableVoltage
+		THEN //back to "not ready to switch on"
+			Controlword.0									:= FALSE;
+			Controlword.1									:= FALSE;
+			Controlword.2									:= FALSE;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.DISABLE_VOLTAGE;
+		ELSE //To "Ready to switch on"
+			Controlword.0									:= FALSE;
+			Controlword.1									:= TRUE;
+			Controlword.2									:= QuickStopOK;
+			Controlword.3									:= FALSE;
+			Cmd												:= eCiA_DS402_CONTROL_CMD.SHUTDOWN;	
+		END_IF
+		
+	eCiA_DS402_STATUS_STATE.FAULT_REACTION_ACTIVE:
+		;	
+	END_CASE
+	
+(* Write controlword ********************************************************)
+	Controlword.7											:= FaultReset; 
+	createControlword										:= TRUE;
+(*****************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Controlword">
+      <LineId Id="54" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Controlword.createControlword">
+      <LineId Id="62" Count="4" />
+      <LineId Id="200" Count="1" />
+      <LineId Id="203" Count="0" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="210" Count="3" />
+      <LineId Id="209" Count="0" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="205" Count="3" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="73" Count="4" />
+      <LineId Id="214" Count="3" />
+      <LineId Id="78" Count="2" />
+      <LineId Id="218" Count="3" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="222" Count="3" />
+      <LineId Id="161" Count="0" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="84" Count="1" />
+      <LineId Id="362" Count="5" />
+      <LineId Id="361" Count="0" />
+      <LineId Id="86" Count="1" />
+      <LineId Id="226" Count="3" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="89" Count="1" />
+      <LineId Id="280" Count="3" />
+      <LineId Id="275" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="234" Count="3" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="348" Count="5" />
+      <LineId Id="347" Count="0" />
+      <LineId Id="355" Count="5" />
+      <LineId Id="354" Count="0" />
+      <LineId Id="98" Count="1" />
+      <LineId Id="238" Count="3" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="288" Count="4" />
+      <LineId Id="110" Count="2" />
+      <LineId Id="321" Count="5" />
+      <LineId Id="320" Count="0" />
+      <LineId Id="328" Count="5" />
+      <LineId Id="327" Count="0" />
+      <LineId Id="169" Count="1" />
+      <LineId Id="298" Count="3" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="311" Count="0" />
+      <LineId Id="293" Count="4" />
+      <LineId Id="113" Count="2" />
+      <LineId Id="146" Count="1" />
+      <LineId Id="266" Count="3" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="254" Count="3" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="116" Count="6" />
+      <LineId Id="124" Count="1" />
+      <LineId Id="60" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

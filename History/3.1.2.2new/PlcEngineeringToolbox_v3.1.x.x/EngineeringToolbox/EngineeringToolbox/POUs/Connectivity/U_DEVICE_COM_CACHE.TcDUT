@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="U_DEVICE_COM_CACHE" Id="{74595ac0-be83-4795-8f43-5c4bd6cf16e5}">
+    <Declaration><![CDATA[TYPE U_DEVICE_COM_CACHE :
+UNION
+	Text				:	STRING(PARAM.DEVICE_COM_MAX_CACHE-1);
+	Bytes				:	ARRAY[PARAM.DEVICE_COM_MIN_CACHE..PARAM.DEVICE_COM_MAX_CACHE] OF BYTE;	
+END_UNION
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

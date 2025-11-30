@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0044" Id="{6b74f7ef-4580-4ad4-8eea-c87dbba5e9d7}">
+    <Declaration><![CDATA[TYPE AX5000_S_0044 :
+STRUCT
+	Velocity_data_scaling_type:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

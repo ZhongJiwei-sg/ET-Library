@@ -1,0 +1,635 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="NciItp" Id="{1a294166-1f63-4234-bd09-b40e9b749c39}" SpecialFunc="None">
+    <Declaration><![CDATA[//Nci Interpolation group control - load,start,stop Nci programs as well start interpolated moves via Plc table (Tc2_PlcInterpolation library)
+//based on Tc2_NCI, TcNcCfg.lib, Tc2_PlcInterpolation librarys
+FUNCTION_BLOCK NciItp  EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	FNC_RESET												:	INT := 0; //Reset Nci group
+	FNC_LOAD												:	INT := 1; //Load Nci program as txt/nc file
+	FNC_START												:	INT := 2; //Start loaded Nci program
+	FNC_STOP												:	INT := 3; //Stop loaded Nci programm
+	FNC_FEED_TBL											:	INT := 4; //Feed table group - provided by Tc2_PlcInterpolation library
+END_VAR                     								
+VAR_INPUT                   								
+	Fnc														:	INT (FNC_RESET..FNC_FEED_TBL):= FNC_RESET;
+	Prg														:	T_MaxString := '';	//Program
+	rTable													:	REFERENCE TO ST_NciFeedGroupTable := 0; //-> NciItpTableEntry
+	rNCIRef													:	REFERENCE TO NCI_REF := 0;
+	StartPrgAfterLoading									:	BOOL := FALSE; //Return value TRUE = Start Program direct after loading 
+	LogFeederEntries										:	BOOL := FALSE; //Return value TRUE = Log tabel entries by Fnc FeedTbl
+	WaitForChnDoneByEndOfTbl								:	BOOL := FALSE; //Fnc FeedTabl - TRUE = FB is busy as long as the prg is running if table contains entry "ST_NciEndOfTables"
+END_VAR                     								
+VAR_IN_OUT                  								
+END_VAR                     								
+VAR_OUTPUT                  								
+	ErrorText												:	STRING(40);
+END_VAR
+VAR
+(* cache **************************************************************************)
+	MemFnc													:	INT := -1;
+	MemResetAfterStop										:	BOOL;
+                            								
+(* timer *)                 								
+                            	
+(* trigger *)               	
+
+(* MC-Function-block intances ******************************************************)
+	ItpLoadProgEx											:	ItpLoadProgEx;
+	ItpStartStopEx											:	ItpStartStopEx;
+	NciFeedTable											:	FB_NciFeedTable;
+	ItpResetEx2												:	ItpResetEx2 := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* NCI Program control																*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute );
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		ErrorText											:= '';
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_RESET							:
+		Reset(Execute:= Execute);
+	FNC_LOAD							:
+		LoadPrg(Execute:= Execute, Prg:= Prg);
+	FNC_START							:
+		StartPrg(Execute:= Execute);
+	FNC_STOP							:
+		StopPrg(Execute:= Execute);
+	FNC_FEED_TBL						:
+		FeedTbl(Execute:= Execute );
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorText										:= '';
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+		ErrorText											:= CONCAT('invalid parameter value(s) Fnc no: ' , INT_TO_STRING(MemFnc));
+	END_CASE
+
+
+(**************************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="feedTbl" Id="{3dbd2c65-a47c-4afe-a87b-4481175df0bb}">
+      <Declaration><![CDATA[METHOD PUBLIC feedTbl : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+//rTable
+VAR_INPUT
+	Execute													:	BOOL := FALSE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_FEED_TBL;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+ELSIF NOT __ISVALIDREF(rTable) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rTable invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		NciFeedTable.bExecute 								:= TRUE;
+	ELSIF NOT NciFeedTable.bFeedBusy
+		AND(
+		NOT NciFeedTable.bExecChannelDoneCheck
+		OR NciFeedTable.bChannelDone)
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		NciFeedTable.bExecute 								:= FALSE;
+	END_IF
+
+	NciFeedTable(
+		bExecute			:= ,
+		bReset				:= FALSE,
+		bLogFeederEntries	:= LogFeederEntries,
+		stFeedGroupTable	:= rTable,
+		stNciToPlc			:= rNCIRef.NciToPlc,
+		bFeedingDone		=> 	,
+		bChannelDone		=> ,
+		bFeedBusy			=> ,
+		bResetBusy			=> ,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF WaitForChnDoneByEndOfTbl
+	THEN
+		Busy 												:= NciFeedTable.bFeedBusy
+																OR
+																NciFeedTable.bFeedingDone
+																AND NciFeedTable.bExecChannelDoneCheck
+																AND NOT NciFeedTable.bChannelDone;
+                            								
+		Done												:= NciFeedTable.bChannelDone
+																OR
+																NciFeedTable.bFeedingDone
+																AND NOT NciFeedTable.bExecChannelDoneCheck;
+                            								
+	ELSE                    								
+		Busy												:= NciFeedTable.bFeedBusy;
+		Done												:= NciFeedTable.bFeedingDone;
+	END_IF
+
+	IF NOT Busy
+	THEN
+		IF NciFeedTable.bExecute
+		THEN
+			Error											:=	NciFeedTable.bError;
+			ErrorId											:= NciFeedTable.nErrorId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error NciFeedTable id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF                          					
+		IF NOT Execute                  					
+		THEN                            					
+			MemFnc											:= -1 ;
+			NciFeedTable(bExecute 							:= FALSE, stNciToPlc:= rNCIRef.NciToPlc, stFeedGroupTable:= rTable  );
+		END_IF                          	
+	END_IF                              	
+                                        	
+	FeedTbl													:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="loadPrg" Id="{2f66201a-193f-40f9-9713-8c43f90bd640}">
+      <Declaration><![CDATA[METHOD PUBLIC loadPrg : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+	Prg														:	T_MaxString := ''; //if Prg = '' then INPUT THIS^.Prg used
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_LOAD;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+END_IF
+	
+	IF Execute AND NOT ItpLoadProgEx.bExecute
+	THEN
+		IF LEN(Prg) > 0
+		THEN
+			ItpLoadProgEx.sPrg								:= Prg;
+		ELSE                    							
+			ItpLoadProgEx.sPrg								:= THIS^.Prg;	
+		END_IF
+	END_IF	
+	
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpLoadProgEx.bExecute 								:= TRUE;
+	ELSIF NOT ItpLoadProgEx.bBusy       					
+		AND(                            					
+		NOT ItpStartStopEx.bBusy        					
+		OR NOT StartPrgAfterLoading)    					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpLoadProgEx.bExecute 								:= FALSE;
+		IF StartPrgAfterLoading             				
+		THEN                                				
+			ItpStartStopEx.bStart 							:= FALSE;
+		END_IF
+	END_IF
+	
+	ItpLoadProgEx(
+		bExecute	:= ,
+		sPrg		:= ,
+		nLength		:= INT_TO_UDINT(LEN(Prg)),
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> ,
+		bErr		=> ,
+		nErrId		=> );
+
+	IF StartPrgAfterLoading
+		OR ItpStartStopEx.bBusy
+	THEN
+		ItpStartStopEx(
+			bStart		:= ItpLoadProgEx.bExecute
+							AND NOT ItpLoadProgEx.bErr
+							AND NOT ItpLoadProgEx.bBusy,
+			bStop		:= FALSE,
+			tTimeOut	:=  ,
+			sNciToPlc	:= rNCIRef.NciToPlc,
+			bBusy		=> ,
+			bErr		=> ,
+			nErrId		=> );
+	END_IF
+
+
+	Busy													:= ItpStartStopEx.bBusy OR ItpLoadProgEx.bBusy;
+                                        					
+	IF StartPrgAfterLoading             					
+	THEN                                					
+		Done												:= NOT Busy
+																AND NOT ItpStartStopEx.bErr
+																AND ItpStartStopEx.bStart;
+	ELSE                                	    		
+		Done												:= NOT Busy
+																AND NOT ItpLoadProgEx.bErr
+																AND ItpLoadProgEx.bExecute;
+	END_IF                                      		
+                                                	
+	IF NOT Busy                                 	
+	THEN
+		IF ItpLoadProgEx.bExecute
+			AND NOT StartPrgAfterLoading
+		THEN
+			Error											:=	ItpLoadProgEx.bErr;
+			ErrorId											:= ItpLoadProgEx.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpLoadProgEx id: ',  UDINT_TO_STRING(Errorid)));
+		ELSIF ItpStartStopEx.bStart 						
+		THEN                        						
+			Error												:=	ItpStartStopEx.bErr;
+			ErrorId											:= ItpStartStopEx.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpStartStopEx id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF                          					
+                                        					
+		IF NOT Execute                  	
+		THEN                            	
+			MemFnc											:= -1 ;
+			ItpLoadProgEx(bExecute := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+			IF StartPrgAfterLoading
+			THEN
+				ItpStartStopEx(bStart := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+			END_IF
+		END_IF
+	END_IF
+	
+	LoadPrg													:= Busy;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{9e820ca7-e408-4b41-b59a-5cf91b76f342}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+//rTable
+VAR_INPUT	
+	Execute													:	BOOL := FALSE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_RESET;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+ELSIF NOT __ISVALIDREF(rTable) AND FALSE 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rTable invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+END_IF
+
+IF Execute
+THEN
+	Error													:=	FALSE;
+	ErrorId													:= 0;
+	NciFeedTable.bReset 									:= __ISVALIDREF(rTable);
+	ItpResetEx2.bExecute									:= NOT __ISVALIDREF(rTable);
+ELSIF NOT NciFeedTable.bFeedBusy                        	
+AND NOT ItpResetEx2.bBusy                               	
+THEN                                                    	
+	Error													:=	FALSE;
+	ErrorId													:= 0;
+	NciFeedTable.bReset 									:= FALSE;
+	ItpResetEx2.bExecute									:= FALSE; 
+END_IF
+
+IF	NOT __ISVALIDREF(rTable)
+THEN
+	ItpResetEx2(
+		bExecute	:= ,
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> Busy,
+		bErr		=> ,
+		nErrId		=> );
+ELSE
+	NciFeedTable(
+		bExecute			:= FALSE,
+		bReset				:= ,
+		bLogFeederEntries	:= ,
+		stFeedGroupTable	:= rTable,
+		stNciToPlc			:= rNCIRef.NciToPlc,
+		bFeedingDone		=> ,
+		bChannelDone		=> ,
+		bFeedBusy			=> ,
+		bResetBusy			=> busy,
+		bError				=> ,
+		nErrorId			=> );
+END_IF
+Done														:= NOT NciFeedTable.bResetBusy AND NOT ItpResetEx2.bBusy
+															 	AND NOT NciFeedTable.bError AND NOT ItpResetEx2.bErr
+															 	AND(NciFeedTable.bReset OR ItpResetEx2.bExecute);
+                                                      	     
+IF NOT Busy                                           	     
+THEN                                                  	     
+	IF NciFeedTable.bReset                            	     
+	THEN                                              	     
+		Error												 :=	NciFeedTable.bError;
+		ErrorId												 := NciFeedTable.nErrorId;
+		ErrorText											 := SEL(Error , '' ,  CONCAT('Error NciFeedTable id: ',  UDINT_TO_STRING(Errorid)));
+	ELSIF ItpResetEx2.bExecute      						 
+	THEN                            						 
+		Error												 :=	ItpResetEx2.bErr;
+		ErrorId												 := ItpResetEx2.nErrId;
+		ErrorText											 := SEL(Error , '' ,  CONCAT('Error ItpResetEx2 id: ',  UDINT_TO_STRING(Errorid)));		
+	END_IF                                            	     
+	IF NOT Execute                                    	     
+	THEN                                                	
+		MemFnc												:= -1 ;
+		IF	NOT __ISVALIDREF(rTable)                    	
+		THEN                                            	
+			ItpResetEx2(bExecute							:= FALSE,sNciToPlc:= rNCIRef.NciToPlc);
+		ELSE                                            	
+			NciFeedTable(bReset 							:= FALSE, stNciToPlc:= rNCIRef.NciToPlc,stFeedGroupTable:= rTable );
+		END_IF                                          	
+	END_IF                                              	
+END_IF                                                  	
+                                                        	
+Reset														:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startPrg" Id="{3918457a-b964-4d26-8556-dfe034812b00}">
+      <Declaration><![CDATA[METHOD PUBLIC startPrg : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_START;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpStartStopEx.bStart 								:= TRUE;
+	ELSIF NOT ItpStartStopEx.bBusy      					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpStartStopEx.bStart 								:= FALSE;
+
+	END_IF
+	
+	ItpStartStopEx(
+		bStart		:= ,
+		bStop		:= FALSE,
+		tTimeOut	:=  ,
+		sNciToPlc:= rNCIRef.NciToPlc,
+		bBusy		=> busy,
+		bErr		=> ,
+		nErrId		=> );
+
+
+	Done													:= NOT ItpStartStopEx.bBusy
+																AND NOT ItpStartStopEx.bErr
+																AND ItpStartStopEx.bStart;
+                                        					
+	IF NOT Busy
+	THEN
+		IF ItpStartStopEx.bStart
+		THEN
+			Error											:=	ItpStartStopEx.bErr;
+			ErrorId											:= ItpStartStopEx.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpStartStopEx id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1 ;
+			ItpStartStopEx(bStart := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+	
+	StartPrg												:= Busy;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="stopPrg" Id="{a27b5d84-e637-4db6-a557-84d725725bde}">
+      <Declaration><![CDATA[METHOD PUBLIC stopPrg : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+//rTable
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_STOP;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpStartStopEx.bStop 								:= TRUE;
+	ELSIF NOT ItpStartStopEx.bBusy      					
+		AND NOT NciFeedTable.bResetBusy 					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpStartStopEx.bStop 								:= FALSE;
+	END_IF
+
+	ItpStartStopEx(
+		bStart		:= FALSE,
+		bStop		:= ,
+		tTimeOut	:=  ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> ,
+		bErr		=> ,
+		nErrId		=> );
+
+	IF ItpStartStopEx.bStop
+		AND ItpStartStopEx.bBusy
+		AND rNCIRef.NciToPlc.ItpState > NCI_INTERPRETER_READY
+		AND rNCIRef.NciToPlc.ItpState <> NCI_INTERPRETER_ABORTED
+	THEN (* After stopping an active programm, please reset the function-block to avoid the error 0x42C5 after restart *)
+		MemResetAfterStop 									:= TRUE;
+	END_IF
+
+	NciFeedTable(
+		bExecute		:= FALSE,
+		bReset			:= NOT ItpStartStopEx.bBusy
+								AND NOT ItpStartStopEx.bErr
+								AND ItpStartStopEx.bStop
+								AND MemResetAfterStop,
+		bLogFeederEntries:= ,
+		stFeedGroupTable:= rTable,
+		stNciToPlc		:= rNCIRef.NciToPlc,
+		bFeedingDone	=> ,
+		bChannelDone	=> ,
+		bFeedBusy		=> ,
+		bResetBusy		=> ,
+		bError			=> ,
+		nErrorId			=> );
+
+	Busy													:= NciFeedTable.bResetBusy OR ItpStartStopEx.bBusy;
+                                        					
+	Done													:= NOT Busy
+																AND NOT ItpStartStopEx.bErr
+																AND ItpStartStopEx.bStop;
+
+	IF NOT Busy
+	THEN
+		IF ItpStartStopEx.bStop
+		THEN
+			Error											:=	ItpStartStopEx.bErr;
+			ErrorId											:= ItpStartStopEx.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpStartStopEx id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemResetAfterStop								:= FALSE;
+			MemFnc											:= -1 ;
+			ItpStartStopEx(bStop 							:= FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+			NciFeedTable(bExecute 							:= FALSE, stNciToPlc:= rNCIRef.NciToPlc,stFeedGroupTable:= rTable );
+		END_IF                      						
+	END_IF                          						
+	                                	
+	StopPrg													:= Busy;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciItp">
+      <LineId Id="3" Count="45" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciItp.feedTbl">
+      <LineId Id="3" Count="84" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciItp.loadPrg">
+      <LineId Id="3" Count="134" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciItp.reset">
+      <LineId Id="3" Count="90" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciItp.startPrg">
+      <LineId Id="3" Count="56" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciItp.stopPrg">
+      <LineId Id="3" Count="83" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,927 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="LogbookSubSysLog" Id="{3b5ef261-afb1-4a5d-8cbb-5277a8c3f860}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+//Sends Logbook entries handover by a LogbookPuplisher as SysLog messages to a SysLog Server 
+//See wikipedia for more further inforamation about Syslog  
+//based on TF6310 Tcp/Ip server 
+FUNCTION_BLOCK LogbookSubSysLog IMPLEMENTS I_LogbookSubscriber
+VAR CONSTANT
+	MAX_BUFFER_LEVEL										:	INT := 85; //If buffer fill level reaches 85% Fb will appear as "busy2 to the LogBookPuplisher 
+END_VAR
+
+VAR CONSTANT 		
+	MAX_SEND_STRING_SIZE									:	INT := 1024;
+END_VAR
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}
+	OPTION_SYSLOG_WITH_FACILITY_SEVERITY_CODE				:	BYTE := 2#0000_0001;
+{attribute 'displaymode':='binary'}
+	OPTION_SYSLOG_WITH_RFC_5424_HEADER						:	BYTE := 2#0000_0010; //FALSE = RFC 3164 - Legacy Syslog / TRUE = RFC 5424 -> <134>1 2025-02-07T14:30:25.003Z server1 sshd 12345 ID47 [example@32473 iut="3" eventSource="ssh"] message 
+{attribute 'displaymode':='binary'}
+	OPTION_SYSLOG_WITH_CR									:	BYTE := 2#0000_0100; 
+	{attribute 'displaymode':='binary'}
+	OPTION_SYSLOG_WITH_LF									:	BYTE := 2#0000_1000; 
+{attribute 'displaymode':='binary'}
+//	OPTION_SYSLOG_WITH_TCP_MODE								:	BYTE := 2#0001_0000;
+{attribute 'displaymode':='binary'}
+	OPTION_SEND_STORED_MSG_WITH_DISABLE						: 	BYTE := 2#0010_0000; //Send stored messages if FB gets disabled to clear buffer
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_BUFFER_ERROR								: 	BYTE := 2#0100_0000; //The FB changes to error state if the buffer was not emptied in time 	
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_DEBUG										:	BYTE := 2#1000_0000; //Creates ADS log entries for conection events and errors
+END_VAR
+VAR_INPUT
+	Enable													: 	BOOL;	//Enables sending new messages
+	ResetTrig												:	BOOL;	//Ack error message
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := OPTION_SYSLOG_WITH_FACILITY_SEVERITY_CODE ; //option constants are alreay predefined, so they can accordingly be passed symbolically to the block
+	SizeOfBuffer											:	UDINT := 2560; //Size of memory allocated from ads router memory pool by DoubleBuffer instance
+	LocalHost	 											: 	T_IPv4Addr;  	//Local (client) address. String containing an (Ipv4) Internet Protocol dotted address. 
+	LocalPort												:	UDINT := 515;	//Local (client) Internet Protocol (IP) port. (TCP Port = 1468) *)	
+	RemoteHost	 											: 	T_IPv4Addr;  	//Remote (server) address. String containing an (Ipv4) Internet Protocol dotted address. 
+	RemotePort												:	UDINT := 514;	//Remote (server) Internet Protocol (IP) port. (TCP Port = 1468) 
+	Facility												:	BYTE := 16; 	//Default local 16
+	Severity 												:	BYTE := 7; 		//0=Emergency/1=Alert/2=Critical/3=Error/4=Warning/5=Notice/6=Informational/7=Debug
+	Tag														:	STRING(32) := ''; //Process name or local host by default
+	LogPriorityLevel										:	UINT := 0; 		//0=All, correlates to EventClass priorities - see Para.EVENT_HANDLING_CONFIG priorities 1-3 
+	PT_SendInterval											:	TIME := T#30S; //Messages will be send when buffer is filled or PT_SendInterval elapsed, T#0ms = off					
+END_VAR                 				
+VAR_OUTPUT              				        			
+	Online													:	BOOL;		//TRUE if coonection is sucessful etablished
+	hSocket													: 	T_HSOCKET ; //UDP Socket handle
+	CntNoOfStoredMsgs										:	INT;
+	TimeSendMsgs											:	TIME;
+	Busy													: 	BOOL;  //Sending busy
+	Error													: 	BOOL;	//Error occured
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT;	//See Beckhoff TF6310/ADS documentation for more information regarding error code
+	ErrorFnc												:	STRING(20); //Error source 
+	WinsockErrorId											:	E_WinsockError; //Winsocket error enum - see TF6310 documentation for further information
+END_VAR
+VAR
+(* Memory ************************************************************)
+	State													: 	INT := 0;
+	SendCnt													:	UINT;
+	StartTimeSendMsgs										:	TIME;
+	SendErrorCnt											:	UINT;
+	HeaderString											:	STRING;
+	SendString												:	STRING(MAX_SEND_STRING_SIZE);
+	SendStringLen											:	INT;
+	_Severity												:	BYTE;
+	LastMessageData											: 	LogbookData;
+	LastEventClass											:	E_TcEventClass := TC2_SYSTEM.TCEVENTCLASS_NONE;
+	
+(* Trigger *****************************************************************)
+
+(* Timer ******************************************************************)
+	tonSendInterval											:	ton;
+	
+(* Blocks ***************************************************************)
+	DblBuffer												:	DoubleBuffer;
+	SocketClose												:	FB_SocketClose := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	SocketUdpCreate 										:	FB_SocketUdpCreate := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	SocketUdpSend											:	FB_SocketUdpSendTo := (tTimeout := T#10S);
+
+(* Dummys *******************************************************************)
+	i,j														:	INT;
+END_VAR
+(* 
+Facality Description:
+00 Kernel message
+01 user-level messages
+02 mail system
+03 system daemons
+04 security/authorization messages
+05 messages generated internally by syslogd
+06 line printer subsystem
+07 network news subsystem
+08 UUCP subsystem
+09 clock daemon
+10 security/authorization messages
+11 FTP daemon
+12 NTP subsystem
+13 log audit
+14 log alert
+15 clock daemon
+16 local10
+17 local11
+18 local12
+19 local13
+20 local14
+21 local15
+22 local16
+23 local17
+
+Severity Description:
+0 Emergency
+1 Alert
+2 Critical
+3 Error
+4 Warning
+5 Notice
+6 Informational
+7 Debug
+*)
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Logbook subscriber to send sys log messages via UDP 				*)
+(********************************************************************)
+
+(* Server connection ************************************************)
+	CASE state OF
+	0:
+		IF Error
+		THEN
+			IF NOT Enable OR ResetTrig 
+			THEN //Reset error
+				Error										:= FALSE;
+				ErrorId										:= 0;
+				ErrorFnc									:= '';	
+				WinsockErrorId								:= WSOK;			
+			END_IF		
+		ELSIF Online AND Enable
+		THEN
+			//Run interval
+			tonSendInterval(IN := PT_SendInterval <> T#0MS AND CntNoOfStoredMsgs > 0 AND NOT DblBuffer.Empty, PT := PT_SendInterval);
+			IF tonSendInterval.Q
+			THEN
+				tonSendInterval(IN := FALSE);
+				DblBuffer.setReadyToRead(TRUE);
+			END_IF
+			
+			IF DblBuffer.ReadyToRead //Buffer full or triggered by interval
+			THEN
+				CntNoOfStoredMsgs							:= 0;
+				StartTimeSendMsgs							:= TIME();
+
+				SocketUdpSend(
+					sSrvNetId	:= , 
+					hSocket		:= hSocket, 
+					sRemoteHost	:= RemoteHost, 
+					nRemotePort	:= RemotePort, 
+					cbLen		:= DblBuffer.SizeOfDataToRead, 
+					pSrc		:= DblBuffer.pDataToRead, 
+					bExecute	:= TRUE, 
+					tTimeout	:= , 
+					bBusy		=> , 
+					bError		=> , 
+					nErrId		=> );
+													
+				state										:= 20;
+			END_IF
+		ELSIF Enable			
+		THEN
+			DblBuffer.SizeOfMemory							:= SizeOfBuffer;
+			SocketUdpCreate(bExecute := FALSE);
+			SocketClose(bExecute := FALSE);
+			SocketUdpSend(bExecute := FALSE);
+			Online											:= FALSE;
+			Busy											:= TRUE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			ErrorFnc										:= '';	
+			WinsockErrorId									:= WSOK;
+			
+			IF NOT SocketUdpCreate.bBusy
+				AND NOT SocketClose.bBusy
+				AND NOT SocketUdpSend.bBusy
+			THEN
+				tonSendInterval(IN := FALSE);
+				SendCnt										:= 0;
+				SendErrorCnt								:= 0;
+				state										:= 10;
+			END_IF	
+		ELSE //Disabled
+			IF hSocket.handle <> 0
+			THEN //Close socket			
+				IF NOT DblBuffer.Empty AND Options.5
+				THEN //Write rest of buffer
+					IF NOT DblBuffer.ReadyToRead THEN DblBuffer.setReadyToRead(TRUE); END_IF 
+					CntNoOfStoredMsgs						:= 0;
+					StartTimeSendMsgs						:= TIME();
+					SocketUdpSend(
+						sSrvNetId	:= , 
+						hSocket		:= hSocket, 
+						sRemoteHost	:= RemoteHost, 
+						nRemotePort	:= RemotePort, 
+						cbLen		:= DblBuffer.SizeOfDataToRead, 
+						pSrc		:= DblBuffer.pDataToRead, 
+						bExecute	:= TRUE, 
+						tTimeout	:= , 
+						bBusy		=> , 
+						bError		=> , 
+						nErrId		=> );
+					State									:= 20;
+				ELSE
+					State									:= 30;
+				END_IF			
+			END_IF
+		END_IF
+
+	(* Create Socket *******************************************************)
+	10: 
+		SocketUdpCreate(
+			sSrvNetId	:= , 
+			sLocalHost	:= LocalHost, 
+			nLocalPort	:= LocalPort, 
+			bExecute	:= TRUE, 
+			tTimeout	:= , 
+			bBusy		=> , 
+			bError		=> , 
+			nErrId		=> , 
+			hSocket		=> hSocket);
+			
+		IF NOT SocketUdpCreate.bBusy
+		THEN
+			IF SocketUdpCreate.bError
+			THEN
+				Error										:= TRUE;
+				ErrorId										:= SocketUdpCreate.nErrId;
+				ErrorFnc									:= 'SocketUdpCreate';
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(ErrorId);
+				
+				IF (Options AND OPTION_ENABLE_DEBUG) = 1
+				THEN
+					AdsLogError(CONCAT('LogbookClientSysLog | SocketUdpCreate %s | error id 16#', DWORD_TO_HEXSTR(TO_DWORD(ErrorID),4,FALSE)) ,HSOCKET_TO_STRING(SocketUdpCreate.hSocket));
+				END_IF	
+
+				state										:= 30;
+			ELSE				
+				hSocket.remoteAddr.sAddr					:= RemoteHost;
+				hSocket.remoteAddr.nPort					:= RemotePort;
+				
+				IF (Options AND OPTION_ENABLE_DEBUG) = 1
+				THEN
+					AdsLogError(CONCAT('LogbookClientSysLog | SocketUdpCreate %s done', '') , HSOCKET_TO_STRING(SocketUdpCreate.hSocket));
+				END_IF	
+				
+				Online 										:= TRUE;
+				state										:= 0;
+			END_IF		
+			SocketUdpCreate(bExecute:= FALSE);
+		END_IF		
+		
+	(* Send message ****************************************************)
+	20:
+		SocketUdpSend(
+			sSrvNetId	:= , 
+			hSocket		:= hSocket, 
+			sRemoteHost	:= RemoteHost, 
+			nRemotePort	:= RemotePort, 
+			cbLen		:= DblBuffer.SizeOfDataToRead, 
+			pSrc		:= DblBuffer.pDataToRead, 
+			bExecute	:= TRUE, 
+			tTimeout	:= , 
+			bBusy		=> , 
+			bError		=> , 
+			nErrId		=> );
+					
+		IF NOT SocketUdpSend.bBusy
+		THEN
+			
+			IF SocketUdpSend.bError
+			THEN
+				IF SendErrorCnt >= 3
+				THEN
+					Error									:= TRUE;
+					ErrorId									:= SocketUdpSend.nErrId;
+					ErrorFnc								:= 'SocketUdpSend';
+					WinsockErrorId							:= ADSERROR_TO_WSERROR(ErrorId);
+	
+					IF (Options AND OPTION_ENABLE_DEBUG) = 1
+					THEN
+						AdsLogError(CONCAT('LogbookClientSysLog | SocketUdpSend %s | error id 16#', DWORD_TO_HEXSTR(TO_DWORD(ErrorID),4,FALSE)) ,HSOCKET_TO_STRING(SocketUdpCreate.hSocket));
+					END_IF	
+					
+					State									:= 30; //Close socket
+				ELSE //Try to send a second time
+					SendErrorCnt							:= SendErrorCnt + 1;
+				END_IF
+			ELSE
+				TimeSendMsgs								:= TIME() - StartTimeSendMsgs;		
+				SendCnt										:= SendCnt + 1;		
+				SendErrorCnt								:= 0;	
+				DblBuffer.setReadyToRead(FALSE);
+				State										:= 0;			
+			END_IF 
+				
+			SocketUdpSend(bExecute := FALSE);
+		END_IF
+		
+	(* Close socket ***********************************************)
+	30:	
+		SocketClose(
+			sSrvNetId	:= , 
+			hSocket		:= hSocket, 
+			bExecute	:= hSocket.handle <> 0, 
+			tTimeout	:= , 
+			bBusy		=> , 
+			bError		=> , 
+			nErrId		=> );
+
+		IF NOT SocketClose.bBusy
+		THEN	
+			IF SocketClose.bError 
+			THEN
+				IF NOT Error
+				THEN
+					Error									:= TRUE;
+					ErrorId									:= SocketClose.nErrId;
+					ErrorFnc								:= 'SocketUdpClose';
+					WinsockErrorId							:= ADSERROR_TO_WSERROR(ErrorId);
+				END_IF
+				IF (Options AND OPTION_ENABLE_DEBUG) = 1
+				THEN
+					AdsLogError( CONCAT('LogbookClientSysLog | SocketClose %s | error id 16#', DWORD_TO_HEXSTR(TO_DWORD(ErrorID),4,FALSE)) ,HSOCKET_TO_STRING(SocketClose.hSocket));
+				END_IF
+
+				state										:= 0;				
+			ELSE    
+				IF (Options AND OPTION_ENABLE_DEBUG) = 1
+				THEN
+					AdsLogError( CONCAT('LogbookClientSysLog | SocketClose %s done', '') , HSOCKET_TO_STRING(SocketClose.hSocket));
+				END_IF	
+                      
+				Online										:= FALSE;      
+				hSocket.handle 								:= 0;          
+				state										:= 0;
+			END_IF		
+			SocketClose(bExecute := FALSE);
+		END_IF		
+			
+	END_CASE
+	
+(* Status *****************************************************************)
+	Busy 													:= State <> 0 OR hSocket.handle <> 0 AND NOT Error;
+	
+(**************************************************************************)
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{158d0774-089b-426d-9f7e-6833e240612d}" />
+    <Folder Name="properties" Id="{a90624a5-4cbb-442d-abb6-09c5f05b5a37}">
+      <Folder Name="options" Id="{0cbaab93-28db-40aa-a1e7-913a4081737c}" />
+    </Folder>
+    <Method Name="addNewMessage" Id="{3bfbbec5-b586-4f55-9ddd-111f28a63046}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC FINAL addNewMessage : BOOL //Return value = TRUE if execution successful finished
+VAR_IN_OUT
+	data													:	LogbookData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Enable AND NOT Error
+	THEN	
+		LastMessageData									:= Data;
+		LastEventClass.0								:= LastMessageData.Options.8;
+		LastEventClass.1								:= LastMessageData.Options.9;
+		LastEventClass.2								:= LastMessageData.Options.10;
+		LastEventClass.3								:= LastMessageData.Options.11;
+		
+		CASE LastEventClass OF
+		TC2_SYSTEM.TCEVENTCLASS_NONE		: _Severity		:= Severity; 		
+		TC2_SYSTEM.TCEVENTCLASS_MESSAGE		: _Severity		:= 4;				
+		TC2_SYSTEM.TCEVENTCLASS_HINT		: _Severity		:= 5;				
+		TC2_SYSTEM.TCEVENTCLASS_STATEINFO	: _Severity		:= 6;				
+		TC2_SYSTEM.TCEVENTCLASS_INSTRUCTION	: _Severity		:= 6;			 											
+		TC2_SYSTEM.TCEVENTCLASS_WARNING		: _Severity		:= 4;	 			
+		TC2_SYSTEM.TCEVENTCLASS_MAINTENANCE	: _Severity		:= 1;	 				 														
+		TC2_SYSTEM.TCEVENTCLASS_ALARM		: _Severity		:= 0;	 			
+		TC2_SYSTEM.TCEVENTCLASS_PARAMERROR	: _Severity		:= 3;	 			
+		ELSE                                                                                     
+			_Severity									:= 7;				
+		END_CASE
+	
+		IF (LogPriorityLevel = 0 OR_ELSE GetEventClassPriority(LastEventClass) > LogPriorityLevel)
+			AND_THEN CreateMsg(LastMessageData.Msg,LastMessageData.Timestamp ,_Severity)
+		THEN
+			IF DblBuffer.addData(ADR(SendString),TO_UDINT(SendStringLen)) <> S_OK
+				AND Options.6
+			THEN
+				Error										:= TRUE;
+				ErrorId										:= HRESULT_TO_ADSERROR(DblBuffer.hr);	
+			ELSE
+				CntNoOfStoredMsgs							:= CntNoOfStoredMsgs + 1;
+			END_IF
+		END_IF
+		
+		addNewMessage										:= NOT Error;	
+	ELSE
+		addNewMessage										:= FALSE;	
+	END_IF
+	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="createMsg" Id="{aa74bb2f-5045-40cf-a7ae-83d0020ac346}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PRIVATE FINAL createMsg : BOOL
+VAR_IN_OUT
+	MsgTxt													:	T_MaxString; (* 80/255 Zeichen *)
+	MsgTime													:	TIMESTRUCT;	
+	Severity												:	BYTE;
+END_VAR                 									
+VAR                     									
+	TimeStamp												:	STRING(25);
+	LenTxt													:	UDINT;
+	LenHeader												:	UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT Options. 1 // OPTION_SYSLOG_WITH_RFC_5424_HEADER
+THEN
+	//Create Syslog msg RFC 5424 | <134>1 2025-02-07T14:30:25.003Z server1 sshd 12345 ID47 [example@32473 iut="3" eventSource="ssh"] message 
+	IF (Options AND OPTION_SYSLOG_WITH_FACILITY_SEVERITY_CODE) <> 0 
+	THEN 
+		HeaderString 										:= REPLACE('<P>',BYTE_TO_STRING(SHL(FACILITY,3) OR (Severity AND BYTE#0000_0111)),1,2);	             										
+	END_IF 
+    
+	//Sep 10 08:31:10
+	CASE MsgTime.wMonth OF
+	1: TimeStamp                                     		:= CONCAT(TimeStamp, ' Jan ');
+	2: TimeStamp                                    		:= CONCAT(TimeStamp, ' Feb ');
+	3: TimeStamp                                    		:= CONCAT(TimeStamp, ' Mar ');
+	4: TimeStamp                                    		:= CONCAT(TimeStamp, ' Apr ');
+	5: TimeStamp                                    		:= CONCAT(TimeStamp, ' May ');
+	6: TimeStamp                                    		:= CONCAT(TimeStamp, ' Jun ');
+	7: TimeStamp                                    		:= CONCAT(TimeStamp, ' Jul ');
+	8: TimeStamp                                    		:= CONCAT(TimeStamp, ' Aug ');
+	9: TimeStamp                                     		:= CONCAT(TimeStamp, ' Seb ');
+	10:TimeStamp                                    		:= CONCAT(TimeStamp, ' Oct ');
+	11:TimeStamp                                    		:= CONCAT(TimeStamp, ' Nov ');
+	12:TimeStamp                                    		:= CONCAT(TimeStamp, ' Dec ');
+	END_CASE
+	
+	TimeStamp                                         		:= CONCAT(TimeStamp,WORD_TO_STRING(MsgTime.wDay));
+				
+	IF MsgTime.wHour <10
+	THEN
+		TimeStamp 											:= Concat(TimeStamp,CONCAT(' 0',WORD_TO_STRING(MsgTime.wHour)));
+	ELSE
+		TimeStamp 											:= Concat(TimeStamp,CONCAT(' ',WORD_TO_STRING(MsgTime.wHour)));
+	END_IF
+	
+	TimeStamp 												:= CONCAT(TimeStamp,':');
+	
+	IF MsgTime.wMinute < 10 
+	THEN
+		TimeStamp 											:= CONCAT(TimeStamp,CONCAT('0',WORD_TO_STRING(MsgTime.wMinute)));
+	ELSE          										
+		TimeStamp 											:= CONCAT(TimeStamp,WORD_TO_STRING(MsgTime.wMinute));
+	END_IF
+	
+	TimeStamp 												:= CONCAT(TimeStamp,':');
+	
+	IF MsgTime.wSecond < 10 
+	THEN
+		TimeStamp 											:= CONCAT(TimeStamp,CONCAT('0',WORD_TO_STRING(MsgTime.wSecond)));
+	ELSE
+		TimeStamp 											:= CONCAT(TimeStamp,WORD_TO_STRING(MsgTime.wSecond));
+	END_IF
+
+	HeaderString 											:= CONCAT(HeaderString,TimeStamp);
+	HeaderString 											:= CONCAT(HeaderString,' ');				
+		
+	(* ' host/sourcename eintragen (IP) *)
+	HeaderString 											:= CONCAT(HeaderString, hSocket.localAddr.sAddr ); 
+	
+	(* Tag *)
+	IF Len(Tag) > 0
+	THEN
+		HeaderString 										:= CONCAT(HeaderString,' '); 
+		HeaderString										:= CONCAT(HeaderString,Tag);	
+	END_IF
+	HeaderString 											:= CONCAT(HeaderString,':'); 
+	
+ELSE //Create Syslog msg RFC 5424 | <134>1 2025-02-07T14:30:25.003Z server1 sshd 12345 ID47 [example@32473 iut="3" eventSource="ssh"] message 
+	IF (Options AND OPTION_SYSLOG_WITH_FACILITY_SEVERITY_CODE) <> 0 
+	THEN 
+		HeaderString 										:= REPLACE('<P> 1 ',BYTE_TO_STRING(SHL(FACILITY,3) OR (Severity AND BYTE#0000_0111)),1,2);
+		             										
+	ELSE             										
+		HeaderString 										:= '1 ';
+	END_IF //1 is default version number
+
+	
+	//ISO 8601 timestamp, 2025-02-07T14:30:25.003 (local time)
+	TimeStamp 											:= CONCAT(TimeStamp,WORD_TO_STRING(MsgTime.wYear));
+				
+	IF MsgTime.wMonth <10
+	THEN
+		TimeStamp 										:= Concat(TimeStamp,CONCAT('-0',WORD_TO_STRING(MsgTime.wMonth)));
+	ELSE
+		TimeStamp 										:= Concat(TimeStamp,CONCAT('-',WORD_TO_STRING(MsgTime.wMonth)));
+	END_IF
+	
+	IF MsgTime.wDay <10
+	THEN
+		TimeStamp 										:= Concat(TimeStamp,CONCAT('-0',WORD_TO_STRING(MsgTime.wDay)));
+	ELSE
+		TimeStamp 										:= Concat(TimeStamp,CONCAT('-',WORD_TO_STRING(MsgTime.wDay)));
+	END_IF
+	
+	
+	IF MsgTime.wHour <10
+	THEN
+		TimeStamp 										:= Concat(TimeStamp,CONCAT('T0',WORD_TO_STRING(MsgTime.wHour)));
+	ELSE
+		TimeStamp 										:= Concat(TimeStamp,CONCAT('T',WORD_TO_STRING(MsgTime.wHour)));
+	END_IF
+	
+	TimeStamp 											:= CONCAT(TimeStamp,':');
+	
+	IF MsgTime.wMinute < 10 
+	THEN
+		TimeStamp 										:= CONCAT(TimeStamp,CONCAT('0',WORD_TO_STRING(MsgTime.wMinute)));
+	ELSE          										
+		TimeStamp 										:= CONCAT(TimeStamp,WORD_TO_STRING(MsgTime.wMinute));
+	END_IF
+	
+	TimeStamp 											:= CONCAT(TimeStamp,':');
+	
+	IF MsgTime.wSecond < 10 
+	THEN
+		TimeStamp 										:= CONCAT(TimeStamp,CONCAT('0',WORD_TO_STRING(MsgTime.wSecond)));
+	ELSE
+		TimeStamp 										:= CONCAT(TimeStamp,WORD_TO_STRING(MsgTime.wSecond));
+	END_IF
+	
+	IF MsgTime.wMilliseconds < 10 
+	THEN
+		TimeStamp 										:= CONCAT(TimeStamp,CONCAT('.00',TO_STRING(MsgTime.wMilliseconds)));
+	ELSIF MsgTime.wMilliseconds < 100
+	THEN
+		TimeStamp 										:= CONCAT(TimeStamp,CONCAT('.0',TO_STRING(MsgTime.wMilliseconds)));
+	ELSE
+		TimeStamp 										:= CONCAT(TimeStamp,CONCAT('.',TO_STRING(MsgTime.wMilliseconds)));
+	END_IF
+	
+	HeaderString 										:= CONCAT(HeaderString,TimeStamp);
+	HeaderString 										:= CONCAT(HeaderString,' ');				
+		
+	(* ' host/sourcename eintragen (IP) *)
+	HeaderString 										:= CONCAT(HeaderString, hSocket.localAddr.sAddr ); 
+	HeaderString 										:= CONCAT(HeaderString,' '); 
+	
+	(* Tag *)
+	IF Len(Tag) > 0
+	THEN
+		HeaderString									:= CONCAT(HeaderString,Tag);
+		HeaderString 									:= CONCAT(HeaderString,' '); 
+	END_IF
+	
+	//Using "-" for "Process ID", "Message ID" and "[Data Structure]", as not applied
+	HeaderString 										:= CONCAT(HeaderString,'- - - '); 
+	
+END_IF
+
+	IF Options.2 
+	THEN //CR
+		MsgTxt											:= CONCAT(MsgTxt,'$r');
+	END_IF
+	
+	IF Options.3 
+	THEN //LF
+		MsgTxt											:= CONCAT(MsgTxt,'$n');
+	END_IF
+	
+	(* Msg *)
+	SendString											:= HeaderString;
+	SendStringLen										:= MIN(MAX_SEND_STRING_SIZE,(LEN(HeaderString) + Len(MsgTxt)));
+	MEMCPY(ADR(SendString) + LEN(HeaderString), ADR(MsgTxt) , INT_TO_UDINT(LEn(MsgTxt)));
+	SendString[SendStringLen] 							:= 0; //Terminate string
+	
+	CreateMsg											:= TRUE;
+	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isBusy" Id="{e67702ae-1ac7-4830-b5d5-6fa289354da8}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC isBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c87e46ff-cf63-464d-8373-9fdadd417f4a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy											:= DblBuffer.Full and Enable and not Error and DblBuffer.fillLevel >= MAX_BUFFER_LEVEL;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="optAdd_CR" Id="{48adad1c-b04f-42f7-beeb-45fb02b12183}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAdd_CR : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d5b90a0a-cc22-43e1-9d23-b3958558e37a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAdd_CR := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{48400278-58de-4d2f-bd32-697c2c91d436}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.2 := optAdd_CR;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optAdd_LF" Id="{b4c298da-5f33-470e-b7bf-7c7485c0a5c5}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAdd_LF : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8ef9ef16-c1e6-4dbe-8b30-1d8282b786f1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAdd_LF := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{62a6c846-626f-43e7-be3a-3568f8118a80}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optAdd_LF;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnabelDebugMode" Id="{da68f2b2-32a2-4b13-8aad-e8cb39c417f3}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnabelDebugMode : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1f7ea493-06ea-4f32-ba8f-5f925b9ea86a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnabelDebugMode := Options.7;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2e5aea28-87da-43b7-bf04-3a8d38e594ca}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.7 := optEnabelDebugMode;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableBufferError" Id="{b3c97c57-5dee-4e5e-b72d-933944fa6411}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableBufferError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8256b78f-4e92-43a0-b104-b787c2d34599}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableBufferError := Options.6;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6dc29065-1d14-4fe0-bd47-082001de5f49}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.6				:= optEnableBufferError;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableFacilitySeverityCode" Id="{294d44f3-64b4-47f6-8c39-593eb4969039}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableFacilitySeverityCode : BOOL]]></Declaration>
+      <Get Name="Get" Id="{31eae8cb-eea9-4e98-a2e0-d378477d9d8e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ optEnableFacilitySeverityCode := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{efa182dc-1072-4c31-b41e-8b25028e7c05}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableFacilitySeverityCode;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableRFCHeader" Id="{ef99c11f-46ce-49b9-9c1b-818275b2a848}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableRFCHeader : BOOL]]></Declaration>
+      <Get Name="Get" Id="{7946e1e3-8716-4988-9133-ab2e587bc603}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableRFCHeader := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{cfdf19d7-d971-46b1-92b0-6984b7f3e5da}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optEnableRFCHeader;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optSendMsgIfDisabled" Id="{c59d3f7e-f031-45b0-81e5-6c5827029fd5}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optSendMsgIfDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4d3ec294-06ec-44d6-bb15-e88bc8f5b58f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optSendMsgIfDisabled := Options.5;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3254600d-7b2a-424a-afa7-fe737f6db0dd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.5 := optSendMsgIfDisabled;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="LogbookSubSysLog">
+      <LineId Id="376" Count="13" />
+      <LineId Id="1429" Count="29" />
+      <LineId Id="390" Count="0" />
+      <LineId Id="399" Count="1" />
+      <LineId Id="692" Count="0" />
+      <LineId Id="401" Count="13" />
+      <LineId Id="1077" Count="0" />
+      <LineId Id="1067" Count="1" />
+      <LineId Id="415" Count="2" />
+      <LineId Id="818" Count="0" />
+      <LineId Id="1341" Count="0" />
+      <LineId Id="1709" Count="16" />
+      <LineId Id="1708" Count="0" />
+      <LineId Id="1726" Count="0" />
+      <LineId Id="819" Count="0" />
+      <LineId Id="421" Count="0" />
+      <LineId Id="1727" Count="0" />
+      <LineId Id="422" Count="3" />
+      <LineId Id="666" Count="8" />
+      <LineId Id="435" Count="28" />
+      <LineId Id="822" Count="0" />
+      <LineId Id="464" Count="3" />
+      <LineId Id="680" Count="10" />
+      <LineId Id="468" Count="0" />
+      <LineId Id="691" Count="0" />
+      <LineId Id="469" Count="1" />
+      <LineId Id="1064" Count="0" />
+      <LineId Id="471" Count="18" />
+      <LineId Id="1582" Count="0" />
+      <LineId Id="1066" Count="0" />
+      <LineId Id="491" Count="0" />
+      <LineId Id="1581" Count="0" />
+      <LineId Id="821" Count="0" />
+      <LineId Id="492" Count="0" />
+      <LineId Id="1063" Count="0" />
+      <LineId Id="493" Count="15" />
+      <LineId Id="510" Count="0" />
+      <LineId Id="512" Count="0" />
+      <LineId Id="1212" Count="0" />
+      <LineId Id="1214" Count="0" />
+      <LineId Id="513" Count="16" />
+      <LineId Id="1216" Count="1" />
+      <LineId Id="530" Count="1" />
+      <LineId Id="820" Count="0" />
+      <LineId Id="532" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.addNewMessage">
+      <LineId Id="5" Count="20" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="99" Count="1" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="86" Count="2" />
+      <LineId Id="46" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.createMsg">
+      <LineId Id="168" Count="0" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="178" Count="2" />
+      <LineId Id="226" Count="0" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="187" Count="3" />
+      <LineId Id="243" Count="9" />
+      <LineId Id="201" Count="1" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="204" Count="0" />
+      <LineId Id="231" Count="0" />
+      <LineId Id="254" Count="22" />
+      <LineId Id="222" Count="0" />
+      <LineId Id="224" Count="0" />
+      <LineId Id="277" Count="4" />
+      <LineId Id="283" Count="3" />
+      <LineId Id="292" Count="0" />
+      <LineId Id="225" Count="0" />
+      <LineId Id="288" Count="0" />
+      <LineId Id="291" Count="0" />
+      <LineId Id="293" Count="0" />
+      <LineId Id="299" Count="0" />
+      <LineId Id="4" Count="2" />
+      <LineId Id="298" Count="0" />
+      <LineId Id="8" Count="2" />
+      <LineId Id="295" Count="1" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="32" Count="6" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="131" Count="4" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="123" Count="4" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="40" Count="16" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="157" Count="1" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="162" Count="2" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="57" Count="1" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="60" Count="7" />
+      <LineId Id="301" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="167" Count="0" />
+      <LineId Id="114" Count="1" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="302" Count="1" />
+      <LineId Id="92" Count="1" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="99" Count="3" />
+      <LineId Id="72" Count="2" />
+      <LineId Id="76" Count="1" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="78" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optAdd_CR.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optAdd_CR.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optAdd_LF.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optAdd_LF.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optEnabelDebugMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optEnabelDebugMode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optEnableBufferError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optEnableBufferError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optEnableFacilitySeverityCode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optEnableFacilitySeverityCode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optEnableRFCHeader.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optEnableRFCHeader.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optSendMsgIfDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubSysLog.optSendMsgIfDisabled.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

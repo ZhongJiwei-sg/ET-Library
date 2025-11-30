@@ -1,0 +1,398 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="IOFcCom" Id="{2db019eb-408c-467e-8d26-0cce18b45cba}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK IOFcCom IMPLEMENTS I_ActuatorFwdRev (* Frequence Converter IO Com *)
+VAR_INPUT
+	ResetTrig												:	BOOL := TRUE;		//Resets error with rising edge 
+	Start													:	BOOL ;				//motor rotates in left direction when TRUE
+	StartRev												:	BOOL ;				//motor rotates in right direction when TRUE
+	Feed													:	BOOL := TRUE;		//enables feed in right direction and should be set to FALSE when right limit sensor is reached
+	FeedBwd													:	BOOL := TRUE;		//enables feed in left direction and should be set to FALSE when left limit sensor is reached
+	Velo													:	LREAL := 0.0;		//sets velocity of drive
+	VeloMin													:	LREAL := 0.0;		//sets minimum limit of velocity of drive
+	VeloMax													:	LREAL := 100.0;		//sets maximum limit of velocity of drive
+	Contactor												:	BOOL;				//if available
+	PT_DelBreak												:	TIME := T#1000MS;	//delay time before switching off 
+	PT_DelEnable											:	TIME := T#1000MS;	//delay time for enabling
+	ProtSwitchOK											: 	FUSE;				//monitors feeding protective device
+	FuseBrakeOK												: 	FUSE;				//monitors feeding circuit breaker 
+END_VAR         								
+VAR_OUTPUT      								
+{attribute 'displaymode':='binary'}
+	Status													:	BYTE;				//for HMI
+	Ready											AT  %I* : 	BOOL := TRUE;		//TRUE when drive is ready to operate
+	Busy													:	BOOL;				//Busy is TRUE at the rising edge of Enable and stays TRUE as long as the FB is performing any action. 
+	Error											AT  %I* : 	BOOL := FALSE;		//Error identification 
+END_VAR
+VAR (* IO Internal *)
+	Q_SetValue										AT  %Q* : 	INT;
+	Q_Reset											AT  %Q* :	BOOL;
+	Q_Enable										AT  %Q* :	BOOL;
+	Q_Reverse										AT  %Q* :	BOOL;
+	Q_Forward										AT  %Q* :	BOOL;
+	Q_Brake											AT  %Q* :	BOOL; 				//if available
+	Q_Contactor										AT  %Q* :	BOOL;
+END_VAR             								
+VAR                 								
+	TofBrake												:	TOF;
+	TofEnable												:	TOF;
+	QuitIntern												:	BOOL;
+	BrakeOpenIntern											:	BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Com FC IO 										 		V1.3	*)
+(********************************************************************)
+
+(* Protection Switch ************************************************)
+	IF ResetTrig 
+	THEN 
+		reset(); 
+	END_IF
+
+	ProtSwitchOK();
+		
+	FuseBrakeOK(); (* same parameter like ProtSwitch *)
+
+(* Contactor ********************************************************)
+	Q_Contactor 											:= Contactor AND ProtSwitchOK.Q AND FuseBrakeOK.Q;
+	
+(* Start ********************************************)
+	IF 	StartRev 
+		AND NOT Start
+	THEN
+		startForward();
+	ELSIF Start 
+		AND NOT StartRev
+	THEN
+		startReverse();
+	ELSE
+		 switchOff();
+   END_IF
+
+(* Enable ****************************************************)
+	TofEnable(	
+		IN := Q_SetValue <> 0,
+		PT := PT_DelEnable);
+
+	Q_Enable 												:= TofEnable.Q AND Ready AND Q_Brake;
+
+(* setvalue standardization *********************************)
+	IF VeloMax > VeloMin THEN
+		IF Velo >= VeloMax THEN
+			Q_SetValue 										:= 32767;
+		ELSIF Velo < VeloMin                				
+		THEN                                				
+			Q_SetValue 										:= 0;
+		ELSE                                				
+			Q_SetValue										:=LREAL_TO_INT ((32767.0 / (VeloMax - VeloMin)) * (Velo - VeloMin));
+		END_IF                              				
+	ELSE                                    				
+		Q_SetValue 											:= 0;
+	END_IF                                  				
+
+(* setvalue **************************************)
+	IF Q_Reverse THEN
+		Q_SetValue 											:= ABS(Q_SetValue) * -1;
+	ELSIF Q_Forward THEN              			
+		Q_SetValue 											:= ABS(Q_SetValue);
+	ELSE                                			
+		Q_SetValue 											:= 0;
+	END_IF                              	
+
+(* HmiStatus **************************************************)
+	Status.0 												:= Q_Reverse AND Ready AND Q_Contactor;
+	Status.1 												:= Q_Forward AND Ready AND Q_Contactor;
+	Status.2 												:= FALSE;
+	Status.3 												:= Q_Brake;
+	Status.4 												:= FeedBwd ;
+	Status.5 												:= Feed;
+	Status.6 												:= Ready;
+	Status.7 												:= Error;
+	                                				
+(* Status ***********************************************************)
+	Busy 													:= TofEnable.Q AND TofBrake.ET <= MAX(T#500MS,TofBrake.PT) - T#500MS ;
+	
+(* Break ************************************************************)
+	TofBrake(	
+		IN := Q_SetValue <> 0,
+		PT := PT_DelBreak);
+
+	IF Q_SetValue <> 0 
+	THEN 
+		BrakeOpenIntern 									:= FALSE; 
+	END_IF
+
+	Q_Brake 												:= TofBrake.Q AND Ready OR BrakeOpenIntern;
+
+(* Reset ***********************************************************)
+	Q_Reset 												:= ResetTrig OR QuitIntern;
+	QuitIntern 												:= FALSE;
+
+(**************************************************************)]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{7af5bb05-8586-44cd-b334-7bfa905881bd}" />
+    <Folder Name="properties" Id="{cd695161-685f-4d3e-b9fc-7dc6ed2aac40}" />
+    <Method Name="closeBrake" Id="{70780707-3221-4b65-91ef-bb50a6523e5e}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC closeBrake : booL //return true if brake open output is off
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[BrakeOpenIntern 											:= FALSE;
+closeBrake													:= NOT Q_Brake;
+															]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="forwardStarted" Id="{d7779f18-73a4-46d6-b94e-c95a5031f7b0}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public forwardStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{783ff3e6-0009-45b5-9a6b-6eadaea7dfc2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[forwardStarted := Q_Contactor and Q_Forward;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inError" Id="{65d37909-9f7d-43d8-a88e-25aebb89f43a}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public inError : bool]]></Declaration>
+      <Get Name="Get" Id="{2799d5db-e14e-48d9-aa33-0fe12b2f1d15}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inError := Error or not ProtSwitchOK.Q or not FuseBrakeOK.Q;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isBusy" Id="{89694754-265a-4e15-9a3c-59abab5740d7}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isBusy : bool]]></Declaration>
+      <Get Name="Get" Id="{4a41e4af-7d61-439e-a2f7-538a376502fa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy := Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOff" Id="{1fb8db15-9f4b-4afc-8152-c677b0fd731d}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{01b073d2-3481-4f08-848a-b28e816d14fa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOff := NOT Q_Contactor AND NOT Q_Reverse	and not Q_Forward;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOn" Id="{e194f59b-e28d-4a5b-871a-17fc46d0757c}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0e2e11d6-8221-4050-9dea-285d8eeee69b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOn := Q_Contactor and(Q_Forward or Q_Reverse);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="noFeed" Id="{08cf1866-db44-47d6-b6fb-7a8baac01ead}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY noFeed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{239ac000-52c4-4f91-a919-664132f97193}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[noFeed := NOT Feed and not FeedBwd;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ok" Id="{16f65269-d897-4fbf-8158-6d322a0683b1}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY ok : bool]]></Declaration>
+      <Get Name="Get" Id="{141353ed-0fda-47be-912c-6b596c24cc14}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ok := isBusy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="openBrake" Id="{0fe306ff-1961-4d37-9d83-afc912ebc7b4}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC openBrake : bool //Return true if break open is on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[BrakeOpenIntern 							:= TRUE;
+openBrake									:= Q_Brake;
+										]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{83dffb23-d2e0-46fe-995f-66eb1a8af924}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC reset : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Error									:= FALSE;
+reset							:= ProtSwitchOK.reset() and FuseBrakeOK.reset();]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="reverseStarted" Id="{aca4732a-4639-449d-a80d-211fdf386b90}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public reverseStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6bb42b18-f1c3-4a1f-8584-2dece40e5de2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[reverseStarted := Q_Contactor and Q_Reverse;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="setContactorOFF" Id="{a0b66d1d-adbe-454f-8752-c5656151d4b9}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setContactorOFF : BOOL //Return true if contactor is off and not busy
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Contactor 													:= FALSE;
+SetContactorOFF 											:= Not Q_Contactor and not busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setContactorON" Id="{e082b2b1-8b41-4a63-aef8-a56e68289df3}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setContactorON : bool //return true if contactor on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Contactor 													:= TRUE;
+SetContactorON												:= Q_Contactor;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startForward" Id="{8a6a271a-3133-4b01-8586-8036c3d3d54e}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC startForward : bool //Return busy flag
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= TRUE; 
+StartRev := Q_Reverse										:= FALSE;
+Q_Forward 													:= Q_Contactor AND Ready AND NOT inError AND Feed;
+Busy														:= Q_Forward;
+startForward												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startReverse" Id="{5cb2e4fc-5dad-4506-89cc-4e119195608a}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC startReverse : bool //Return busy flag
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[StartRev 													:= TRUE; 
+Start := Q_Forward											:= FALSE;
+Q_Reverse 													:= Q_Contactor AND Ready AND NOT inError AND Feed;
+Busy														:= Q_Reverse;
+startReverse												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOff" Id="{6af453a7-64a5-4d89-9b2d-ad847444d962}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC switchOff : BOOL //Return true if stopped / busy = false
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start := StartRev											:= FALSE;
+Q_Contactor := Q_Reverse := Q_Forward 						:= FALSE;
+Busy														:= FALSE;
+switchOff													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{c4c7eb7f-08f7-4ae6-84aa-3f22ccf41283}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC switchOn : BOOL  //True if motor is switched on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[switchOn := startForward();]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="IOFcCom">
+      <LineId Id="3114" Count="87" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.closeBrake">
+      <LineId Id="22" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.forwardStarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.inError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.isOff.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.isOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.noFeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.ok.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.openBrake">
+      <LineId Id="20" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.reset">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.reverseStarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.setContactorOFF">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.setContactorON">
+      <LineId Id="6" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.startForward">
+      <LineId Id="23" Count="3" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.startReverse">
+      <LineId Id="17" Count="3" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.switchOff">
+      <LineId Id="3" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOFcCom.switchOn">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

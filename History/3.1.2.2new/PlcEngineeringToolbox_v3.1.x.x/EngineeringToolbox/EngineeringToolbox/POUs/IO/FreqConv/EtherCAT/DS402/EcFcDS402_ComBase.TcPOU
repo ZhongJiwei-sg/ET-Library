@@ -1,0 +1,274 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EcFcDS402_ComBase" Id="{02833c51-a892-42a4-8f8d-2f3f6af83b0a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK EcFcDS402_ComBase	EXTENDS EcSlaveInfoData IMPLEMENTS I_ActuatorEnableDisable(* SEW *)
+VAR_INPUT
+	ResetTrig												:	BOOL := TRUE;	//Resets error with rising edge 
+	Enable													:	BOOL := FALSE;	//enables drive
+	Start													:	BOOL := FALSE;	//motor rotates in right direction when TRUE
+	StartBwd												:	BOOL := FALSE; 	//motor rotates in left direction when TRUE
+	Feed													:	BOOL := TRUE;	//enables feed in right direction and should be set to FALSE when right limit sensor is reached
+	FeedBwd													:	BOOL := TRUE;	//enables feed in left direction and should be set to FALSE when left limit sensor is reached
+	Velo													: 	LREAL := 0.0;  	//sets speed of rotation
+	ProtSwitchOK											: 	FUSE;			//monitors feeding protective device
+	FuseBrakeOK												: 	FUSE;			//monitors feeding circuit breaker 
+	Contactor												:	BOOL := FALSE;	//if available
+END_VAR
+VAR_OUTPUT		
+	{attribute 'displaymode':='binary'}
+	Status													:	BYTE; (* for HMI *)
+	Fault													:	BOOL; (* Drive Error *)
+	SwitchedOn												:	BOOL; (* Drive enabled *)
+	Ready													:	BOOL; (* Drive Ready *)
+	Busy													:	BOOL;
+	Error													:	BOOL;
+	{attribute 'displaymode':='binary'}    
+	Controlword										AT %Q* 	:	UINT; //Link to FC contro word
+	{attribute 'displaymode':='binary'}																					
+	Statusword										AT %I* 	:	UINT; //Link to FC status word 		
+	Q_Contactor 									AT  %Q* :	BOOL; //Hardware output contactor 
+    
+END_VAR
+VAR	
+	ResetIntern												:	BOOL;
+														
+END_VAR
+VAR_OUTPUT CONSTANT
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+
+]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{277425da-ad19-4999-80f2-cf4baf730ac0}" />
+    <Folder Name="properties" Id="{a46cabb6-127c-4f99-9433-1f371a2f8760}" />
+    <Property Name="inError" Id="{80df3aa8-e0c3-4acd-bb49-07cafcae647d}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public inError : bool]]></Declaration>
+      <Get Name="Get" Id="{f1f3a181-b437-47cf-acbe-1264b4aa88da}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inError := Error or not ProtSwitchOK.Q or not FuseBrakeOK.Q;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isBusy" Id="{ed7ca700-1708-4c8c-8129-abab894f70a7}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isBusy : bool]]></Declaration>
+      <Get Name="Get" Id="{5e45d7ff-b1c1-44b1-a0a6-e10e4fb9ef6b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy := Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isDisabled" Id="{d77c56e1-0f53-4d86-80aa-ca0de6bf270f}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2f8082ab-cdb5-42d5-9150-618460455561}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isDisabled := not Enable;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isEnabled" Id="{397688e6-03c3-46bb-86a9-ed6ae457b61c}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isEnabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6ec30f1c-623c-4360-bbf4-748b3d1f53ac}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isEnabled := Enable;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOff" Id="{ce6cd1b4-b282-4e37-871e-10c5f0632db5}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0716f9cc-9d26-4268-9f5a-b01951b24ab6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOff := TRUE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOn" Id="{85a9345d-c5ab-4337-8362-1dcfd5fd34c1}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6795a0e7-1007-4980-824e-1c2260865596}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOn := isEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="noFeed" Id="{a437c50c-3258-4cc7-9f0d-6628a3c2eecb}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY noFeed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{47e7d540-d2ec-4c36-b7c9-b15b0dbdf81d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[noFeed := not Feed and not FeedBwd;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ok" Id="{f1121690-a2f9-46cd-8799-a97c1bcb467e}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY ok : bool]]></Declaration>
+      <Get Name="Get" Id="{e321a328-f84d-49e4-bd7d-11508de4cebf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ok := isBusy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{cf81faa6-8f3d-4be4-9804-b12d3d89c257}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC reset : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ProtSwitchOK.reset();
+FuseBrakeOK.reset();
+ResetIntern												:= TRUE;
+reset													:= TRUE;
+															]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setContactorOFF" Id="{e44a8034-04c2-4900-8b79-92ddc53ea96f}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setContactorOFF : BOOL //Return true if contactor is off and not busy
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q_Contactor := Contactor 									:=FALSE;				
+SetContactorOFF 											:= switchOff() AND setDisable();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setContactorON" Id="{05d0008f-1c08-4c42-b2d7-e9efe540ba36}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setContactorON : bool //return true if contactor on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q_Contactor := Contactor 									:= ProtSwitchOK.Q AND FuseBrakeOK.Q ;
+SetContactorON												:= Q_Contactor;
+															]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setDisable" Id="{7ff1b3ee-26f4-4336-a6e5-79c922a5dd04}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD public setDisable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enable										:= FALSE;
+setDisable									:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setEnable" Id="{4c6b70cf-10ea-4da6-a312-e63a4ead898b}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD public setEnable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enable										:= Q_Contactor;
+setEnable									:= Enable;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOff" Id="{c667b662-c898-4bcc-ae5b-7a861f2dd718}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC switchOff : BOOL //Return true if stopped / busy = false
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= FALSE;
+StartBwd													:= FALSE;
+switchOff													:= NOT Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{e79fbf9a-0bfb-4345-bc7b-0eee8904de63}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC switchOn : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[switchOn := FALSE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EcFcDS402_ComBase">
+      <LineId Id="290" Count="0" />
+      <LineId Id="268" Count="0" />
+      <LineId Id="284" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.inError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.isDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.isEnabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.isOff.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.isOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.noFeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.ok.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.reset">
+      <LineId Id="14" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.setContactorOFF">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.setContactorON">
+      <LineId Id="7" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.setDisable">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.setEnable">
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.switchOff">
+      <LineId Id="15" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ComBase.switchOn">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

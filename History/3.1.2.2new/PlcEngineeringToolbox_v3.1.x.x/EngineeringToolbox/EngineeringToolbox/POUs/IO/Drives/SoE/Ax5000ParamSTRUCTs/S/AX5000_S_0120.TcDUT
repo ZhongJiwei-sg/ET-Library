@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0120" Id="{46589847-73cb-4548-b447-fc38a9eb8ab1}">
+    <Declaration><![CDATA[TYPE AX5000_S_0120 :
+STRUCT
+	Current_controler_loop_integral_action_time2:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

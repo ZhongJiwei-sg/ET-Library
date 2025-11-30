@@ -1,0 +1,259 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="ModbusSlaveBase" Id="{72089226-31d0-4971-a254-0e0d82777c14}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+// Modbus SlaveRoot 
+// This Funktionblock represents a root structure for a Modbus slave to communicate with all Modbus masters of Engineering Toolbox 
+// inherit this POU into "your" Modbus device POU
+// declare "your" Data POU for your Modbus Device
+// overload methodes evaluation, initJobs and prepareWriteData as private and edit inbetween the marks
+// call methode Run to start communication.
+// based on TF625x Modbus communication
+FUNCTION_BLOCK ModbusSlaveBase      
+VAR_INPUT
+	IpAddr													:	T_IPv4Addr := '127.0.0.1';	// use only for TCP and UDP or ''
+	Port 													:	UDINT;			// use only for TCP			or 0
+	Address													:	BYTE := 0;		//Modbus RTU addres
+//	Data													:	MyModbusDeviceData;	
+END_VAR            							
+VAR_OUTPUT
+	ModBusCom												:	ModbusSlaveCom; //Master-Slave Handshake object
+	Valid													:	BOOL; 		//	data valid 
+	TimeStamp												:	DT;			//	timestamp of last refresh 
+	CountGood												:	DWORD := 0;	//	counter for successful data transmission 
+	CountBad												:	DWORD := 0;	//	counter for failed data transmission
+	NoOfJobs												:	INT;		//	no of active jobs
+END_VAR
+VAR
+(* memory **************************************************)
+	state													:	INT;						
+(* trigger *************************************************)
+
+(* timer ***************************************************)
+
+(* blocks **************************************************)
+
+(* internal used variables *********************************)
+	i,j,k													:	INT :=0;	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="evaluation" Id="{797c6b60-fb28-4613-a520-8ef397d307ce}">
+      <Declaration><![CDATA[METHOD PROTECTED evaluation : BOOL //Result needs to be TRUE if data are evaluated
+VAR_INPUT
+	CurrentJobIdx						: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// copy and edit the code only between the marks to evaluate read data
+	
+	CASE currentJobIdx OF
+	0: evaluation											:= TRUE;
+	// **********************************************************		
+	// Modify start *********************************************	
+	1:	// evaluation of job 1 
+		// Data.Var_a										:= ModBusCom.Data[1];
+		// MEMCPY(ADR(Data.Var_b), ADR(ModBusCom.Data[1]),SIZEOF(Data.Var_b));
+			// HOST_TO_BE16(Data.Var_b);		
+		// MEMCPY(ADR(Data.Var_c), ADR(ModBusCom.Data[2]),SIZEOF(Data.Var_c));
+			// HOST_TO_BE32(Data.Var_c);				
+		//evaluation										:= TRUE;
+	2:	// evaluation of job 2 
+		// MEMCPY(ADR(Data.Var_d), ADR(ModBusCom.Data[1]),SIZEOF(Data.Var_a));
+		// Data.Var_e										:=	DWORD_TO_REAL_EX(	ADR(ModBusCom.Data[	5	]));
+		// Data.Var_f										:=	DWORD_TO_REAL_EX(	ADR(ModBusCom.Data[	9	]));	
+		//evaluation										:= TRUE;	                                                
+	3: 	// evaluation of job 3                              
+		// Data.Var_g										:=	TO_INT(					ModBusCom.Data[	1	]);	
+		// Data.Var_h										:=	TO_INT(					ModBusCom.Data[	3	]);
+		// Data.Var_i										:=	TO_INT(					ModBusCom.Data[	5	]);
+		//evaluation										:= TRUE;																					
+	4:	// write job, no evaluation 	
+		//evaluation										:= TRUE;
+	// Modify end ***********************************************
+	// **********************************************************
+	ELSE
+		;
+	END_CASE   
+                                     											
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="initJobs" Id="{19ee5944-9277-42bd-8d2c-a28557dfc743}">
+      <Declaration><![CDATA[METHOD PROTECTED initJobs : BOOL //Result needs to be TRUE for every valid JobIdx 
+VAR_INPUT
+	JobIdx													:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(********** Modbus slave jobs *********************)
+	
+// HINT: The register number is in accordance with the Modbus specification always less 1.
+	CASE JobIdx OF
+	0:initJobs												:= TRUE;
+// **********************************************************		
+// Modify start *********************************************
+	1: // read job 
+//		ModBusCom.Jobs[JobIdx].FunctionCode 				:=   3		;
+//		ModBusCom.Jobs[JobIdx].startAddress					:=   499	;	(* first read-address -1 *)
+//		ModBusCom.Jobs[JobIdx].Quantity 					:=   14		;	(* no of read words *)
+//		initJobs											:= TRUE;
+		                                    				
+	2:	// read job                         				
+//		ModBusCom.Jobs[JobIdx].FunctionCode 				:=   3		;
+//		ModBusCom.Jobs[JobIdx].startAddress					:=  40000	;	(* first read-address -1 *)
+//		ModBusCom.Jobs[JobIdx].Quantity 					:=   120	;	(* no of read words *)
+//		initJobs											:= TRUE;
+	3:	// read job                         				
+//		ModBusCom.Jobs[JobIdx].FunctionCode 				:=   3		;
+//		ModBusCom.Jobs[JobIdx].startAddress					:=  40120	;	(* first read-address -1 *)
+//		ModBusCom.Jobs[JobIdx].Quantity 					:=   20		;	(* no of read words *)
+//		initJobs											:= TRUE;
+	4:	// write job                        				
+//		ModBusCom.Jobs[JobIdx].FunctionCode 				:=   5		;
+//		ModBusCom.Jobs[JobIdx].startAddress					:=   112	;	(* first read-address*)
+//		ModBusCom.Jobs[JobIdx].Quantity 					:=   1		;	(* no of write words *)
+//		initJobs											:= TRUE;
+// Modify end ***********************************************
+// **********************************************************	
+
+	ELSE	
+		;
+	END_CASE
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="prepareWriteData" Id="{124a484e-da6c-4f41-8218-4b860353a919}">
+      <Declaration><![CDATA[METHOD PROTECTED prepareWriteData : BOOL	//Result needs to be TRUE for every valid write JobIdx
+VAR_INPUT
+	CurrentJobIdx						: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// copy and edit the code only between the marks to prepare necessary write data
+	CASE currentJobIdx OF	
+	0:prepareWriteData										:= TRUE;
+	// **********************************************************		
+	// Modify start *********************************************
+	1:	// no write data in this job
+		
+	2:	// no write data in this job
+											
+	3:  // no write data in this job
+	
+	4:	//Copy write job data to com object
+		// ModBusCom.Data[	1	]							:=	Data.SET_Var_j;
+		// prepareWriteData									:= TRUE; //Set to true:              			
+	// Modify end ***********************************************
+	// **********************************************************		
+	ELSE
+		;
+	END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="run" Id="{690c7f1f-02a8-4284-9593-e77828491056}">
+      <Declaration><![CDATA[METHOD FINAL run : BOOL // returns TRUE if one job is finished
+VAR_INPUT
+	Enable													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	(* Modbus slave logic 									*)
+	(********************************************************)
+	
+(* Sequence ****************************************************************)
+CASE state OF 
+//Wait for start slave 
+0: 
+	IF Enable 
+	THEN
+		ModBusCom.Enable									:= Enable;
+		ModBusCom.Address 									:= Address;
+		ModBusCom.IpAddr	 								:= IpAddr;
+		ModBusCom.Port	 									:= Port;
+		ModBusCom.countBad 		:= ModBusCom.countGood		:= 0;
+		ModBusCom.noOfJobs 									:= 0;
+		
+		//Run loop to init every single job		
+		FOR i:= ModBusCom.MIN_SLAVE_JOB TO ModBusCom.MAX_SLAVE_JOB DO
+			ModBusCom.Jobs[i].Init();
+			IF initJobs(JobIdx := i)
+			THEN
+				noOfJobs									:= i;
+			ELSE
+				EXIT;
+			END_IF
+		END_FOR
+
+		ModBusCom.DeleteData();
+		ModBusCom.noOfJobs									:= noOfJobs;
+	
+		state												:= 1;
+	END_IF
+
+//Read/write slave data is active
+1: 
+	//Init write data if requesed by master
+	IF ModBusCom.writeJobRequested 
+	THEN //
+		ModBusCom.DeleteData();
+		prepareWriteData(currentJobIdx := ModBusCom.currentJobIdx);
+		ModBusCom.writeJobRequested 						:= FALSE;
+	END_IF
+	
+	//Evaluation of job result
+	IF ModBusCom.Jobs[ModBusCom.currentJobIdx].Valid //Valid is set by master
+	THEN	
+		Valid 												:= FALSE; //Slave data not valid
+		evaluation(CurrentJobIdx := ModBusCom.currentJobIdx);	
+				
+		countBad 											:= ModBusCom.countBad;
+		countGood 											:= ModBusCom.countGood;
+		TimeStamp 											:= ModBusCom.Jobs[ModBusCom.currentJobIdx].TimeStamp;
+		ModBusCom.Jobs[ModBusCom.currentJobIdx].Valid 		:= FALSE;
+		ModBusCom.DeleteData();                                 
+		Valid 												:= TRUE; //Slave data valid
+		run													:= TRUE;
+	ELSE
+		run													:= FALSE;
+	END_IF
+	
+	state													:= SEL(Enable, 0, state);
+	ModBusCom.Enable										:= Enable;	
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ModbusSlaveBase">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusSlaveBase.evaluation">
+      <LineId Id="3" Count="2" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="6" Count="25" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusSlaveBase.initJobs">
+      <LineId Id="3" Count="3" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="7" Count="31" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusSlaveBase.prepareWriteData">
+      <LineId Id="3" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="5" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusSlaveBase.run">
+      <LineId Id="3" Count="62" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="KIN_REF" Id="{f1abdfb3-7af1-4662-bc92-d8ac271679cf}" SpecialFunc="None">
+    <Declaration><![CDATA[//Kinematic group ref - call ReadStatus cyclic
+FUNCTION_BLOCK KIN_REF
+VAR_INPUT
+	PlcToNci										AT %Q*	:	PLCTONC_NCICHANNEL_REF;
+END_VAR                     						
+VAR_OUTPUT                  						
+	NciToPlc										AT %I*	:	NCTOPLC_NCICHANNEL_REF;
+                            						
+	ChnOperationState										:	E_KINSTATUS := 0;
+	CartesianModeON											:	BOOL := FALSE;
+	                                					
+(* ChnState ***************************)
+	IsKinematicChn											:	BOOL := FALSE;
+	                                					
+	AxList													: ST_KinAxes;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="readStatus" Id="{e1e8673f-f871-422c-9060-9a77799d4e64}">
+      <Declaration><![CDATA[METHOD PUBLIC readStatus : booL;
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Kin Channel State *********************************************************)
+	F_KinGetAcsMcsAxisIds(AxList,NciToPlc);
+	
+	ChnOperationState 										:= TO_INT(F_KinGetChnOperationState(NciToPlc));
+
+	CartesianModeON											:= NciToPlc.AcsAxisIDs[0] <> 0 AND NciToPlc.AcsAxisIDs[1] <> 0;
+	
+	IsKinematicChn											:= NciToPlc.ChnState.1;
+
+	readStatus												:= TRUE;
+(*****************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="KIN_REF">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_REF.readStatus">
+      <LineId Id="3" Count="7" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

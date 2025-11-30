@@ -1,0 +1,278 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MDP_RaidSimple" Id="{9c5699bd-1a3c-4135-9121-35d8e02bba26}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK MDP_RaidSimple  EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	MIN_DRIVE												:	INT := 1;
+	MAX_DRIVE												:	INT := 4;
+	                    									
+//Cntr state            									
+	CS_UNKNOWN												:	INT := 0;
+	CS_GOOD													:	INT := 1;
+	CS_FAILED												:	INT := 2; 
+	CS_OFFLINE												:	INT := 3; 
+	CS_POWER_OFF											:	INT := 4;
+	                    									
+//Cntr offline reason   									
+	COR_NO_REASON											:	INT := 0;
+	COR_INITIALIZING										:	INT := 1;
+	COR_BUS_DEGRADED										:	INT := 2;
+	COR_BUS_FAILURE											:	INT := 3;
+	                    									
+//Set state             									
+	SS_OK													:	INT := 0;
+	SS_DEGRADED												:	INT := 1;
+	SS_REBUILDING											:	INT := 2;
+	SS_FAILED												:	INT := 3;
+	                    									
+//Drive state		    									
+	DS_OK													:	INT := 0;
+	DS_REBUILDING											:	INT := 1;
+	DS_FAILED 												:	INT := 2;
+	DS_DEGRADED 											:	INT := 3;
+END_VAR                 									
+VAR_INPUT               									
+	AmsNetId												: 	T_AmsNetId := '';	//AmsNetId as text
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;	//Ads timeout
+END_VAR                 									
+VAR_OUTPUT              									
+(* Raid Data *)         									
+	CntrState												:	INT := CS_UNKNOWN;		//current controller state
+	CntrOfflReason 											: 	INT := COR_NO_REASON;	//reason for controller offline
+                        									
+	SetType													:	USINT;					//type of RAID system
+	SetState												:	INT := SS_OK;			
+	SetInfo													:	USINT; (* 	If SetStatus = OK, THEN Info will be 0.
+																					If SetStatus = DEGRADED, then Info will contain the failed drive index number.1
+																					If SetStatus = REBUILDING, then Info will contain the percentage complete. The value will be in the range of 0 to 100 (0h to 64h).
+																					If SetStatus == FAILED, then Info will be 0 or vendor specific. Since the failure modes could include drive or controller failures, Info may provide a vendor specific error code to indicate which component led to the failed status. *)
+	CountDrives												:	UINT;
+	DriveSTATE												:	ARRAY[MIN_DRIVE..MAX_DRIVE] OF INT; //current state of drive
+	CountRAIDSets											:	UINT; 		//Count RAID sets
+	ErrorGrp												:	E_MDP_ErrGroup := eMDP_Err_NoError;
+END_VAR                 									
+VAR                     									
+	idx														:	INT := 1;
+	MDP_ScanModules											:	FB_MDP_ScanModules := ( nModuleType 	:= eMDP_ModT_RAID , iModIdx		:= 0);
+	MDP_Read												: 	FB_MDP_Read;
+	SplitErrorId											:	FB_MDP_SplitErrorID ;
+	DstBuf													:	ARRAY[0..4] OF BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Read RAID Information 						V1.0	*)
+(* only for RAID set 1									*)
+(* not more then MAX_DRIVES per RAID set				*)
+(********************************************************)
+
+(* Start Read *******************************************)
+	IF Execute
+		AND state = 0
+	THEN
+		CntrState											:= CS_UNKNOWN;
+		CntrOfflReason 										:= COR_NO_REASON;
+		SetType												:= 0;
+		SetState											:= SS_OK;
+		SetInfo												:= 0;
+		CountDrives											:= 0;
+		MEMSET(ADR(DriveSTATE),0,SIZEOF(DriveSTATE));   	
+		CountRAIDSets										:= 0;
+                                                        	
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+		MDP_Read(bExecute := FALSE);
+		MDP_ScanModules(
+			bExecute		:= FALSE,
+			nModuleType		:= eMDP_ModT_RAID,
+			iModIdx			:= 0,
+			tTimeout		:= timeout,
+			sAmsNetId		:= AmsNetId,
+			bBusy			=> ,
+			bError			=> ,
+			nErrID			=> ,
+			nDynModuleId	=> ,
+			iModuleTypeCount=> ,
+			iModuleCount	=> );
+			
+		MDP_ScanModules(bExecute:= TRUE);
+		state												:= 1;
+	ELSIF NOT Execute
+		AND State = 99
+	THEN
+		state												:= 0;
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+	END_IF
+
+
+	CASE state OF
+	0:
+		;
+	1:
+		MDP_ScanModules();
+		IF NOT MDP_ScanModules.bBusy
+		THEN
+			IF MDP_ScanModules.bError
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_ScanModules.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_ScanModules(bExecute := FALSE);
+			ELSE
+				MDP_Read(bExecute := FALSE);
+				MDP_Read.stMDP_DynAddr.nArea				:= 16#8;
+				MDP_Read.stMDP_DynAddr.nModuleId			:= MDP_ScanModules.nDynModuleId;
+				MDP_Read.stMDP_DynAddr.nTableId				:= 16#1;
+				MDP_Read.stMDP_DynAddr.nSubIdx				:= 0;
+				state										:= 2;
+			END_IF
+
+		END_IF
+
+	2:
+		MDP_Read( pDstBuf	:= ADR(DstBuf), cbDstBufLen := SIZEOF(DstBuf));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				IF MDP_Read.stMDP_DynAddr.nTableId = 16#2
+					AND MDP_Read.stMDP_DynAddr.nSubIdx = 1
+				THEN (* No RaidSystem found *)
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 99;
+				ELSE
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					SplitErrorId(
+						nErrID		:= MDP_Read.nErrID,
+						eErrGroup	=> ErrorGrp ,
+						nErrCode	=> ErrorId);
+				END_IF
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				MDP_Read(bExecute := FALSE);
+				CASE MDP_Read.stMDP_DynAddr.nTableId OF
+				16#1: (* Controller Info *)
+					CASE MDP_Read.stMDP_DynAddr.nSubIdx	OF
+					0:
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 1;
+
+					1:
+						MEMCPY(ADR(CntrState), ADR(DstBuf), SIZEOF(CntrState));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 2;
+
+					2:
+						MEMCPY(ADR(CntrOfflReason), ADR(DstBuf), SIZEOF(CntrOfflReason));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 0;
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#2;
+					END_CASE
+
+				16#2: (* Raid Sets Type *)
+					CASE MDP_Read.stMDP_DynAddr.nSubIdx	OF
+					0:
+						MEMCPY(ADR(CountRAIDSets), ADR(DstBuf), SIZEOF(CountRAIDSets));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 1;
+
+					1:
+						MEMCPY(ADR(SetType), ADR(DstBuf), SIZEOF(SetType));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 1;
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#3;
+					END_CASE
+
+				16#3: (* RAID sets state and info *)
+					CASE MDP_Read.stMDP_DynAddr.nSubIdx	OF
+					1:
+						MEMCPY(ADR(SetState), ADR(DstBuf[0]), 1);
+						MEMCPY(ADR(SetInfo), ADR(DstBuf[1]), 1);
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 0;
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#A;
+					END_CASE
+
+
+				16#A: (* Drives state  *)
+					CASE MDP_Read.stMDP_DynAddr.nSubIdx	OF
+					0:
+						MEMCPY(ADR(CountDrives), ADR(DstBuf), SIZEOF(CountDrives));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 1;
+
+					1..255:
+						MEMCPY(ADR(DriveSTATE), ADR(DstBuf), 1);
+						MDP_Read.stMDP_DynAddr.nSubIdx	:= MDP_Read.stMDP_DynAddr.nSubIdx + 1;
+						IF MDP_Read.stMDP_DynAddr.nSubIdx > CountDrives
+							OR MDP_Read.stMDP_DynAddr.nSubIdx > MAX_DRIVE
+						THEN
+							Busy							:= FALSE;
+							Done							:= TRUE;
+							state							:= 99;
+						END_IF
+
+					END_CASE
+
+				ELSE
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 99;
+				END_CASE
+
+				MDP_Read(
+					stMDP_DynAddr	:= ,(* address to request subindex Count of AdressList *)
+					pDstBuf			:= ADR(DstBuf),
+					cbDstBufLen		:= SIZEOF(DstBuf),
+					bExecute		:= NOT MDP_Read.bBusy AND state = 2,
+					tTimeout		:= Timeout,
+					sAmsNetId		:= AmsNetId,
+					bBusy			=> ,
+					bError			=> ,
+					nErrId			=> );
+			END_IF
+		END_IF
+
+	99: ;
+
+	ELSE
+		;
+	END_CASE
+
+	(* reset state for next start *)
+	IF NOT Execute
+		AND state = 99
+	THEN
+		state												:= 0;
+	END_IF
+
+(****************************************************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MDP_RaidSimple">
+      <LineId Id="3" Count="207" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

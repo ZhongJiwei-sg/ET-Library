@@ -1,0 +1,474 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="AxDriveStepperParam" Id="{d9765c2f-a1c6-495c-91ef-c535bab9f69c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//FB template to read and write parameter
+//The FB can be enherided and derivatived methods of SeqRead/SeqWrite used for application specific parameter.
+//The extended methods need to call the super class at the beginning and return true if execution will be finished. The allowed states for new parameter are 1..99
+//
+//Calculating NC-parameter
+//Sacling with Enc 		= Distance per revolution / (Increments x 4 fold)
+//Scaling without Enc.  = Distance per revolution / (Fullsteps x Microsteps)
+//Scalingfactor = 360° / (1024 x 4) OR 360° / (200 x 64) 
+//
+//Ref. Velocity = (Max. Outputfreq * Distance per rev.) / (Fullsteps * Microsteps)
+//3515 °/s = (126kHz * 360°) / (200 * 64)
+//Set kv to 0 to see whether ref. velocity is correct
+//
+FUNCTION_BLOCK AxDriveStepperParam EXTENDS AxRWParaBase
+VAR_OUTPUT CONSTANT
+END_VAR                                 					
+VAR_INPUT                               					
+	AdsAddr													: 	AMSADDR; //Terminal AMS Net Addr.                                        	                                        	
+	Channel													:	USINT := 0; //Drive channel 0 or 1 
+	SetKpPosition											:	LREAL; //0:8014:02 - only at EL70x7
+	SetKpVelocity											:	LREAL; //0:8014:03 in 0.1mA/(rad/s) - at EL70x1 -> 0:8013:01 - at EL70x1
+	SetKiVelocity											:	LREAL; //0:8013:02 in 0.001 - NOT for EL70x7
+	SetTnVelocity											:	LREAL; //0:8014:04 in 0.01 ms - only at EL70x7 
+	SetKpCurrent											:	LREAL; //0:8011:01 
+	SetKiCurrent											:	LREAL; //0:8011:02 
+
+	SetCalibrInvertDirForCamSearch							:	BOOL; 	//0:8021:13 / TRUE=Cam search direction negative
+	SetCalibrInvertDirForOfCam								:	BOOL; 	//0:8021:14 / TRUE=Sync impuls (off cam) search direction negative
+	SetCalibrPosition										:	UDINT;	//0:8020:08 
+END_VAR 
+VAR_IN_OUT
+END_VAR                               					
+VAR_OUTPUT
+	DeviceType												:	STRING(15); //e.g. EL7037
+
+	KpPosition												:	LREAL;
+	KpVelocity												:	LREAL;
+	KiVelocity												:	LREAL; //Not available at EL70x7
+	TnVelocity												:	LREAL; //Only available at EL70x7
+	KpCurrent												:	LREAL;
+	KiCurrent												:	LREAL;	
+	CalibrInvertDirForCamSearch								:	BOOL; // TRUE=Cam search direction negative
+	CalibrInvertDirForOfCam									:	BOOL; // TRUE=Sync impuls (off cam) search direction negative
+	CalibrPosition											:	UDINT;
+END_VAR                         	
+VAR
+(* Cache ************************************************************)
+	
+(* Trigger **********************************************************)
+
+(* Timer ******************************************************************)
+
+(* FBs ***************************************************************)
+	CoEWrite												: FB_EcCoESdoWriteEx := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	CoERead													: FB_EcCoeSdoReadEx := (tTimeout := DEFAULT_ADS_TIMEOUT);
+
+(* Dummy memory **********************************************************)
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read/Write stepper drive parameter												*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	SUPER^();
+	
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Property Name="deviceAddrIsValid" Id="{edc6c59c-f1e3-44bf-9718-6e949e1086ee}">
+      <Declaration><![CDATA[PROPERTY PROTECTED deviceAddrIsValid : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0e0eeeca-f3e1-4e55-bfbb-0982d28c9585}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[deviceAddrIsValid := AdsAddr.port > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="getValue" Id="{bd8ae433-1b8f-42ec-a6ec-7257ca32a4d9}">
+      <Declaration><![CDATA[METHOD PROTECTED getValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	Index						:	WORD;
+	SubIndex					:	BYTE;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value
+	pSetValue					:	PVOID; //Address of variable for ser value variable, can be zero if no corresponding SetVariable exists
+	CompleteAccess				:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CoERead(bExecute := TRUE , nIndex := Index ,nSubIndex := SubIndex ,pDstBuf := pActValue ,cbBufLen := Len, bCompleteAccess  := CompleteAccess);
+IF NOT CoERead.bBUSY 	
+THEN
+	IF NOT CoERead.bError
+	THEN
+		IF pSetValue <> 0 THEN MEMCPY(pSetValue, pActValue, Len); END_IF
+		state 												:= state + 1; 
+	ELSE
+		Busy												:= FALSE;
+		Error												:= TRUE;
+		ErrorId												:= CoERead.nErrId;
+		ErrorText											:= CONCAT('Error read parameter in state:' , TO_STRING(state * -1));
+		ErrorText											:= CONCAT(ErrorText , ' Id:');
+		ErrorText											:= CONCAT(ErrorText , TO_STRING(ErrorId));
+		State												:= 9999;
+	END_IF
+	CoERead(bExecute := FALSE);
+	getValue												:= TRUE;
+END_IF 
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqRead" Id="{8f930e2e-5c96-427d-81f5-342aa8176c15}">
+      <Declaration><![CDATA[METHOD PROTECTED seqRead : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	State							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+(* Sequence read parameter **********************************)
+	CASE state OF
+	1..99: //Read application specific parameter  
+		seqRead												:= TRUE;
+		
+	1001: (* Init step ******************************************************)
+		CoERead(bExecute := FALSE, sNetId:= F_CreateAmsNetId(nIds := AdsAddr.netId), nSlaveAddr:= AdsAddr.port);
+		IF NOT CoERead.bBusy
+		THEN
+			state											:= state + 1;	
+		END_IF
+		
+	1002: (* Device name *************************************************************************************)
+		IF LEN(DeviceType) > 0 AND NOT CoERead.bBusy
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(Index:= 16#1008,	Subindex := 16#0,	LEN := SIZEOF(DeviceType),	pActValue := ADR(DeviceType),	pSetValue := 0, completeAccess := FALSE);
+		END_IF
+
+			
+	1003: (* kp_current *************************************************************************************)
+		IF DeviceType = 'EL7041-1000' OR DeviceType = 'EP7041-3002' OR DeviceType = 'EP7041-3102'
+		THEN
+			state											:= state + 1; (* NOT available *)
+		ELSE	
+			IF getValue(Index:= 16#8011,	Subindex := 16#01,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),	pSetValue := 0, completeAccess := FALSE)
+			THEN
+				KpCurrent := SetKpCurrent					:= SEL(Error, UINT_TO_LREAL(_UINT), 0.0);
+			END_IF
+		END_IF
+		
+	1004: (* ki current **********************************)
+		IF DeviceType = 'EL7041-1000' OR DeviceType = 'EP7041-3002' OR DeviceType = 'EP7041-3102'
+		THEN
+			state											:= state + 1; (* Not available *)
+		ELSE	
+			IF getValue(Index:= 16#8011,	Subindex := 16#02,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),	pSetValue := 0, completeAccess := FALSE)
+			THEN
+				KiCurrent := SetKiCurrent					:= SEL(Error, UINT_TO_LREAL(_UINT), 0.0);
+			END_IF		
+		END_IF
+	
+	1005: (* Kp velocity ****************************************************************************************)
+		IF DeviceType = 'EL7041-1000'
+		THEN
+			state											:= state + 1;
+		ELSIF DeviceType = 'EL7037' OR DeviceType = 'EL7047' 
+		THEN			
+			IF getValue(Index:= 16#8014,	Subindex := 16#03,	LEN := SIZEOF(_UDINT),	pActValue := ADR(_UDINT),	pSetValue := 0, completeAccess := FALSE)
+			THEN
+				KpVelocity := SetKpVelocity					:= SEL(Error, UDINT_TO_LREAL(_UDINT), 0.0);
+			END_IF
+		ELSE			
+			IF getValue(Index:= 16#8013,	Subindex := 16#01,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),	pSetValue := 0, completeAccess := FALSE)
+			THEN
+				KpVelocity := SetKpVelocity					:= SEL(Error, UINT_TO_LREAL(_UINT), 0.0);
+			END_IF			
+		END_IF	
+		
+	1006: (* Tn velocity or Ki Velocity ****************************************************************************************)
+		IF DeviceType = 'EL7041-1000'
+		THEN
+			state											:= state + 1;
+		ELSIF DeviceType = 'EL7037' OR DeviceType = 'EL7047'
+		THEN (* Tn velocity*)			
+			IF getValue(Index:= 16#8014,	Subindex := 16#04,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),	pSetValue := 0, completeAccess := FALSE)
+			THEN
+				KiVelocity := SetKiVelocity					:= SEL(Error, UINT_TO_LREAL(_UINT), 0.0);
+			END_IF
+			
+		ELSE (* Ki Velccity*)
+			IF getValue(Index:= 16#8013,	Subindex := 16#02,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),	pSetValue := 0, completeAccess := FALSE)
+			THEN
+				KiVelocity := SetKiVelocity					:= SEL(Error, UINT_TO_LREAL(_UINT), 0.0);
+			END_IF
+		END_IF 
+	
+	1007: (* Kp position ****************************************************************************************)
+		IF DeviceType = 'EL7037' OR DeviceType = 'EL7047' 
+		THEN			
+			IF getValue(Index:= 16#8014,	Subindex := 16#02,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),	pSetValue := 0, completeAccess := FALSE)
+			THEN
+				KpPosition := SetKpPosition					:= SEL(Error, UINT_TO_LREAL(_UINT), 0.0);
+			END_IF			
+		ELSE
+			;
+		END_IF	
+	
+	1008: (* Homing cam search direction ****************************************************************************************)		
+		IF DeviceType = 'EL7041-1000' 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(Index:= 16#8021,	Subindex := 16#13,	LEN := SIZEOF(CalibrInvertDirForCamSearch),	pActValue := ADR(CalibrInvertDirForCamSearch),	pSetValue := ADR(SetCalibrInvertDirForCamSearch), completeAccess := FALSE);			
+		END_IF
+	
+	1009: (* Homing cam of direxction ****************************************************************************************)	
+		IF DeviceType = 'EL7041-1000'
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(Index:= 16#8021,	Subindex := 16#14,	LEN := SIZEOF(CalibrInvertDirForOfCam),	pActValue := ADR(CalibrInvertDirForOfCam),	pSetValue := ADR(SetCalibrInvertDirForOfCam), completeAccess := FALSE);			
+		END_IF
+
+	1010: (* Calibration value ****************************************************************************************)
+		IF DeviceType = 'EL7041-1000'
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(Index:= 16#8020,	Subindex := 16#08,	LEN := SIZEOF(CalibrPosition),	pActValue := ADR(CalibrPosition),	pSetValue := ADR(SetCalibrPosition), completeAccess := FALSE);			
+		END_IF
+		
+	ELSE
+		state												:= 1;
+	END_CASE
+
+(***********************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqWrite" Id="{b788de8b-c9ba-4b5e-a765-3997fd6fafa5}">
+      <Declaration><![CDATA[METHOD PROTECTED seqWrite : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	State							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+(* Sequence write parameter *********************************************)
+	CASE state OF
+	1..99: //Write application specific parameter  
+		seqWrite											:= TRUE;
+		
+	1001: (* Init step ******************************************************)
+		CoEWrite(bExecute := FALSE, sNetId:= F_CreateAmsNetId(nIds := AdsAddr.netId), nSlaveAddr:= AdsAddr.port);
+		IF NOT CoEWrite.bBusy
+		THEN
+			state											:= state + 1;	
+		END_IF
+		
+	1002: (* Kv position *************************************************************************************)
+		IF DeviceType = 'EL7041-1000' OR DeviceType = 'EP7041-3002' OR DeviceType = 'EP7041-3102'
+			OR KpCurrent = SetKpCurrent AND NOT CoEWrite.bBusy
+		THEN
+			state											:= state + 1;
+		ELSE
+			_UINT											:= LREAL_TO_UINT(SetKpCurrent);
+			IF setValue(Index:= 16#8011,	Subindex := 16#01,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT) , completeAccess := FALSE)
+			THEN
+				KpCurrent									:= SetKpCurrent;
+			END_IF			
+		END_IF	
+		
+	1003: (* ki current **********************************)
+		IF DeviceType = 'EL7041-1000' OR DeviceType = 'EP7041-3002' OR DeviceType = 'EP7041-3102'
+			OR KiCurrent = SetKiCurrent AND NOT CoEWrite.bBusy
+		THEN
+			state											:= state + 1;
+		ELSE
+			_UINT											:= LREAL_TO_UINT(SetKiCurrent);
+			IF setValue(Index:= 16#8011,	Subindex := 16#02,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT) , completeAccess := FALSE)
+			THEN
+				KiCurrent									:= SetKiCurrent;
+			END_IF			
+		END_IF
+	
+	1004: (* Kp velocity ****************************************************************************************)
+		IF DeviceType = 'EL7041-1000' 
+			OR KpVelocity = SetKpVelocity AND NOT CoEWrite.bBusy
+		THEN
+			state											:= state + 1;
+		ELSE
+			IF DeviceType = 'EL7037' OR DeviceType = 'EL7047' 
+			THEN
+				_UDINT										:=LREAL_TO_UDINT(SetKpVelocity);
+				IF setValue(Index:= 16#8014,	Subindex := 16#03,	LEN := SIZEOF(_UDINT),		pActValue := 0,		pSetValue := ADR(_UDINT) , completeAccess := FALSE)
+				THEN
+					KpVelocity								:= SetKpVelocity;
+				END_IF	
+			ELSE
+				_UINT										:=LREAL_TO_UINT(SetKpVelocity);
+				IF setValue(Index:= 16#8013,	Subindex := 16#01,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT) , completeAccess := FALSE)
+				THEN
+					KpVelocity								:= SetKpVelocity;
+				END_IF	
+			END_IF		
+		END_IF
+	
+	1005: (* Tn velocity or Ki velocity****************************************************************************************)
+		IF SetTnVelocity = TnVelocity AND SetKiVelocity = KiVelocity AND NOT CoEWrite.bBusy OR DeviceType = 'EL7041-1000'
+		THEN 
+			state											:= state + 1;
+		ELSE
+			IF DeviceType = 'EL7037' OR DeviceType = 'EL7047' 
+			THEN (* Tn Velocity *)
+				_UINT										:= LREAL_TO_UINT(SetTnVelocity);
+				IF setValue(Index:= 16#8014,	Subindex := 16#04,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT) , completeAccess := FALSE)
+				THEN
+					TnVelocity								:= SetTnVelocity;
+				END_IF	
+				
+	
+			ELSE (* Ki Velocity *)
+				_UINT										:= LREAL_TO_UINT(SetKiVelocity);
+				IF setValue(Index:= 16#8013,	Subindex := 16#02,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT) , completeAccess := FALSE)
+				THEN
+					KiVelocity								:= SetKiVelocity;
+				END_IF				
+			END_IF	
+		END_IF
+	
+	1006: (* Kp position ****************************************************************************************)		
+		IF SetKpPosition <> KpPosition AND (DeviceType = 'EL7037' OR DeviceType = 'EL7047')
+		THEN
+			_UINT											:= LREAL_TO_UINT(SetKpPosition);
+			IF setValue(Index:= 16#8014,	Subindex := 16#02,	LEN := SIZEOF(_UINT),		pActValue := 0 ,		pSetValue := ADR(_UINT) , completeAccess := FALSE)	
+			THEN
+				KpPosition									:= SetKpPosition;
+			END_IF			
+		ELSIF NOT CoEWrite.bBusy
+		THEN
+			state											:= state + 1;
+		END_IF
+			
+	1007: (* Homing cam search direction ********************************************************************************************)
+		IF DeviceType = 'EL7041-1000' 
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(Index:= 16#8021,	Subindex := 16#13,	LEN := SIZEOF(SetCalibrInvertDirForCamSearch),		pActValue := ADR(CalibrInvertDirForCamSearch) ,		pSetValue := ADR(SetCalibrInvertDirForCamSearch) , completeAccess := FALSE);
+		END_IF
+		
+	1008: (* Homing cam of direction *****************************************************************************************)
+		IF DeviceType = 'EL7041-1000' 
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(Index:= 16#8021,	Subindex := 16#14,	LEN := SIZEOF(SetCalibrInvertDirForOfCam),		pActValue := ADR(CalibrInvertDirForOfCam) ,		pSetValue := ADR(SetCalibrInvertDirForOfCam) , completeAccess := FALSE)	;	
+		END_IF
+	
+	1009: (* Calibration position ***********************************************************************)	
+		IF DeviceType = 'EL7041-1000' 
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(Index:= 16#8020,	Subindex := 16#08,	LEN := SIZEOF(SetCalibrPosition),		pActValue := ADR(CalibrPosition) ,		pSetValue := ADR(SetCalibrPosition) , completeAccess := FALSE)	;	
+		END_IF
+	ELSE
+		state												:= 1;
+	END_CASE
+
+(************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setValue" Id="{b85fc202-f9b6-413c-88fa-cf20cf5fc8e5}">
+      <Declaration><![CDATA[METHOD PROTECTED setValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	Index						:	Word;
+	SubIndex					:	BYTE;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value, can be zero if no corresponding acual value variable exists
+	pSetValue					:	PVOID; //Address of variable for set value variable
+	CompleteAccess				:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+
+IF pActValue <> 0 AND pSetValue <> 0 AND_THEN MEMCMP(pSetValue, pActValue, Len) = 0
+THEN //Skip write parameter if set and actual value are equel
+	state													:= state + 1;	
+	setValue												:= TRUE;
+ELSE
+	CoEWrite(bExecute := TRUE, nIndex := Index ,nSubIndex := SubIndex , pSrcBuf := pSetValue ,cbBufLen := Len , bCompleteAccess := CompleteAccess );
+	IF NOT CoEWrite.bBusy
+	THEN
+		IF NOT CoEWrite.bError
+		THEN
+			IF pActValue <> 0 THEN MEMCPY(pActValue, pSetValue, Len); END_IF	
+			state											:= state + 1;
+		ELSE
+			Busy											:= FALSE;
+			Error											:= TRUE;
+			ErrorId											:= CoEWrite.nErrId;
+			ErrorText										:= CONCAT('Error write parameter in state:' , TO_STRING(state * -1));
+			ErrorText										:= CONCAT(ErrorText , ' Id:');
+			ErrorText										:= CONCAT(ErrorText , TO_STRING(ErrorId));
+			State											:= 9999;
+		END_IF
+		CoEWrite(bExecute := FALSE);
+		setValue											:= TRUE;
+	END_IF		
+END_IF
+	
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveStepperParam">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveStepperParam.deviceAddrIsValid.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveStepperParam.getValue">
+      <LineId Id="3" Count="5" />
+      <LineId Id="10" Count="9" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveStepperParam.seqRead">
+      <LineId Id="3" Count="117" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveStepperParam.seqWrite">
+      <LineId Id="3" Count="123" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveStepperParam.setValue">
+      <LineId Id="3" Count="12" />
+      <LineId Id="17" Count="9" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="27" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
