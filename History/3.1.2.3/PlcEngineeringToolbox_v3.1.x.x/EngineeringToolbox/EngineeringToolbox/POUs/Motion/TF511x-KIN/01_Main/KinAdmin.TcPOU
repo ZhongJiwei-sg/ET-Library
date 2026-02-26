@@ -1,0 +1,224 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="KinAdmin" Id="{5a05651f-1260-477a-b1aa-66c47f552c8f}" SpecialFunc="None">
+    <Declaration><![CDATA[//Kinematic group administration - Enable/Disable/Reset group
+//based on TF511x - Tc2_NcKinematicTransformation
+//ACS - Axis coordinate system => Robot motors M1-Mx 
+//MCS - Machine coordinate system >= Cartesian Axis X,Y,Z,Rx,Ry,Rz (A,B,C) 
+FUNCTION_BLOCK KinAdmin
+VAR_INPUT
+	ResetTrig												:	BOOL := FALSE;
+	Enable													:	BOOL := FALSE; (* TRUE = Build Group , FALSE = Reconfig Group *)
+	Override												:	LREAL	:= 0.0;
+	ItpChannelId 											: 	UDINT := 0; (* Bei 0 wirtd der ITP Kanal nicht resetet *)
+	AxesList												: 	ST_KinAxes;
+	rKINRef													:	REFERENCE TO KIN_REF := 0;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	Busy													:	BOOL;
+	Done													:	BOOL;
+	Error													:	BOOL;
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT;
+	ErrorText												:	STRING(40);
+END_VAR
+VAR
+(* cache **************************************************************************)
+	MemDone													:	BOOL;
+	MemFnc													:	INT := 1;
+	                        								
+(* MC-functonblock instances *******************************************************)
+	ResetKinGroup											: 	FB_KinResetGroup ;
+	ConfigKinGroup											:	FB_KinConfigGroup  ;
+
+(* Dummy Speicher **********************************************************)
+	OK 														: BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Kinematic group administration										*)
+	(************************************************************************)
+
+(* aborting function-block call if pointer is not valid ****************************************)
+IF NOT __ISVALIDREF(rKINRef) 
+THEN
+	Busy													:= NOT Error;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rKINRef invalid (0)';
+	RETURN;
+END_IF
+
+(* reading axis-status from NCtoPLC-channel ***************************************************)
+	rKINRef.readStatus();
+
+(* accepting setvalue-barrier e.g. for hardware limit switch **********************************)
+	rKINRef.PlcToNci.ChnAxesOvr 							:= LREAL_TO_DWORD(LIMIT(0.0,Override,100.0) * 10000.0 );
+
+(* ctrl programm ******************************************************************************)
+	ConfigKinGroup.bExecute									:=	NOT ConfigKinGroup.bBusy
+																AND(
+																Enable
+																AND NOT ConfigKinGroup.bCartesianMode
+																OR
+																NOT Enable
+																AND ConfigKinGroup.bCartesianMode);
+
+	IF ConfigKinGroup.bExecute
+	THEN
+		ConfigKinGroup.bCartesianMode						:= Enable;
+	END_IF
+
+	ConfigKinGroup(
+		bExecute		:= ,
+		bCartesianMode	:= ,
+		stAxesList		:= AxesList,
+		stKinRefIn		:= rKinRef.NciToPlc,
+		bBusy			=> ,
+		bDone			=> ,
+		bError			=> ,
+		nErrorId		=> );
+
+(* Reset Grp ****************************************************************)
+	IF Memfnc < 0
+	THEN
+		IF ResetTrig
+		THEN
+			reset(Execute:= TRUE);
+			MemFnc											:= 1;
+		END_IF
+	ELSIF NOT reset(Execute:= ResetTrig)
+	THEN
+		MemFnc												:= -1;
+	END_IF
+
+(******************************************************************************)
+(* Ctrl Status 																					*)
+(******************************************************************************)
+	Busy						:= ResetKinGroup.bBusy OR ConfigKinGroup.bBusy;
+	
+	IF Busy
+	THEN
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorText											:= '';
+	ELSIF ConfigKinGroup.bError
+	THEN
+		Error												:= TRUE;
+		ErrorId												:= ConfigKinGroup.nErrorID;
+		ErrorText											:= CONCAT('ConfigKinGroup ErrorId: ', UDINT_TO_STRING(Errorid));
+	ELSIF ResetKinGroup.bExecute
+		AND ResetKinGroup.bError
+	THEN
+		Error												:= TRUE;
+		ErrorId												:= ResetKinGroup.nErrorID;
+		ErrorText											:= CONCAT('ResetKinGroup ErrorId: ', UDINT_TO_STRING(Errorid));
+	ELSIF rKINRef.NciToPlc.ErrorCode <> 0
+	THEN
+		Error												:= TRUE;
+		ErrorId												:= rKINRef.NciToPlc.ErrorCode;
+		ErrorText											:= CONCAT('KIN Grp ErrorId: ', UDINT_TO_STRING(Errorid));
+	ELSE
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorText											:= '';
+	END_IF
+
+	IF ResetKinGroup.bDone
+		OR ConfigKinGroup.bDone
+	THEN
+		MemDone												:= TRUE;
+	END_IF
+
+	Done													:= NOT Busy AND MemDone;
+
+	IF done
+	THEN
+		MemDone												:= FALSE;
+	END_IF
+
+(**************************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{47315406-4807-4fea-b761-821c0b2f56a3}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if busy
+//required parameter
+//rKinRef
+//ItpChannelId
+//AxesList
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rKINRef) THEN
+	Busy													:= NOT Error;
+	ErrorId													:=E_AdsErr.DEVICE_INVALIDPARM;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rKINRef  invalid (0)';
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ResetKinGroup.bExecute 								:= rKinRef.NciToPlc.ErrorCode <> 0;
+	ELSIF NOT ResetKinGroup.bBusy
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ResetKinGroup.bExecute 								:= FALSE;
+
+	END_IF
+
+	ResetKinGroup(
+		bExecute		:= ,
+		nItpChannelId	:= ItpChannelId,
+		stKinRefIn		:= rKinRef.NciToPlc,
+		stAxesList		:= AxesList,
+		bBusy			=> Busy,
+		bDone			=> ,
+		bError			=> ,
+		nErrorId		=> );
+
+	Done													:= NOT ResetKinGroup.bBusy
+																AND NOT ResetKinGroup.bError
+																AND ResetKinGroup.bExecute;
+
+	IF NOT Busy
+	THEN
+		IF ResetKinGroup.bExecute
+		THEN
+			Error											:=	ResetKinGroup.bError;
+			ErrorId											:= ResetKinGroup.nErrorId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ResetKinGroup id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1 ;
+			ResetKinGroup(	bExecute := FALSE, 
+							stKinRefIn := rKinRef.NciToPlc, 
+							stAxesList := AxesList);
+		END_IF
+	END_IF
+	
+	reset													:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="KinAdmin">
+      <LineId Id="275" Count="101" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KinAdmin.reset">
+      <LineId Id="3" Count="55" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

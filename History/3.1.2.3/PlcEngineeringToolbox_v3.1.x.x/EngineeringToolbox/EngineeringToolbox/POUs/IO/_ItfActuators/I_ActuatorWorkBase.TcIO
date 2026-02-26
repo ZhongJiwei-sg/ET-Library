@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorWorkBase" Id="{429acf1f-cf78-427f-bf14-9e27e58ec8e6}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorWorkBase EXTENDS I_ActuatorBase
+]]></Declaration>
+    <Property Name="isInBasePos" Id="{8a0e9d16-dce0-43cd-bdd7-5e28c38773b4}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY isInBasePos : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f3ab26b9-6c0b-466e-8e8b-b1f0af801ae0}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isInWorkPos" Id="{c2dab2e5-900f-4eab-a351-cac1f6726a53}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY isInWorkPos : BOOL]]></Declaration>
+      <Get Name="Get" Id="{060c5c35-f011-4b66-9f4e-6ab14b996d88}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="moveToBasePos" Id="{e0be16fa-848e-49c9-84b2-5359cf72f017}">
+      <Declaration><![CDATA[METHOD public moveToBasePos : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="moveToWorkPos" Id="{a426d756-d2f8-420b-aa58-a7a5b31ba1e8}">
+      <Declaration><![CDATA[METHOD public moveToWorkPos : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

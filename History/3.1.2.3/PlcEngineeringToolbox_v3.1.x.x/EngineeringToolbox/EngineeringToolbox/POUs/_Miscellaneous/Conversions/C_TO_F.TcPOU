@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="C_TO_F" Id="{1ae957c1-758b-48f9-afbf-04d5f486e3a2}" SpecialFunc="None">
+    <Declaration><![CDATA[//Converts Celsius into Fahrenheit
+FUNCTION C_TO_F : LREAL
+VAR_INPUT
+	C														:	LREAL; //Celsius
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[C_TO_F := C * 1.8 + 32.0;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="getCntCharInStr" Id="{f492d5fa-af5e-4452-9cce-6f54509917fe}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Returns the count of a particular char found in a string line
+FUNCTION getCntCharInStr : INT
+VAR_INPUT
+	Chars													:	STRING(5):=';';
+	Strline													:	T_MaxString;
+END_VAR             										
+VAR                 
+	tmpString												:	T_MaxString ;										
+	pos,k													:	INT;
+END_VAR             	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF StrLine <> '' AND Chars <> ''
+THEN
+	MEMSET(ADR(tmpString),0,SIZEOF(tmpString));
+	MEMCPY(ADR(tmpString),ADR(Strline),TO_UDINT(LEN(Strline)));
+	pos 													:= FIND (tmpString,Chars);
+	WHILE pos <> 0 DO	
+		k													:=  pos + (LEN(Chars) - 1);
+		tmpString											:=	RIGHT(tmpString,LEN(tmpString) - k);
+		pos 												:= 	FIND (tmpString,Chars);
+		getCntCharInStr										:=	getCntCharInStr+1;
+	END_WHILE;
+ELSE
+	getCntCharInStr											:= 0;
+END_IF
+]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="getCntCharInStr">
+      <LineId Id="37" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,298 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxDriveSoE_Ax5000Param" Id="{178ab71a-e4ba-4712-880a-cbf26675a2f1}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//FB template to read and write parameter
+//The FB can be enherided and derivatived methods of SeqRead/SeqWrite used for application specific parameter.
+//The extended methods need to call the super class at the beginning and return true if execution will be finished. The allowed states for new parameter are 1..99
+FUNCTION_BLOCK AxDriveSoE_Ax5000Param EXTENDS AxRWParaBase
+VAR_OUTPUT CONSTANT
+END_VAR 
+VAR_INPUT                               					
+	AdsAddr													: 	AMSADDR; //Terminal AMS Net Addr. 
+	Channel													:	USINT := 0; //Drive channel 0 or 1 for a two channel AX5000
+	SetKvPosition											:	LREAL; //S-0-0104 (rad/s)rad - e.g. 10.0		
+	SetKpVelocity											:	LREAL; //S-0-0100 mA/(rad/s) - e.g. 0.058	
+	SetTnVelocity											:	LREAL; //S-0-0101 0.1ms 		- e.g. 0.015	
+END_VAR 
+VAR_IN_OUT
+END_VAR                               					
+VAR_OUTPUT 	
+//	MotorSN													:	STRING(15); 
+	KvPosition												:	LREAL;//S-0-0104
+	KpVelocity												:	LREAL;//S-0-0100
+	TnVelocity												:	LREAL;//S-0-0101
+	NominalMainVoltage										:	LREAL;//P-0-0201 Volt 
+	ConfiguredChnPeakForce									:	LREAL;//P-0-0094 Nm                    										
+	ErrorSoEId												:	UDINT := 0;
+END_VAR                         	
+VAR
+(* Cache ************************************************************)
+
+	
+(* Trigger **********************************************************)
+
+(* Timer ******************************************************************)
+
+(* FBs ***************************************************************)
+	SoEWrite												: 	FB_SoEWrite_ByDriveRef := (tTimeout := DEFAULT_ADS_TIMEOUT); //SoE read
+	SoERead													: 	FB_SoERead_ByDriveRef := (tTimeout := DEFAULT_ADS_TIMEOUT); //SoE wriet
+
+(* Dummy memory **********************************************************)
+
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read/Write drive parameter														*)
+	(************************************************************************************)
+	
+(* Execute ***************************************************************************************)
+	SUPER^();
+	
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Property Name="deviceAddrIsValid" Id="{255c1cbb-8e53-4e16-91a0-e43b3da1e8aa}">
+      <Declaration><![CDATA[PROPERTY PROTECTED deviceAddrIsValid : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4a54dbcc-8dbf-4d50-aa3a-7b5ddbbab1de}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[deviceAddrIsValid := AdsAddr.port > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="getValue" Id="{1325e5d9-1e72-4bf9-be73-7b765091e930}">
+      <Declaration><![CDATA[METHOD PROTECTED getValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	Idn							:	WORD;
+	Element						:	BYTE;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value
+	pSetValue					:	PVOID; //Address of variable for ser value variable, can be zero if no corresponding SetVariable exists
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+SoERead(bExecute := TRUE, nIdn := Idn, nElement := Element, pDstBuf := pActValue, cbBufLen := Len);
+IF NOT SoERead.bBUSY 	
+THEN
+	IF NOT SoERead.bError
+	THEN
+		IF pSetValue <> 0 THEN MEMCPY(pSetValue, pActValue, Len); END_IF
+		state 												:= state + 1; 
+	ELSE
+		Busy												:= FALSE;
+		Error												:= TRUE;
+		ErrorId												:= SoERead.iAdsErrId;
+		ErrorSoEId											:= SoERead.iSercosErrId;
+		ErrorText											:= CONCAT('Error read parameter in state:' , TO_STRING(state * -1));
+		ErrorText											:= CONCAT(ErrorText , CONCAT(' Id:',TO_STRING(ErrorId)));
+		ErrorText											:= CONCAT(ErrorText , CONCAT(' Sercos Err :',TO_STRING(ErrorSoEId)));
+		State												:= 9999;
+	END_IF
+	SoERead(bExecute := FALSE);
+	getValue												:= TRUE;
+END_IF 
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqRead" Id="{1c429309-829d-4b34-919f-bbdf023743a9}">
+      <Declaration><![CDATA[METHOD PROTECTED seqRead : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	State							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+(* Sequence read parameter **********************************)
+	CASE state OF
+	1..99: //Read application specific parameter  
+		SeqRead												:= TRUE;
+		
+	1001: (* Init step ******************************************************)		
+		SoERead(bExecute:=FALSE);
+		IF NOT SoERead.bBusy
+		THEN
+			SoERead.stDriveRef.sNetId						:= F_CreateAmsNetId(AdsAddr.netId);	
+			SoERead.stDriveRef.nSlaveAddr 					:= AdsAddr.port;
+			SoERead.stDriveRef.nDriveNo 					:= TO_BYTE(Channel);			
+			state											:= state + 1;	
+		END_IF
+		
+	1002: (* Kv Position *************************************************************************************)
+		IF getValue(Idn:= S_0_IDN + 104,	Element := EC_SOE_ELEMENT_VALUE,	LEN := SIZEOF(_UINT),		pActValue := ADR(_UINT),	pSetValue := 0 )
+		THEN
+			KvPosition	:= SetKvPosition					:= SEL(Error, TO_LREAL(_UINT) * 0.01, 0.0); 
+		END_IF
+
+	1003: (* Kp velocity *******************************************)
+		IF getValue(Idn:= S_0_IDN + 100,	Element := EC_SOE_ELEMENT_VALUE,	LEN := SIZEOF(_UDINT),		pActValue := ADR(_UDINT),	pSetValue := 0 )
+		THEN
+			KpVelocity := SetKpVelocity						:= SEL(Error, TO_LREAL(_UDINT) * 0.001, 0.0);
+		END_IF
+
+	1004: (* Tn velocity ********************************************)
+		IF getValue(Idn:= S_0_IDN + 101,	Element := EC_SOE_ELEMENT_VALUE,	LEN := SIZEOF(_UINT),		pActValue := ADR(_UINT),	pSetValue := 0 )
+		THEN
+			TnVelocity	:= SetTnVelocity					:= SEL(Error, TO_LREAL(_UINT) * 0.1, 0.0);
+		END_IF
+					
+	1005: (* Nominal main voltage  ********************************************)
+  		IF getValue(Idn:= P_0_IDN + 201,	Element := EC_SOE_ELEMENT_VALUE,	LEN := SIZEOF(_UINT),		pActValue := ADR(_UINT),	pSetValue := 0 )
+		THEN
+			NominalMainVoltage								:= SEL(Error, TO_LREAL(_UINT) * 0.1, 0.0);
+		END_IF	
+		
+	1006: (* Configured Channel Peak Current ********************************************)
+  		IF getValue(Idn:= P_0_IDN + 94,		Element := EC_SOE_ELEMENT_VALUE,	LEN := SIZEOF(_UDINT),		pActValue := ADR(_UDINT),	pSetValue := 0 )
+		THEN
+			ConfiguredChnPeakForce 							:= SEL(Error, TO_LREAL(_UDINT) * 0.01, 0.0);
+		END_IF
+	ELSE
+		state												:= 1;
+	END_CASE
+
+(***********************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqWrite" Id="{f47ae264-5c48-41a8-b272-793e41ddca03}">
+      <Declaration><![CDATA[METHOD PROTECTED seqWrite : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	State							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Sequence write parameter *********************************************)
+	CASE state OF
+	1..99: //Write application specific parameter  
+		SeqWrite											:= TRUE;
+		
+	1001: (* Init step ******************************************************)		
+		SoEWrite(bExecute:= TRUE);
+		IF NOT SoEWrite.bBusy
+		THEN
+			SoEWrite.stDriveRef.sNetId						:= F_CreateAmsNetId(AdsAddr.netId);	
+			SoEWrite.stDriveRef.nSlaveAddr 					:= AdsAddr.port;
+			SoEWrite.stDriveRef.nDriveNo 					:= Channel;		
+			state											:= state + 1;	
+		END_IF
+	
+	1002: (* Kv position *************************************************************************************)
+		_UINT												:= TO_UINT(SetKvPosition * 100.0);
+		IF setValue(Idn := S_0_IDN + 104, Element := EC_SOE_ELEMENT_VALUE,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT) )
+		THEN
+			KvPosition										:= SetKvPosition;
+		END_IF		
+		
+	1003: (* Kp velocity ****************************************)
+		_UDINT												:= TO_UDINT(SetKpVelocity * 1000.0);
+		IF setValue(Idn := S_0_IDN + 100, Element := EC_SOE_ELEMENT_VALUE,	LEN := SIZEOF(_UDINT),		pActValue := 0,		pSetValue := ADR(_UDINT) )
+		THEN
+			KpVelocity										:= SetKpVelocity;
+		END_IF	
+		
+	1004: (* Tn velocity **********************************)
+		_UINT											:= TO_UINT(SetTnVelocity * 10.0);
+		IF setValue(Idn := S_0_IDN + 101, Element := EC_SOE_ELEMENT_VALUE,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT) )
+		THEN
+			TnVelocity										:= SetTnVelocity;
+		END_IF		ELSE
+		state												:= 1;
+	END_CASE
+
+(************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setValue" Id="{5fda99bc-79f2-47a5-85de-b03b2fc3f027}">
+      <Declaration><![CDATA[METHOD PROTECTED setValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	Idn							:	WORD;
+	Element						:	BYTE;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value, can be zero if no corresponding acual value variable exists
+	pSetValue					:	PVOID; //Address of variable for set value variable
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+IF pActValue <> 0 AND pSetValue <> 0 AND_THEN MEMCMP(pSetValue, pActValue, Len) = 0
+THEN //Skip write parameter if set and actual value are equel
+	state													:= state + 1;	
+	setValue												:= TRUE;
+ELSE
+	SoEWrite(bExecute:= TRUE, nIdn := Idn, nElement := Element, pSrcBuf := pSetValue, cbBufLen := LEN);
+	IF NOT SoEWrite.bBusy
+	THEN
+		IF NOT SoEWrite.bError
+		THEN
+			IF pActValue <> 0 THEN MEMCPY(pActValue, pSetValue, Len); END_IF	
+			state											:= state + 1;
+		ELSE
+			Busy											:= FALSE;
+			Error											:= TRUE;
+			ErrorId											:= SoEWrite.iAdsErrId;
+			ErrorSoEId										:= SoEWrite.iSercosErrId;
+			ErrorText										:= CONCAT('Error write parameter in state:' , TO_STRING(state * -1));
+			ErrorText										:= CONCAT(ErrorText , CONCAT(' Id:',TO_STRING(ErrorId)));
+			ErrorText										:= CONCAT(ErrorText , CONCAT(' Sercos Err :',TO_STRING(ErrorSoEId)));
+			State											:= 9999;
+		END_IF
+		SoEWrite(bExecute := FALSE);
+		setValue											:= TRUE;
+	END_IF		
+END_IF
+	
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveSoE_Ax5000Param">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000Param.deviceAddrIsValid.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000Param.getValue">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000Param.seqRead">
+      <LineId Id="3" Count="38" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="52" Count="3" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="42" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000Param.seqWrite">
+      <LineId Id="3" Count="37" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000Param.setValue">
+      <LineId Id="3" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

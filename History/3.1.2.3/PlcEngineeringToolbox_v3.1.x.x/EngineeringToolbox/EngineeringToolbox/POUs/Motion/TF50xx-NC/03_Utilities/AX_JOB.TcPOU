@@ -1,0 +1,77 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AX_JOB" Id="{9ab18949-101c-4dca-b12d-fe923e02952a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AX_JOB (* Datatyp/Object - Ax Start data *)
+VAR_INPUT
+//	name						:	STRING(10);
+	Fnc														:	INT := 0;
+	BufferMode												:	MC_BufferMode := MC_Aborting;(* 	MC_Aborting,
+																									MC_Buffered,
+																									MC_BlendingLow,
+																									MC_BlendingPrevious,
+																									MC_BlendingNext,
+																									MC_BlendingHigh *)
+	Direction												:	MC_Direction := MC_POSITIVE_DIRECTION;	(*	MC_POSITIVE_DIRECTION,
+																						   					MC_SHORTeSTATE.WAY,
+																						   					MC_NEGATIVE_DIRECTION,
+																						   					MC_CURRENT_DIRECTION *)
+	Target													:	LREAL	:= 0.0; // target position
+	Velo													: 	LREAL	:= 0.0; // target velocity mm/s
+	Override												:	LREAL := 100.0; // override
+	Acc														:	LREAL := 0.0; // acceleration
+	Dec														:	LREAL := 0.0; // deceleration
+	Jerk													:	LREAL := 0.0; // jerk
+	InTarget												:	BOOL := FALSE;
+	InPosWindow												:	BOOL := FALSE;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{8c786b13-7b06-4ca9-a464-1ff203e66519}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Fnc															:= 0;
+BufferMode													:= MC_Aborting;
+Direction													:= MC_CURRENT_DIRECTION;
+Target														:= 0;
+Velo														:= 0;
+Override													:= 0;
+InTarget													:= FALSE;
+InPosWindow													:= FALSE;
+reset														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AX_JOB">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AX_JOB.reset">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

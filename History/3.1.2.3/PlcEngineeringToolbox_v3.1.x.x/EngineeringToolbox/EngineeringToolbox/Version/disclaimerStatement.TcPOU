@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="disclaimerStatement" Id="{9e4ea5b5-aba2-4eaa-be6c-b559d6d86d6d}" SpecialFunc="None">
+    <Declaration><![CDATA[// .. Disclaimer:: This function contains statements about the use of this library 
+{attribute 'no-analysis'}
+{attribute 'no_check'}
+FUNCTION disclaimerStatement : WSTRING(1500)
+VAR_INPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[DisclaimerStatement := 
+	"This disclaimer contains statements about the use of this library.
+
+		-The use of this version of the library is free of charge 
+		-It is incumbent on the customer to check and decide whether the library and provided function is suitable for use his particular application
+		-This library is provided 'AS IS' and neither a part of TwinCAT3 nor directly supported by Beckhoff Automation
+		-The use of the Library is at the Customer's own risk
+		-There is no warranty given that the library and source code, which is made available with this library is complete or accurate
+		-In no event will the author or Beckhoff Automation be liable for any claims, damages or other liability for errors and/or omissions arising from the use of the library
+		-There is no right to expect maintenance, support, enhancements or modifications of the library as well as for updates or compatibility to updates of the library or TwinCAT3 if released
+		
+	For feedback or questions please contact the Beckhoff Industry Management for Electronics Manufacturing, D.Schlingmann@Beckhoff.com
+	
+	© Beckhoff Automation GmbH & Co. KG,
+	The reproduction, distribution and utilisation of this library or parts of it as well as the communication of its content to others without express authorisation is prohibited held liable for the payment of damages.
+	
+	All rights reserved in the event of the grant of a patent, utility model or design.";
+]]></ST>
+    </Implementation>
+    <LineIds Name="disclaimerStatement">
+      <LineId Id="109" Count="15" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="135" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

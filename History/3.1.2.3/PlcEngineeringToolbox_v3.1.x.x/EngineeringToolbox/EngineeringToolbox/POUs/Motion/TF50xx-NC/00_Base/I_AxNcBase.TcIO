@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <Itf Name="I_AxNcBase" Id="{63a531b5-04b0-4e7c-a6c9-a4c27f8d34dd}">
+    <Declaration><![CDATA[INTERFACE I_AxNcBase EXTENDS __SYSTEM.IQueryInterface 
+]]></Declaration>
+    <Method Name="noAction" Id="{d5977db7-8962-473c-84f0-cfe12b378593}">
+      <Declaration><![CDATA[METHOD PUBLIC noAction : BOOL //Return value = TRUE if busy of home and motion 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="rAdmin" Id="{2f452c8e-a52c-426d-aa44-7aaa9c9f5a0d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rAdmin : REFERENCE TO AxAdmin]]></Declaration>
+      <Get Name="Get" Id="{f2aa10ae-8b5a-4e7d-873c-e5e6f75b059f}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="rAxisRef" Id="{8c7216d5-300d-4bc3-858f-23641dc5bca6}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rAxisRef : REFERENCE TO AXIS_REF]]></Declaration>
+      <Get Name="Get" Id="{2711ca45-ff8a-4b65-8821-2cb8f393cdc1}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="rErrHdl" Id="{31f67fc2-1223-4446-ae77-f09234164d4f}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rErrHdl : REFERENCE to ERROR_HDL]]></Declaration>
+      <Get Name="Get" Id="{8ccd0612-4507-46da-801b-3ebbf55a28dc}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{6abc7d25-e9a7-49cf-ab4f-748147926500}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="reset" Id="{99e50139-ee77-42f7-9851-5fb964dcc950}">
+      <Declaration><![CDATA[METHOD reset : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="rHome" Id="{f08342a8-057b-401d-b68c-db3705bcbcf3}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rHome : REFERENCE TO AxHoming]]></Declaration>
+      <Get Name="Get" Id="{2680064b-8b56-4037-b9b4-b7a639538894}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="rPara" Id="{1cf40cb4-d466-4dc3-9952-039fe4227393}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rPara : REFERENCE TO AxPara]]></Declaration>
+      <Get Name="Get" Id="{9050b1ad-4cf8-46e6-b1e4-97a5a854ab29}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

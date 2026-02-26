@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <GVL Name="Gvl" Id="{1aff40c5-aa0c-4237-844b-918ceabad85c}">
+    <Declaration><![CDATA[VAR_GLOBAL
+	{info <'Please check the disclaimer note vis function DisclaimerStatement (FUN) '>}
+	
+	CheckBoundsInfo												: 	CheckBoundsInfo; //Checkbounds result buffer 
+	EventHandlingStatistic										:	EventHandlingStatisticInfo; //System information of eventlogger 
+//	SOURCE_ID													:	SOURCE_ID; //Systemsource ids
+
+	ALWAYS_TRUE										AT  %Q* 	:	BOOL := TRUE;
+END_VAR
+VAR_GLOBAL CONSTANT
+	IBN															: 	BOOL := TRUE;	
+END_VAR
+]]></Declaration>
+  </GVL>
+</TcPlcObject>

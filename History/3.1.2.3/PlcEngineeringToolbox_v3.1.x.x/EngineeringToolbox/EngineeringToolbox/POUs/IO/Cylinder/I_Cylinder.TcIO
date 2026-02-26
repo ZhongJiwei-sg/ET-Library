@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <Itf Name="I_Cylinder" Id="{4d2373c8-2760-49ad-87af-d4082e0bb0ba}">
+    <Declaration><![CDATA[INTERFACE I_Cylinder EXTENDS I_ActuatorWorkBase
+
+]]></Declaration>
+    <Method Name="enable" Id="{e4f0239a-dfff-456c-9610-8c975276794c}">
+      <Declaration><![CDATA[METHOD enable : BOOL //Result value = successful execution of desired action 
+VAR_INPUT
+	IN							:	BOOL; //TRUE = to Work pos / FLASE = to base pos
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="inError" Id="{2a3db1e8-9167-420f-9c58-a14c446a0406}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inError : Bool]]></Declaration>
+      <Get Name="Get" Id="{637fc8c7-88ff-41f0-88b9-113a7e814405}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isBusy" Id="{d2bfd107-8d51-4229-bcc3-42f04887b647}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY isBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2f3ccf62-bb7e-42e7-bb50-da66199bf6c2}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isInBasePos" Id="{144ba97a-dafe-4a4d-b244-eff50927a481}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY isInBasePos : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2f624f26-ec4c-4240-9be8-67ff899ff7ed}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isInWorkPos" Id="{2d9eb0a7-3b1d-4f8a-9efd-2dae1699b26f}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY isInWorkPos : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e479d18e-d6e9-4b93-a58a-01040a2c84d7}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="moveToBasePos" Id="{3c4995cb-c8da-43d1-bebb-265d8ef4ecce}">
+      <Declaration><![CDATA[METHOD PUBLIC moveToBasePos : BOOL //Return = Done -> InBasePos
+]]></Declaration>
+    </Method>
+    <Method Name="moveToWorkPos" Id="{5bdeb475-d97a-434f-8399-4fa795a3d6a6}">
+      <Declaration><![CDATA[METHOD PUBLIC moveToWorkPos : BOOL //Return = Done -> InWorkPos
+]]></Declaration>
+    </Method>
+    <Property Name="noFeed" Id="{7ed343f7-7775-43c9-b6d3-64d82bac56d9}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY noFeed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d23d00d7-e588-43e0-8191-aa7f20c3cd6b}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="rCylinder" Id="{dad555d2-b66e-4daf-bb58-2fc8f90962eb}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC rCylinder : REFERENCE TO Cylinder]]></Declaration>
+      <Get Name="Get" Id="{23918dde-c9df-4d02-9c90-79cc2a49d4d7}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="simulation" Id="{b63ad6e8-a595-4c2c-beb8-b12826329149}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY simulation : BOOL]]></Declaration>
+      <Get Name="Get" Id="{fb0211f2-a8c5-41a0-b9f7-f95a7fd07d66}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{f5b13c02-fd36-4547-82e4-307be261014b}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="switchOff" Id="{fdb6901a-99c7-489f-8d3c-2770508a80b9}">
+      <Declaration><![CDATA[METHOD PUBLIC switchOff : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

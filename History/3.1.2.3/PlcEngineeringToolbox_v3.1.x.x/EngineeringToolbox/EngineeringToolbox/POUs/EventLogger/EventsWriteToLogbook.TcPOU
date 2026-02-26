@@ -1,0 +1,222 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="EventsWriteToLogbook" Id="{9b819198-200b-4eba-9af5-c517bdbcc59f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Write new event logger messages from "ReadAdsEvent" instance into "LogBook" instance
+FUNCTION_BLOCK EventsWriteToLogbook
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_DT_TO_MSG_STRING								:	BYTE := 2#0000_0001;
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_CLASS_TO_MSG_STRING							:	BYTE := 2#0000_0010;
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_SOURCE_TO_MSG_STRING							:	BYTE := 2#0000_0100;	//Default option
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_SOURCE_ID_TO_MSG_STRING						:	BYTE := 2#0000_1000; 
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_MSG_ID_TO_MSG_STRING							:	BYTE := 2#0001_0000;	//Default option	
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_MSG_DT_TO_LOGBOOK_TIMESTAMP					:	BYTE := 2#0010_0000;	
+{attribute 'displaymode':='binary'}
+	OPTION_ADD_MSG_STATE_ID_TO_MSG_STRING					:	BYTE := 2#0100_0000;	//Add event state before text
+END_VAR
+VAR_INPUT
+	Enable													:	BOOL	:= FALSE;	//Activate the function block
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE 	:= OPTION_ADD_SOURCE_TO_MSG_STRING OR OPTION_ADD_MSG_ID_TO_MSG_STRING;
+END_VAR                                                     
+VAR_IN_OUT                                                  
+	EventlogRead											:	EventlogRead;		//ReadAdsEvent instance
+	LogBook													:	LogBook_wEventClass;//Logbook instance 
+END_VAR                                                     
+VAR_OUTPUT                                                  
+	LastEventDT												:	DT;					//Date and time of last checked event
+END_VAR                                                         			
+VAR
+(* Memory ******************************************************)
+	LastEntryTimestamp										:	T_DCTIME64;			//Date of last event in this cycle
+	LastEventTimestamp										:	T_DCTIME64;			//Timestamp of last added event
+	ExitMarker												:	BOOL;
+	MemLogbookOptions										:	BYTE;	
+	MemClass												:	E_TcEventClass := TC2_SYSTEM.TCEVENTCLASS_ALARM;
+	MemTimestamp											:	TIMESTRUCT;
+	LenMem													:	INT;
+
+	
+(* Timer *******************************************************)
+
+(* Trigger *****************************************************)
+
+(* Blocks ******************************************************)
+
+(* Error *******************************************************)
+
+(* Dummys ******************************************************)
+	i														: 	INT := 0; 
+	k,j														:	INT;
+	OK														:	BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Read new events and write into logbook 							*)
+(********************************************************************)
+
+(* action ***********************************************************)
+IF Enable 
+THEN
+	IF EventlogRead.Done
+	THEN //Start read events
+	
+		//first save Logbook settings 
+		MemTimestamp										:= LogBook.Timestamp;
+		MemLogbookOptions									:= LogBook.Options;		
+		MemClass											:= LogBook.eClass;
+	(*	LogBook.Options										:= LogBook.Options 
+																AND Logbook.OPTION_WRITE_TO_ADSLOG AND Logbook.OPTION_WRITE_TO_FILE 
+																AND Logbook.OPTION_ADD_TIME_TO_MSG_STRING AND Logbook.OPTION_ADD_TIME_TO_MSG_STRING ; *)
+		
+		//Check list for new entrys
+		ExitMarker											:= FALSE;
+		FOR i := EventlogRead.TotalNumberOfEvents TO EventlogRead.MIN_EVENT BY - 1  
+		DO
+			IF EventlogRead.Event[i].Timestamp > LastEntryTimestamp
+			THEN //New entries
+				IF NOT ExitMarker 
+					OR //Events with event newer timestamp, exit and continue at next cycle
+					EventlogRead.Event[i].Timestamp = LastEventTimestamp
+				THEN //new message
+					ExitMarker								:= TRUE;
+					LastEventTimestamp						:= EventlogRead.Event[i].Timestamp;
+										
+					IF _formatMsg(EventlogRead.LangId, EventlogRead.Event[i], LogBook)
+					THEN //Write message to logbook	
+						Logbook();
+					END_IF
+					
+				ELSE //add messages the next time
+					EXIT; 
+				END_IF
+				
+			ELSE //old messages
+				;
+			END_IF
+		
+		END_FOR		
+		
+		//Record timestamp of last event
+		LastEntryTimestamp									:= LastEventTimestamp;
+
+		//Recover old entries	
+		LogBook.Options										:= MemLogbookOptions;
+		LogBook.eClass										:= MemClass;
+		LogBook.Timestamp									:= MemTimestamp;				
+	END_IF	
+END_IF
+
+(*******************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="_formatMsg" Id="{f66dd63f-8db5-4a76-b1f9-e5831470400d}">
+      <Declaration><![CDATA[METHOD PROTECTED _formatMsg : BOOL
+VAR_INPUT
+	Lcid													:	eLCID;
+END_VAR
+VAR_IN_OUT
+	Event													 : EVENTLOG_READ_DATA;
+	LogBook													:	LogBook_wEventClass;//Logbook instance 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//2020-05-30-07:06:08.436;<EventClass txt>;<Source ID>;<Event Id>;<Event state>;CoE Drive | AxisY - Remote control over fieldbus not active  	
+
+	//Add class to log book entry
+	LogBook.eClass											:= Event.eClass;	
+	Logbook.Msg												:= '';
+	
+	//Event timestamp to logbook timestamp
+	IF OPtions.5
+	THEN
+		LogBook.Timestamp 									:= DT_TO_SYSTEMTIME(Event.TimestampDT);			
+	END_IF
+	
+	//add date and time
+	IF Options.0
+	THEN					
+		LogBook.Msg											:= DT_TO_STRING(Event.TimestampDT);			
+		LogBook.Msg											:= DELETE(LogBook.Msg, 3, 1); //delete DT# 
+		LogBook.Msg 										:= CONCAT(LogBook.Msg,';');					
+	END_IF
+		
+	//add event class
+	IF Options.1
+	THEN
+		LogBook.Msg											:= CONCAT(LogBook.Msg,GetEventClassText(Event.eClass));
+		LogBook.Msg 										:= CONCAT(LogBook.Msg,';');
+	END_IF
+
+	//add source id 
+	IF Options.3 
+	THEN
+		LogBook.Msg 										:= CONCAT(LogBook.Msg,TO_STRING(Event.Sourceid));
+		LogBook.Msg 										:= CONCAT(LogBook.Msg,';');		
+	END_IF							
+							
+	//add event id 
+	IF Options.4
+	THEN
+		LogBook.Msg 										:= CONCAT(LogBook.Msg,DWORD_TO_STRING(Event.id));
+		LogBook.Msg 										:= CONCAT(LogBook.Msg,';');				
+	END_IF					
+	
+	//add event state
+	IF Options.6
+	THEN
+		LogBook.Msg 										:= CONCAT(LogBook.Msg,DWORD_TO_STRING(Event.State));
+		LogBook.Msg 										:= CONCAT(LogBook.Msg,';');				
+	END_IF					
+
+	//add event source text
+	IF Options.2
+	THEN
+		IF Lcid <> eLCID.CN
+		THEN
+			LogBook.Msg 									:= CONCAT(LogBook.Msg,WSTRING_TO_STRING(Event.Source));
+			LogBook.Msg 									:= CONCAT(LogBook.Msg,' | ');	
+		ELSIF NOT Options.3    
+		THEN                               
+			LogBook.Msg 									:= CONCAT(LogBook.Msg,CONCAT('Source Id[', UDINT_TO_STRING(Event.Sourceid)));
+			LogBook.Msg 									:= CONCAT(LogBook.Msg,'] | ');								
+		END_IF	
+	END_IF
+		
+	IF Lcid <> eLCID.CN
+	THEN
+		LogBook.Msg											:= CONCAT(LogBook.Msg,WSTRING_TO_STRING(Event.MsgText));
+	ELSE
+		LogBook.Msg 										:= CONCAT(LogBook.Msg, SEL(Options.4 , CONCAT('EventId[' ,CONCAT(UDINT_TO_STRING(Event.id),'] <Unicode active>')) , '<Unicode active>'));										
+	END_IF
+
+	_formatMsg												:= TRUE;
+	
+(**********************************************************************************************)
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EventsWriteToLogbook">
+      <LineId Id="1081" Count="56" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventsWriteToLogbook._formatMsg">
+      <LineId Id="132" Count="3" />
+      <LineId Id="218" Count="0" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="136" Count="61" />
+      <LineId Id="209" Count="0" />
+      <LineId Id="198" Count="0" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

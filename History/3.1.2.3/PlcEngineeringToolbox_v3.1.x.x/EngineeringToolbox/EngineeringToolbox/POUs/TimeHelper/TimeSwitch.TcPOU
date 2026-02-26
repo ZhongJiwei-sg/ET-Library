@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="TimeSwitch" Id="{50a30011-281e-4df1-a2f5-a7e0b3f9cc16}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Simpel single time switch based on actual date and time, configured by time of day values for on and off
+FUNCTION_BLOCK TimeSwitch
+VAR_INPUT
+	 Enable                                  				:  	BOOL;			//Start time switch - FALSE = set Q back to FALSE
+	 ActDT			                          				:	DATE_AND_TIME;	//Actual date and time
+	 SwitchOnTOD                             				: 	TOD;			//Time of day where Q will set to TRUE 
+	 SwitchOffTOD                            				:  	TOD;			//Time of day where Q will set back to FALSE 
+{attribute 'displaymode':='binary'}
+	 DayConfig												:	BYTE := 2#0000_0000;//.0 = Sun|.1 = Mon|.2 = Tue|.3 = Wed|.4 = Thu|.5 = Fri|.6 = Sat|.7 = full week																							
+END_VAR                                                 	
+VAR_OUTPUT
+	 Q                                       				 :  BOOL;			//Output is TRUE between SwitchOnTOD and SwitchOFfTOD
+	 Q_RT                                    				 :  BOOL;			//Rising flag of Q
+	 Q_FT                                    				 :  BOOL;			//Falling flag of Q
+END_VAR
+VAR
+	 tmpCTS                                   				:  TIMESTRUCT;
+	 tmpActTOD                            					:  TOD;
+	 MemQ													:	BOOL;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF Enable 
+	AND ActDT > DT#1970-01-01-00:00
+	AND ActDT < DT#2106-02-06-06:28:15
+THEN
+	tmpCTS 													:= DT_TO_SYSTEMTIME(ActDT);
+	tmpActTOD 												:= DT_TO_TOD(ActDT);
+	IF SwitchOnTOD < SwitchOffTOD 
+	THEN
+		MemQ												:= Q;
+		IF tmpActTOD >= SwitchOnTOD 
+			AND tmpActTOD < SwitchOffTOD
+ 		THEN			
+			Q												:= tmpCTS.wDayOfWeek = 0 AND DayConfig.0 //Sunday
+																OR tmpCTS.wDayOfWeek = 1 AND DayConfig.1
+																OR tmpCTS.wDayOfWeek = 2 AND DayConfig.2
+																OR tmpCTS.wDayOfWeek = 3 AND DayConfig.3
+																OR tmpCTS.wDayOfWeek = 4 AND DayConfig.4
+																OR tmpCTS.wDayOfWeek = 5 AND DayConfig.5
+																OR tmpCTS.wDayOfWeek = 6 AND DayConfig.6 //Saturday
+																OR DayConfig.7;
+                    										
+		ELSE        	
+			Q												:= FALSE;			
+		END_IF      										
+		Q_RT												:= Q AND NOT MemQ;
+		Q_FT												:= NOT Q AND MemQ;
+
+	ELSIF SwitchOnTOD > SwitchOffTOD
+	THEN 
+		MemQ												:= Q;
+		IF tmpActTOD >= SwitchOnTOD 
+		THEN
+			Q												:= tmpCTS.wDayOfWeek = 0 AND DayConfig.0 //Sunday
+																OR tmpCTS.wDayOfWeek = 1 AND DayConfig.1
+																OR tmpCTS.wDayOfWeek = 2 AND DayConfig.2
+																OR tmpCTS.wDayOfWeek = 3 AND DayConfig.3
+																OR tmpCTS.wDayOfWeek = 4 AND DayConfig.4
+																OR tmpCTS.wDayOfWeek = 5 AND DayConfig.5
+																OR tmpCTS.wDayOfWeek = 6 AND DayConfig.6 //Saturday
+																OR DayConfig.7;
+		
+		ELSIF tmpActTOD < SwitchOnTOD 
+			AND tmpActTOD >= SwitchOffTOD 
+		THEN
+			Q 												:= FALSE;
+		END_IF      										
+		Q_RT												:= Q AND NOT MemQ;
+		Q_FT												:= NOT Q AND MemQ;
+	END_IF          										
+ELSE	            										
+	Q														:= FALSE;
+	Q_RT													:= FALSE;
+	Q_FT													:= FALSE;
+END_IF
+						
+]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="TimeSwitch">
+      <LineId Id="3" Count="54" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

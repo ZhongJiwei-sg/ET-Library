@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="RPM_TO_DEGREES" Id="{ef6cb763-219d-4e5b-a103-246def0d1625}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//RPM -> °/s
+FUNCTION RPM_TO_DEGREES : LREAL
+VAR_INPUT
+	IN														:	LREAL;	//Input value
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[RPM_TO_DEGREES 												:= IN * 360.0 / 60.0	;
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="RPM_TO_DEGREES">
+      <LineId Id="7" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0312" Id="{2dcc01ee-367e-4002-902b-de8e159ed6e2}">
+    <Declaration><![CDATA[TYPE AX5000_P_0312 :
+STRUCT
+	PCB_temperature:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

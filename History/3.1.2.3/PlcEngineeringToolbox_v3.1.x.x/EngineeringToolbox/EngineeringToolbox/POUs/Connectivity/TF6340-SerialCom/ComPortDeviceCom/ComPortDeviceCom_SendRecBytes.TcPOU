@@ -1,0 +1,234 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="ComPortDeviceCom_SendRecBytes" Id="{2b2e6a6b-90e8-4fdd-8fd3-b70dc45690aa}" SpecialFunc="None">
+    <Declaration><![CDATA[//FB sends a "command" out and waits for response of the connected device (handshake mode)
+//By setting pDest = 0 the FB will turn into only send mode and with pSrc = 0 into only receive mode (ClrComBuffer will be ignored)
+FUNCTION_BLOCK ComPortDeviceCom_SendRecBytes
+VAR CONSTANT
+	TIMEOUT_COM												: TIME 		:= T#10S;
+END_VAR
+VAR_INPUT
+	Execute													: BOOL;
+	ClrComBuffer											: BOOL := TRUE; //TRUE Clears com buffer before start
+	Prefix													: STRING(5) := ''; //Use string variable as byte array if Prefix is not a string
+	Suffix													: STRING(5) := '$r$n'; //Use string variable as byte array if Suffix is not a string
+	RecTimeout												: TIME := DEFAULT_ADS_TIMEOUT; 
+	pSrc													: POINTER TO BYTE; //Pointer to data source, in case the pointer is empty (0) the FB will only start to wait for data
+	cbSrcLen												: UDINT;
+	pDest													: POINTER TO BYTE; //Pointer to receive buffer, in case the pointer is empty (0) the FB will send data out 
+	cbDestLen												: UDINT;
+END_VAR
+VAR_IN_OUT
+	Handle													:	ComPortDeviceCom_BufferHandle;
+END_VAR	
+VAR_OUTPUT
+	RecBytes												: UDINT;	
+	Done													: BOOL;
+	Busy													: BOOL;
+	Error													: BOOL;
+	ErrorID													: ComError_t := ComError_t.COMERROR_NOERROR;
+END_VAR
+VAR
+(* Memory *****************************************************)
+	state													: INT := 0;
+	
+(* Timer ******************************************************)
+	timeout													:	ton := (PT := TIMEOUT_COM);
+	
+(* Trigger ****************************************************)
+	rtExecute												: R_TRIG;
+	
+(* Blocks *****************************************************)
+	Rec														: ReceiveData := (Timeout := T#10S);
+	Send													: SendData;
+	
+(* Error ******************************************************)
+(* Dummys *****************************************************)
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Send data and receive response						 *)
+	(*********************************************************)
+	
+(* state machine ********************************************************)
+	rtExecute(CLK := Execute);
+	CASE state OF
+	0 : 
+		Busy 												:= FALSE;
+		IF NOT Execute THEN
+			Done 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorID 										:= 0;
+		END_IF
+		IF rtExecute.Q THEN
+			Busy 											:= TRUE;		
+			timeout(IN := FALSE, PT := TIMEOUT_COM + RecTimeout);
+			RecBytes 										:= 0;
+			Error 											:= FALSE;
+			ErrorID 										:= ComError_t.COMERROR_NOERROR;
+			Rec(Reset := TRUE,Timeout :=RecTimeout,rxBuffer := Handle.RXBuffer);	
+		
+			IF ClrComBuffer
+			THEN
+				Handle.Clear();
+			END_IF
+			
+			IF pSrc = 0 AND pDest <> 0
+			THEN //Rec mode
+				MemSet(pDest,0,cbDestLen);
+				Rec(
+					Reset := FALSE,
+					pPrefix:= SEL(Prefix[0] > 0, 0, ADR(Prefix)), pSuffix:= SEL(Suffix[0] > 0, 0, ADR(Suffix)), 
+					LenPrefix := TO_BYTE(LEN(Prefix)), LenSuffix := TO_BYTE(LEN(Suffix)),					
+					pReceiveData:= pDest, SizeReceiveData:= cbDestLen, 
+					rxBuffer := Handle.RXBuffer);
+				state 										:= 2;	
+			ELSE
+				Send(pSendData := pSrc, Length := cbSrcLen,TxBuffer := handle.TXBuffer);
+				state 										:= state + 1;			
+			END_IF
+		END_IF
+		
+	1 : //Send tag 
+		IF Send.Busy  //Call FB only if still busy after call in state 0
+		THEN
+			Send(pSendData := pSrc, Length := cbSrcLen,TxBuffer := handle.TXBuffer);
+		END_IF
+		IF NOT Send.Busy 
+		THEN
+			IF Send.Error <> ComError_t.COMERROR_NOERROR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				Errorid										:= Send.Error;
+				state										:= 0;
+			ELSIF pDest = 0
+			THEN
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				state										:= 0;			
+			ELSE
+				MemSet(pDest,0,cbDestLen);
+				Rec(
+					Reset := FALSE,
+					pPrefix:= SEL(Prefix[0] > 0, 0, ADR(Prefix)), pSuffix:= SEL(Suffix[0] > 0, 0, ADR(Suffix)), 
+					LenPrefix := TO_BYTE(LEN(Prefix)), LenSuffix := TO_BYTE(LEN(Suffix)),					
+					pReceiveData:= pDest, SizeReceiveData:= cbDestLen, 
+					rxBuffer := Handle.RXBuffer);
+				
+				state 										:= state + 1;
+			END_IF
+		END_IF
+
+	2: //Wair for response
+		timeout(IN := TRUE);
+		Rec(
+			pPrefix:= SEL(Prefix[0] > 0, 0, ADR(Prefix)), pSuffix:= SEL(Suffix[0] > 0, 0, ADR(Suffix)), 
+			LenPrefix := TO_BYTE(LEN(Prefix)), LenSuffix := TO_BYTE(LEN(Suffix)),	
+			pReceiveData:= pDest, SizeReceiveData:= cbDestLen, 
+			rxBuffer := Handle.RXBuffer);
+		IF NOT Rec.Busy
+		THEN
+			IF Rec.DataReceived
+			THEN
+				IF Rec.LenReceiveData > 0
+				THEN
+					RecBytes								:= Rec.LenReceiveData;					
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 0;					
+				ELSE
+					; //Nothing received, continue to read until done or timeout kicks in
+				END_IF
+			ELSIF Rec.Error <> ComError_t.COMERROR_NOERROR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				Errorid										:= Rec.Error;
+				state										:= 0;								
+			ELSIF Rec.RxTimeout 
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				Errorid										:= ComError_t.COMERROR_TIMEOUT;
+				state										:= 0;	
+			ELSIF timeout.Q
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				Errorid										:= ComError_t.COMERROR_TIMEOUT;
+				state										:= 0;					
+			END_IF
+		END_IF
+	END_CASE
+(********************************************************************************)
+]]></ST>
+    </Implementation>
+    <LineIds Name="ComPortDeviceCom_SendRecBytes">
+      <LineId Id="3" Count="3" />
+      <LineId Id="8" Count="6" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="23" Count="3" />
+      <LineId Id="719" Count="0" />
+      <LineId Id="755" Count="0" />
+      <LineId Id="566" Count="1" />
+      <LineId Id="569" Count="0" />
+      <LineId Id="568" Count="0" />
+      <LineId Id="744" Count="0" />
+      <LineId Id="572" Count="0" />
+      <LineId Id="950" Count="1" />
+      <LineId Id="962" Count="5" />
+      <LineId Id="961" Count="0" />
+      <LineId Id="955" Count="1" />
+      <LineId Id="958" Count="1" />
+      <LineId Id="952" Count="0" />
+      <LineId Id="39" Count="1" />
+      <LineId Id="850" Count="1" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="849" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="577" Count="2" />
+      <LineId Id="586" Count="0" />
+      <LineId Id="581" Count="0" />
+      <LineId Id="585" Count="0" />
+      <LineId Id="587" Count="0" />
+      <LineId Id="582" Count="0" />
+      <LineId Id="756" Count="0" />
+      <LineId Id="970" Count="0" />
+      <LineId Id="972" Count="1" />
+      <LineId Id="971" Count="0" />
+      <LineId Id="969" Count="0" />
+      <LineId Id="612" Count="0" />
+      <LineId Id="748" Count="0" />
+      <LineId Id="747" Count="0" />
+      <LineId Id="907" Count="0" />
+      <LineId Id="749" Count="1" />
+      <LineId Id="614" Count="0" />
+      <LineId Id="583" Count="0" />
+      <LineId Id="580" Count="0" />
+      <LineId Id="588" Count="0" />
+      <LineId Id="590" Count="1" />
+      <LineId Id="807" Count="0" />
+      <LineId Id="592" Count="0" />
+      <LineId Id="758" Count="0" />
+      <LineId Id="908" Count="0" />
+      <LineId Id="759" Count="1" />
+      <LineId Id="605" Count="1" />
+      <LineId Id="628" Count="0" />
+      <LineId Id="1026" Count="9" />
+      <LineId Id="1025" Count="0" />
+      <LineId Id="629" Count="0" />
+      <LineId Id="631" Count="3" />
+      <LineId Id="630" Count="0" />
+      <LineId Id="1019" Count="4" />
+      <LineId Id="1018" Count="0" />
+      <LineId Id="801" Count="4" />
+      <LineId Id="610" Count="0" />
+      <LineId Id="607" Count="0" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="185" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

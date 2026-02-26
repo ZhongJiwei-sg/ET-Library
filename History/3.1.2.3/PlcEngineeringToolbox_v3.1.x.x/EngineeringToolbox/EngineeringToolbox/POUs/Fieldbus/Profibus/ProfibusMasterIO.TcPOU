@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="ProfibusMasterIO" Id="{039e2140-d470-4240-ad5e-f4dc50107657}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EL6731 Profibus Master IOs via EtherCAT
+FUNCTION_BLOCK ProfibusMasterIO
+VAR_OUTPUT CONSTANT
+	MIN_SLAVES												:	INT := 1;
+	MAX_SLAVES												:	INT := PARAM.PROFIBUS_MASTER_DEV_IO_MAX_SLAVES;
+END_VAR
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	DevId											AT %I*	: 	UINT; 		//// Link to Profibus "DevId" or EtherCAT Master "DevId" under InfoData 
+	AdsAddr											AT %I*	:	AMSADDR;	//Structure of AdsAddr
+	AmsNetIdStr												:	T_AmsNetId;	//shows string of AmsNetId 
+	Error											AT %I*	:	USINT;		//No of Slaves with an state <> 0
+	ActualModulo		 							AT %I*	:	USINT;		
+	DiagFlag										AT %I*	:	BOOL;		//TRUE when diagnostic values are available
+	Name													:	STRING(30);
+                            					             	
+	SlaveDpStates									AT %I*	:	ARRAY[MIN_SLAVES..MAX_SLAVES] OF USINT;
+	SlaveExtDiagFlags								AT %I*	:	ARRAY[MIN_SLAVES..MAX_SLAVES] OF BOOL;
+END_VAR                     					             	
+VAR                         	                             	
+	IOF_GetBoxNameByAddr									:	IOF_GetBoxNameByAddr := (NETID := '', TMOUT := DEFAULT_ADS_TIMEOUT);
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Profibus Master IO diag										      	 		*)
+(********************************************************************************)
+
+(* Get name ******************************************************************************)
+IF Name = ''
+	AND AdsAddr.port <> 0 AND DevId <> 0
+	OR IOF_GetBoxNameByAddr.BUSY
+	OR IOF_GetBoxNameByAddr.START
+THEN
+	AmsNetIdStr												:= F_CreateAmsNetId(nIds := AdsAddr.netId);
+
+	IF AmsNetIdStr = '0.0.0.0.0.0' THEN
+		AmsNetIdStr	:= '';
+	END_IF
+		
+	IOF_GetBoxNameByAddr(
+		NETID		:= AmsNetIdStr , 
+		DEVICEID	:= UINT_TO_UDINT(DevId) ,
+		BOXADDR		:= AdsAddr.port ,
+		START		:= Name = '' AND NOT IOF_GetBoxNameByAddr.BUSY,
+		TMOUT		:= ,
+		BOXNAME		=> name);
+END_IF
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="ProfibusMasterIO">
+      <LineId Id="3" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

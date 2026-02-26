@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="CiA_DS402Controlword_Danfoss" Id="{57c24ef4-37e5-4b47-8f49-26e8732d3693}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Controlword_Danfoss EXTENDS CiA_DS402Controlword
+VAR_INPUT
+	EnableRamp						: BOOL; //Operation mode specific Bit 4 -> False = Quick stop / Switch on disabled  
+	RunEnable						: BOOL;(* Operation mode specific Bit 5, False = Freeze, the given output frequency is maintained even iF the reference is changed. 
+												TRUE = the frequency converter is again able to regulate, and the given reference is followed  *)
+	Start							: BOOL;	(* Operation mode specific BIT 6 -> TRUE = gives a start command to the frequency converter / FALSE = the frequency converter controls the motor down to stop  *)
+
+	Jog1On							: BOOL; //	Manufacturere specific Bit 11 Activation of pre-programmed speed in 8-90 Bus Jog 1 Speed JOG 1 is only possible if Bit 04="0", and bit 00-03="1". 
+
+	SetupSelectLSB					: BOOL; //	Manufacturere specific Bit 13
+		
+	SetupSelectMSB					: BOOL; //	Manufacturere specific Bit 14
+	Reversing						: BOOL; // Manufacturere specific Bit 15 
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="createControlword" Id="{e76493ac-916a-4a9b-9240-3522a8ea24d3}">
+      <Declaration><![CDATA[METHOD PUBLIC createControlword : BOOL
+VAR_INPUT
+	StatusState												: eCiA_DS402_STATUS_STATE;
+END_VAR
+VAR_IN_OUT
+	Controlword												:	UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	
+	createControlword										:= SUPER^.createControlword(StatusState,Controlword);
+	Controlword.4											:= EnableRamp;
+	Controlword.5											:= RunEnable;	
+	Controlword.6											:= Start;	
+	Controlword.11											:= Jog1On;	
+	Controlword.13											:= SetupSelectLSB;	
+	Controlword.14											:= SetupSelectMSB;	
+	Controlword.15											:= Reversing;		
+	
+			
+(*****************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Controlword_Danfoss">
+      <LineId Id="54" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Controlword_Danfoss.createControlword">
+      <LineId Id="153" Count="4" />
+      <LineId Id="170" Count="3" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="60" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

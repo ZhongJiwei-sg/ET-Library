@@ -1,0 +1,138 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SensorTimeoutCheck" Id="{eddc3f74-ab46-49e1-b419-2e186f93b836}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//This function-block checks wheter a sensor ("IN") is to long or to short occupied, based on the values of time and velocity which are related to the lenght
+//Used to detect jamped pieces on a conveyor or flickering sensors
+FUNCTION_BLOCK SensorTimeoutCheck
+VAR_INPUT
+	Enable													:	BOOL := TRUE;	//Enable 
+	In														: 	BOOL := FALSE;	//Sensor signal 
+	ResetTrig												:	BOOL := FALSE;	//Ack an error
+	Offset_msec												: 	TIME := T#0MS; //ms
+	Offset_mm												: 	LREAL := 300.0; //mm
+	LenghtMin												:	LREAL := 100.0; //mm
+ 	LenghtMax												:	LREAL := 1000.0; //mm
+	Velo													:	LREAL := 1000.0; //mm/s 
+END_VAR             										
+VAR_OUTPUT          										
+	ErrorMin												:	BOOL	:= 0;	//Error - IN signal is flickering
+	ErrorMax												: 	BOOL	:= 0;	//Error - IN signal is to long TRUE, a sign for jammed material
+	TimeInFree												:	TIME	:= T#0MS;
+	TimeInOccupied											:	TIME	:= T#0MS;                                                                                                       
+END_VAR             	
+VAR                 	
+	TON_ToMin 												: 	TON;
+	TON_ToMax 												: 	TON;
+	MemSysTime												:	TIME;
+	Mem														:	BYTE := 0;
+	CntToMin												:	BYTE	:= 0;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* monitors the toggle-signal of a sensor		 				       	 V2.2		*)
+(************************************************************************************)
+
+(* abort if not enable ***********************************************)
+IF NOT Enable	
+	OR ErrorMin
+	OR ErrorMax
+THEN
+	Mem.1													:= TRUE;
+	IF ResetTrig 
+	THEN 
+		reset();	
+	END_IF
+	RETURN;
+END_IF
+	
+(* runtime meassuring *************************************)
+TON_ToMin(
+	IN 	:= TRUE, 
+	PT 	:= LREAL_TO_TIME( ((LenghtMin + Offset_mm) / MAX(1.0, ABS(Velo)) ) * 1000.0) + Offset_msec,
+	Q	=> );
+	
+IF IN AND NOT Mem.0 
+THEN
+	IF NOT TON_ToMin.Q
+	THEN
+		CntToMin											:= CntToMin + 1;
+	ELSE                                                    	
+		CntToMin											:= 0;
+	END_IF                                                  	
+	ErrorMin												:= CntToMin >= 3;
+	TON_ToMin(IN := FALSE);
+	TimeInOccupied := T#0MS;
+ELSIF NOT In AND Mem.0 
+THEN	
+	IF NOT TON_ToMin.Q
+	THEN
+		CntToMin											:= CntToMin + 1;
+	ELSE
+		CntToMin											:= 0;
+	END_IF
+	ErrorMin												:= CntToMin >= 3;
+	TON_ToMin(IN := FALSE);
+	TimeInFree := T#0MS;
+END_IF
+Mem.0														:= In;
+
+(* runtime error ********************************)
+TON_ToMax(
+	IN 	:= In AND NOT Mem.1, 
+	PT 	:= LREAL_TO_TIME( ((LenghtMax + Offset_mm) / MAX(1.0, ABS(Velo)) ) * 1000.0) + Offset_msec,
+	Q	=> ErrorMax);
+
+(* runtime meassuring **************************************************)	
+IF Mem.1 
+THEN 
+	MemSysTime 												:= TIME(); 
+END_IF
+
+IF IN 
+THEN 
+	TimeInOccupied 											:= TimeInOccupied + (TIME() - MemSysTime);
+ELSE
+	TimeInFree 												:= TimeInFree + (TIME() - MemSysTime);
+END_IF
+MemSysTime													:= TIME();
+
+(* reset restart ************************************)
+Mem.1														:= FALSE;
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{c97eeb8b-6ee9-49c1-b0e1-be4a44d7cfb2}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ErrorMin := ErrorMAx 								:= FALSE; 
+reset												:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="SensorTimeoutCheck">
+      <LineId Id="124" Count="68" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SensorTimeoutCheck.reset">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

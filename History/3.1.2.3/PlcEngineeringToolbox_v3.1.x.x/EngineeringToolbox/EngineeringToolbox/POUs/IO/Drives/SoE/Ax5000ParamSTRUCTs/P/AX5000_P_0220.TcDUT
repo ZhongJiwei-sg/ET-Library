@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0220" Id="{90a9c5ce-14d6-429e-b915-d8fefd8688c4}">
+    <Declaration><![CDATA[TYPE AX5000_P_0220 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Max_energy_over_100percent_duty_cycle:UDINT;
+	Max_energy_over_40percent_duty_cycle:UDINT;
+	Max_energy_over_20percent_duty_cycle:UDINT;
+	Max_energy_over_10percent_duty_cycle:UDINT;
+	Max_energy_over_1percent_duty_cycle:UDINT;
+	Max_energy_over_01percent_duty_cycle:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

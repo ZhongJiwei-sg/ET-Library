@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AnalogInELMBase" Id="{935f5cf2-9690-4966-a919-2149ef030e9f}" SpecialFunc="None">
+    <Declaration><![CDATA[// Based FB for analog input channels of ELM terminals incl. EtherCAT Slave Info Data 
+//You can inherit your final implementation from this base "class"  
+FUNCTION_BLOCK AnalogInELMBase EXTENDS EcSlaveInfoData
+VAR_INPUT
+	Enable													:	BOOL 	:= TRUE;
+	MinValue												: 	LREAL 	:= 0.0;
+	MaxValue												: 	LREAL 	:= 0.0;
+	NoOfDigits												: 	INT 	(0..10)	:= 0; //number of decimal digits of scaled Q variable 
+	OutOnError												:	LREAL 	:= 0.000000000000000001;
+{attribute 'displaymode':='binary'}     	            	
+	Options													:	BYTE  := 2#0000_0000;
+END_VAR                 									
+VAR                                     	            	
+{attribute 'displaymode':='binary'}     	            	
+	Status										AT  %I*		:	DWORD := 2#0100_0000_0000_0000;	//Terminal status (4 bytes) 
+	
+END_VAR                                 	            	
+VAR_OUTPUT                              	            	                                       	
+	(* Statusbist *)                    	
+	NoOfSamples												:	USINT; //Byte 1
+	Error													:	BOOL; //Byte2.0
+	Underrange 												:	BOOL; //Byte2.1
+	Overrange												:	BOOL ; //Byte2.2
+	Diag													:	BOOL; //Byte2.4
+	TxPDOState												:	BOOL; //Byte2.5
+	InputCycleCounter										:	USINT; //Byte2.6/.7	
+END_VAR                                 	
+VAR                                     	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Base FB for ELM analog in terminals 																		*)
+(************************************************************************************************************)
+
+(* evaluate statusword **************************************************************************************)
+	MEMCPY(ADR(NoOfSamples),ADR(Status),SIZEOF(NoOfSamples));
+	Error													:= Enable AND (Status.8 OR MinValue = MaxValue AND NoOfDigits = 0);
+	Underrange 												:= Status.9;
+	Overrange												:= Status.10;
+	
+	Diag													:= Status.12;
+	TxPDOState												:= Status.13; //True if not valid
+	InputCycleCounter.0										:= Status.14;
+	InputCycleCounter.1										:= Status.15;
+	
+(**********************************************************************************************************************)
+]]></ST>
+    </Implementation>
+    <LineIds Name="AnalogInELMBase">
+      <LineId Id="128" Count="2" />
+      <LineId Id="217" Count="8" />
+      <LineId Id="141" Count="1" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,212 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="OEECalculation" Id="{e8cac645-8029-4892-bc64-72d8bf971835}" SpecialFunc="None">
+    <Declaration><![CDATA[//Overall Equipment Effectiveness - see www.OEE.com
+//The preferred OEE calculation is based on the three OEE Factors: Availability, Performance, and Quality
+//It takes into account all losses, resulting in a measure of truly productive manufacturing time. It is calculated as
+//
+//Availability:
+//Takes into account all events that stop planned production long enough where it makes sense to track a reason for being down (typically several minutes).
+//
+//Performance:
+//Takes into account anything that causes the manufacturing process to run at less than the maximum possible speed when it is running (including both Slow Cycles and Small Stops).
+//
+//Quality:
+//Takes into account manufactured parts that do not meet quality standards, including parts that need rework. 
+//
+{attribute 'no_check'}
+FUNCTION_BLOCK OEECalculation
+VAR_INPUT
+	ResetCalc												:	BOOL; //Reset all values
+	PlannedProdTime											:	TIME; //Total time that equipment is expected to produce. Calculated by subtracting Schedule Loss from All time Benchmark that OEE is measured against
+	IdealCycleTime											:	TIME; //Theoretical minimum time to produce ONE unit (Reciprocal of Ideal run rate).	
+	ProdRunning												:	BOOL; //TRUE to record elapsed actual production time / Do not use if actual production time will be set by attribute "ActualProdTime"	
+	ProdPausing												:	BOOL; //TRUE to record allowed machine stop which will be not tracked as down time (Caused by unexpected stops)	
+END_VAR
+VAR_OUTPUT
+	TotalUnitCount											:	LREAL; 
+	GoodUnitCount											:	LREAL; 
+	BadUnitCount											:	LREAL; 
+	DownTime												:	TIME;  //= PlannedProdTime - ActualProdTime - ActualPauseTime. All time where the manufactoring process was intended to be running but was not due to unplanned stops (Stop time)
+	Availability											:	LREAL; //= Ratio of ActualProdTime / PlannedProdTime in %
+	Performance												:	LREAL; //= Ratio of (IdealCycleTime x TotalUnitCount) / ActualProdTime in %
+	Quality													:	LREAL; //= Ratio of GoodUnitCount / TotalUnitCount in %
+	Summary													:	LREAL; //= Result of (Availability x Performance x Quality( or ((GoodUnitCount x IdealCycleTime) / PlannedProdTime) in %
+	InProduction											:	BOOL; //Accumulating actual production time 
+	InPausing												:	BOOL; //Pausing time running, elapsed time will not be a part of stop time (Down time)
+	Error													:	BOOL; //Invalid parameter e.g. Any value > 100% , Actual prod. time > Planned prod. time, Bad unit count > total unit count
+END_VAR
+VAR
+	ProdTime												:	TIME; //The manufactoring process is scheduled for production and is running. Calculated by subtracting down time.
+	PauseTime												:	TIME;
+	IdealRunRate											:	LREAL; //Theoretical maximum prodcution rate (Reciprocal of Ideal cylce time)
+	AvailabilityRate										:	LREAL; 
+	PerformanceRate											:	LREAL; 
+	QualityRate												:	LREAL; 
+	SummaryRate												:	LREAL;
+	ActSysTime												:	TIME;
+	LastSysTime												:	TIME;	
+	rfProdRunning											:	RF_TRIG;
+	rfPauseRunning											:	RF_TRIG;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Calculate overall equipment effectivness 				*)
+	(************************************************************)
+
+(* Reset *****************************************************************)
+	IF ResetCalc THEN reset(); END_IF
+	
+(* Get intern values *******************************************************)
+	IdealRunRate											:= SEL(IdealCycleTime = T#0MS,  1.0 / TO_LREAL(IdealCycleTime), 0.0);
+	BadUnitCount											:= TotalUnitCount - GoodUnitCount ;
+
+(* Record production time, pausing and resulting down time *******************)
+	rfProdRunning(CLK := ProdRunning); rfPauseRunning(CLK := ProdPausing);
+	IF rfProdRunning.Q 
+	THEN
+		InProduction										:= ProdRunning ;
+		InPausing											:= FALSE;
+	ELSIF rfPauseRunning.Q
+	THEN
+		InProduction										:= FALSE ;
+		InPausing											:= ProdPausing;		
+	END_IF
+	
+	ActSysTime 												:= TIME();(* read system time *)
+	IF InProduction 
+	THEN	
+		ProdTime		 									:= (ActSysTime - LastSysTime) + ProdTime;  (* add the current milliseconds *)		
+	ELSIF InPausing
+	THEN
+		PauseTime		 									:= (ActSysTime - LastSysTime) + PauseTime;  (* add the current milliseconds *)		
+	END_IF
+	LastSysTime 											:= ActSysTime;
+
+	//Final issue caused down time
+	DownTime												:= MAX(T#0MS, PlannedProdTime - ProdTime - PauseTime);
+
+(* Calculate availability ********************************************)
+	IF PlannedProdTime = T#0MS
+	THEN
+		AvailabilityRate									:= 0.0;
+	ELSE
+		AvailabilityRate									:= TO_LREAL(ProdTime) / TO_LREAL(PlannedProdTime);	
+	END_IF
+	Availability											:= AvailabilityRate * 100.0;
+					
+(* Calcualate performance ********************************************)					
+	IF ProdTime = T#0MS OR IdealRunRate = 0.0
+	THEN
+		PerformanceRate										:= 0.0;	
+	ELSE
+		PerformanceRate										:= (TotalUnitCount/TO_LREAL(ProdTime) / IdealRunRate);	
+	END_IF
+	Performance												:= PerformanceRate * 100.0;
+	
+(* Calcualte quality *****************************************************)
+	IF TotalUnitCount = 0.0
+	THEN
+		QualityRate											:= 0.0;	
+	ELSE
+		QualityRate											:= GoodUnitCount / TotalUnitCount;		
+	END_IF
+	Quality													:= QualityRate * 100.0;
+	
+(* OEE Result *************************************************************)
+	SummaryRate												:= AvailabilityRate * PerformanceRate * QualityRate;
+	Summary													:= SummaryRate * 100.0;
+	
+	Error													:= AvailabilityRate > 1.0 OR PerformanceRate > 1.0 OR QualityRate > 1.0 OR ProdRunning AND ProdPausing OR BadUnitCount < 0.0;
+
+(****************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="addBadUnits" Id="{239eebff-c284-4a9f-ab98-0d3d47c3a59b}">
+      <Declaration><![CDATA[METHOD PUBLIC addBadUnits : BOOL  //Return value = TRUE if execution finished
+VAR_INPUT
+	NoOfUnits										:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[BadUnitCount										:= BadUnitCount + NoOfUnits;
+TotalUnitCount										:= BadUnitCount + GoodUnitCount;
+addBadUnits											:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addGoodUnits" Id="{f62f2d84-b68f-4221-b2a9-c382bb0acc0f}">
+      <Declaration><![CDATA[METHOD PUBLIC addGoodUnits : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	NoOfUnits										:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GoodUnitCount										:= GoodUnitCount + NoOfUnits;
+TotalUnitCount										:= BadUnitCount + GoodUnitCount;
+addGoodUnits										:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{08b3f465-0f02-47dc-948b-9bb180b581ad}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+	
+	//Reset memory
+	ProdTime												:= T#0MS;
+	PauseTime												:= T#0MS; 
+	TotalUnitCount											:= 0.0;
+	BadUnitCount											:= 0.0;
+	GoodUnitCount											:= 0.0;
+	AvailabilityRate										:= 0.0;
+	PerformanceRate											:= 0.0;
+	QualityRate												:= 0.0;
+	SummaryRate												:= 0.0;
+		
+	//Reset outputs values
+	IdealRunRate											:= 0.0;
+	GoodUnitCount											:= 0.0;
+	DownTime												:= T#0MS;
+	Availability											:= 0.0;
+	Performance												:= 0.0;
+	Quality													:= 0.0;
+	Summary													:= 0.0;
+	InPausing												:= FALSE;
+	InProduction											:= FALSE;
+	Error													:= FALSE;
+	
+	reset													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="OEECalculation">
+      <LineId Id="409" Count="67" />
+      <LineId Id="90" Count="0" />
+    </LineIds>
+    <LineIds Name="OEECalculation.addBadUnits">
+      <LineId Id="16" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="OEECalculation.addGoodUnits">
+      <LineId Id="6" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="OEECalculation.reset">
+      <LineId Id="28" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="6" Count="2" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="9" Count="3" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="5" />
+      <LineId Id="61" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="66" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

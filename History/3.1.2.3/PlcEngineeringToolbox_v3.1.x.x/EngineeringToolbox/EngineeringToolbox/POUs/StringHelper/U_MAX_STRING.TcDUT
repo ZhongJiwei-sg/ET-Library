@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.3">
+  <DUT Name="U_MAX_STRING" Id="{f7fbd664-5056-4c50-8683-82ee47847317}">
+    <Declaration><![CDATA[TYPE U_MAX_STRING :
+UNION
+	text				:	STRING(MAX_STRING_LENGTH);
+	{attribute 'displaymode':='hex'}
+	_BYTES				:	ARRAY[0..MAX_STRING_LENGTH] OF BYTE;	
+END_UNION
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

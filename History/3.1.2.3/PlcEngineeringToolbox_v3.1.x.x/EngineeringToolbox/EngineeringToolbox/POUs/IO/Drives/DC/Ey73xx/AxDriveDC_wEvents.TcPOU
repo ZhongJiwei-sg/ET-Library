@@ -1,0 +1,152 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxDriveDC_wEvents" Id="{6bd92ba0-c409-4dee-b2c5-c177224c021f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Beckhoff Stepper terminal diag and diagnosis with eventlogger - extended from AxDriveStepper
+//EventHandling instance use inside
+FUNCTION_BLOCK AxDriveDC_wEvents EXTENDS AxDriveDC
+VAR CONSTANT         	
+END_VAR  
+VAR_INPUT
+	EnableEvent												:	BOOL := TRUE; //Enable to show events
+	ConfirmTrig												:	BOOL := FALSE; //Quit events
+	SourceId												:	UDINT := 102700; //CoE / MDP733 DC-Motor Drive (EL73xx) default multisource Id + Ax id
+	Name													:	STRING(30) := '';
+	ErrorLimitPos											:	BOOL := FALSE;
+	ErrorLimitNeg											:	BOOL := FALSE;
+END_VAR                     					
+VAR_IN_OUT                  					
+END_VAR                     					
+VAR_OUTPUT                  					
+ 	EventStatus												:	DWORD;       
+	NoOfActiveEvents										:	INT;                    					
+END_VAR                     					                   					
+VAR                         					
+END_VAR
+VAR
+
+(* Cache *********************************************************************)
+	
+(* Timer ********************************************************************************)
+
+(* Trigger ******************************************************************************)
+
+(* Instance ****************************************************************************)
+	Event													:	EventHandlingGrp10;
+	
+(* Dummy Speicher **********************************************************)
+	i														: INT := 0 ;
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Stepper Drive Control with events												*)
+	(************************************************************************************)
+
+(* Call super **********************************************)
+	SUPER^();
+	
+(* work events *******************************************)
+	_callEvents();
+
+(*******************************************************)]]></ST>
+    </Implementation>
+    <Method Name="_callEvents" Id="{5e88a3fc-00dc-44e2-af4a-29501eb9de74}">
+      <Declaration><![CDATA[METHOD PRIVATE _callEvents : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+(* Check if msg activ and init some parameter ***********************)
+	IF Event.no[1].Text2 <> Name AND Name <> '' OR Event.no[1].Text2 = '' AND rAxis.NcToPlc.AxisId <> 0
+	THEN
+		Event.no[1].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[3].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		
+		(* Init Achsname *)
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+		(*	Event.no[i].Text1								:= '';*)
+			Event.no[i].Text2								:= SEL(LEN(name)>1,CONCAT('Axis id:',DWORD_TO_STRING(rAxis.NcToPlc.AxisId)),name);
+		END_FOR
+	END_IF
+
+(* workl Event Ctrl *************************************************)
+	Event(
+		ConfirmTrig := ConfirmTrig,
+		Disable		:= rAxis.NcToPlc.AxisId = 0 OR NOT EnableEvent,
+		SourceId	:= SourceId + rAxis.NcToPlc.AxisId,
+		Status		=> EventStatus,
+		NoOfActiveEvents => NoOfActiveEvents);
+
+(* Event Logger Meldungen *****************************************************)
+	Event.no[1].Flag 										:= NOT Status_ReadyToEnable ; 
+	Event.no[2].Flag 										:= Fault;
+	Event.no[3].Flag 										:= (Status_Warning OR Diag_Configuration) AND NOT rAxis.Status.Homing AND NOT rAxis.Status.Disabled; //Avoid warning if drive is disabled (EL7037 and older FB on EL7047 - 2020-03-26) 				
+	Event.no[4].Flag 										:= Diag_TorqueOverloaded;
+	Event.no[5].Flag 										:= Diag_UnderVoltage OR Diag_OverVoltage OR Diag_NoControlPower;
+	Event.no[6].Flag 										:= Diag_ShortCircuit;
+	Event.no[7].Flag 										:= Diag_Saturated;
+	Event.no[8].Flag										:= Diag_OverTemperature ;
+	Event.no[9].Flag 										:= ErrorLimitPos; 	
+	Event.no[10].Flag 										:= ErrorLimitNeg;	
+(*	Event.no[11].Flag 										:= FALSE; 				
+	Event.no[12].Flag 										:= FALSE;					
+	Event.no[13].Flag 										:= FALSE; 			Event.no[9].Class := TC2_SYSTEM.TCEVENTCLASS_WARNING;
+	Event.no[14].Flag 										:= FALSE; 			Event.no[10].Class := TC2_SYSTEM.TCEVENTCLASS_WARNING;
+	Event.no[15].Flag 										:= FALSE;
+	Event.no[16].Flag 										:= FALSE;
+	Event.no[17].Flag 										:= FALSE;
+	Event.no[18].Flag 										:= FALSE;
+	Event.no[19].Flag 										:= FALSE;
+	Event.no[20].Flag 										:= FALSE;
+	Event.no[21].Flag 										:= FALSE;
+	Event.no[22].Flag 										:= FALSE;
+	Event.no[23].Flag 										:= FALSE;
+	Event.no[24].Flag 										:= FALSE;
+	Event.no[25].Flag 										:= FALSE;
+*)
+
+(******************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="confirm" Id="{540f3996-b8f2-4dd0-b39d-62f9c2e3ea80}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[confirm			:= Event.confirm();]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveDC_wEvents">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveDC_wEvents._callEvents">
+      <LineId Id="3" Count="49" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveDC_wEvents.confirm">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

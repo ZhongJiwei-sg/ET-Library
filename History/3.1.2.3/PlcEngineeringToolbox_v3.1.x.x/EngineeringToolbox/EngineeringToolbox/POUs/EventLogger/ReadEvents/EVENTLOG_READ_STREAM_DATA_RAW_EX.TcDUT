@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="EVENTLOG_READ_STREAM_DATA_RAW_EX" Id="{82cd8f64-9fe6-4439-9c2c-22d15147cd85}">
+    <Declaration><![CDATA[TYPE EVENTLOG_READ_STREAM_DATA_RAW_EX :
+STRUCT
+	cb				: WORD;			//Complete size OF the structure including data
+	cbFmt			: WORD;			//Size OF the format STRING
+	cbData			: WORD;			//Size OF the data
+	Temp			: ARRAY [PARAM.EVENT_HANDLING_CONFIG.EVENTLOG_READ_MSG_LEN_MIN..PARAM.EVENT_HANDLING_CONFIG.EVENTLOG_READ_MSG_LEN_MAX] OF BYTE;
+	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

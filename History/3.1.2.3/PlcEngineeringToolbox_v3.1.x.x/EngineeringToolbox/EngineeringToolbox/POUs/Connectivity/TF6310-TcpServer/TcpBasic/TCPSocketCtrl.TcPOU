@@ -1,0 +1,487 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="TCPSocketCtrl" Id="{65710eb0-50e8-4c36-abf5-1ed9739a994c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Setup Tcp client or server socket communication 
+//based on TF6310, required lib: Tc2_TcpIp - see Beckhoff Infosys for more information
+FUNCTION_BLOCK TCPSocketCtrl EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+ 	FNC_CONNECT 											:	INT := 0; //Send a communication request as a client to a server
+ 	FNC_CLOSE 												:	INT := 1; //Close specified communication socket
+ 	FNC_CLOSE_ALL 											:	INT := 2; //Close all communication sockets
+	FNC_LISTEN 												:	INT := 3; //Open up a server communication socket for incomming  client connection request
+	FNC_ACCEPT 												:	INT := 4; //Accept incomming client connection request
+END_VAR
+VAR_INPUT
+	Fnc														:	INT  (FNC_CONNECT..FNC_ACCEPT) := FNC_CONNECT;
+	SrvNetId												: 	T_AmsNetId := ''; //Server AMSNetId from the TCP/IP Servers - '' for local *)
+	Host	 												: 	T_IPv4Addr := '127.0.0.1'; //Remote host (socket connect) or local host (socket listen) IP-Adress 
+	Port													: 	UDINT := 0;//Remote port (socket connect) or local port (socket listen) number 
+	Timeout													: 	TIME := DEFAULT_ADS_TIMEOUT;
+	hListener												:	T_HSOCKET; //Socket listener ip adress and port number to open up a socket
+END_VAR             										
+VAR_OUTPUT          										
+	Online													:	BOOL; 	// Connection etablised
+	Request													:	BOOL; 	// Communication request detected 
+	hSocket													: 	T_HSOCKET;  	// TCP Socket handle
+	hSocketText												:	STRING(80); 	// TCP socket handle inforamation
+	WinsockErrorId											:	E_WinsockError;  // Winsocket error enum - see TF6310 documentation for further information
+END_VAR
+VAR
+(* cache ************************************************************)
+	MemFnc													:	INT := -1;
+
+(* function-block instances ***************************************************************)
+	SocketCloseAll											:	FB_SocketCloseAll;
+	SocketClose												:	FB_SocketClose;
+	SocketCreate 											:	FB_SocketConnect;
+	SocketListen											:	FB_SocketListen;
+	SocketAccept											:	FB_SocketAccept;
+
+(* Dummy **********************************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_CONNECT:
+		Connect(Execute);
+
+	FNC_CLOSE:
+		Close(Execute);
+
+	FNC_CLOSE_ALL:
+		CloseAll(Execute);
+
+	FNC_LISTEN:
+		Listen(Execute);
+
+	FNC_ACCEPT:
+		Accept(Execute);
+
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+	END_CASE
+
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="accept" Id="{e8a69a50-0720-4f6d-a57a-1a2241f54c1d}">
+      <Declaration><![CDATA[METHOD PUBLIC accept : BOOL //Return value = TRUE if busy
+//required parameter
+//hListener
+VAR_INPUT
+	Execute													:	BOOL;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketAccept.bExecute 								:= TRUE;
+	ELSIF NOT SocketAccept.bBusy    						
+	THEN                            						
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketAccept.bExecute 								:= FALSE;
+	END_IF                          						
+                                    						
+	MemFnc													:= FNC_ACCEPT;
+	THIS^.Execute											:= Execute;
+	                                	
+	SocketAccept(
+		sSrvNetId	:= SrvNetId,
+		hListener	:= SEL(hListener.handle <> 0,  hSocket, hListener),
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> ,
+		bAccepted	=> ,
+		hSocket		=> );
+
+	IF NOT SocketAccept.bBusy
+		AND NOT SocketAccept.bError
+		AND SocketAccept.bExecute
+	THEN
+		Done												:= TRUE;
+		hSocket												:= SocketAccept.hSocket;
+		hSocketText											:= HSOCKET_TO_STRING(hSocket);
+		Online												:= SocketAccept.bAccepted;
+	ELSE                            						
+		Done												:= FALSE;
+	END_IF                          	
+                                    	
+	IF NOT Busy
+	THEN
+		IF SocketAccept.bExecute
+		THEN
+			Error											:=	SocketAccept.bError;
+			IF SocketAccept.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketAccept.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketAccept.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketAccept(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	Accept													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="close" Id="{042059e1-f859-4d7e-97fc-386d14fd4490}">
+      <Declaration><![CDATA[METHOD PUBLIC close : Bool //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketClose.bExecute 								:= TRUE;
+	ELSIF NOT SocketClose.bBusy     						
+	THEN                            						
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketClose.bExecute 								:= FALSE;
+	END_IF                          						
+                                    						
+	MemFnc													:= FNC_CLOSE;
+	THIS^.Execute											:= Execute;
+                                    						
+	SocketClose(
+		sSrvNetId	:= SrvNetId,
+		hSocket		:= hSocket,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=>,
+		nErrId		=> );
+
+	IF NOT SocketClose.bBusy
+		AND NOT SocketClose.bError
+		AND SocketClose.bExecute
+	THEN
+		Done												:= TRUE;
+		MEMSET(ADR(hSocket), 0 , SIZEOF(hSocket));
+		hSocketText											:= '';
+		Online												:= FALSE;
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF
+
+	IF NOT Busy
+	THEN
+		IF SocketClose.bExecute
+		THEN
+			Error											:=	SocketClose.bError;
+			IF SocketClose.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketClose.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketClose.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF                  	
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketClose(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	Close													:= Busy;
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="closeAll" Id="{befe59ad-9baf-4815-958f-b4df0ebeecac}">
+      <Declaration><![CDATA[METHOD PUBLIC closeAll : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketCloseAll.bExecute 							:= TRUE;
+	ELSIF NOT SocketCloseAll.bBusy  						
+	THEN                            						
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		SocketCloseAll.bExecute 							:= FALSE;
+	END_IF                          						
+                                    	
+	MemFnc													:= FNC_CLOSE_ALL;
+	THIS^.Execute											:= Execute;
+
+	SocketCloseAll(
+		sSrvNetId	:= SrvNetId,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	IF NOT SocketCloseAll.bBusy
+		AND NOT SocketCloseAll.bError
+		AND SocketCloseAll.bExecute
+	THEN
+		Done												:= TRUE;
+		MEMSET(ADR(hSocket), 0 , SIZEOF(hSocket));
+		hSocketText											:= '';
+		Online												:= FALSE;
+	ELSE
+		Done												:= FALSE;
+	END_IF
+
+	IF NOT Busy
+	THEN
+		IF SocketCloseAll.bExecute
+		THEN
+			Error											:=	SocketCloseAll.bError;
+			IF SocketCloseAll.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketCloseAll.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketCloseAll.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:=  -1;
+			SocketCloseAll(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	CloseAll												:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="connect" Id="{ab13c47e-bcf4-4e33-a0b2-ff9a2b90b180}">
+      <Declaration><![CDATA[METHOD PUBLIC connect : BOOL //Return value = TRUE if busy
+//required parameter
+//Host
+//Port
+VAR_INPUT
+	Execute													:	BOOL;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketCreate.bExecute 								:= TRUE;
+	ELSIF NOT SocketCreate.bBusy    						
+	THEN                            						
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketCreate.bExecute 								:= FALSE;
+	END_IF                          						
+                                    	
+	MemFnc													:= FNC_CONNECT;
+	THIS^.Execute											:= Execute;
+
+	SocketCreate(
+		sSrvNetId	:= SrvNetId,
+		sRemoteHost	:= Host,
+		nRemotePort	:= Port,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> ,
+		hSocket		=> );
+
+	IF NOT SocketCreate.bBusy
+		AND NOT SocketCreate.bError
+		AND SocketCreate.bExecute
+	THEN
+		Done												:= TRUE;
+		hSocket												:= SocketCreate.hSocket;
+		hSocketText											:= HSOCKET_TO_STRING(hSocket);
+		Online												:= SocketCreate.hSocket.handle <> 0;
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF                              	
+                                        	
+	IF NOT Busy
+	THEN
+		IF SocketCreate.bExecute
+		THEN
+			Error											:=	SocketCreate.bError;
+			IF SocketCreate.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketCreate.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketCreate.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF                  						
+		END_IF                      	
+		IF NOT Execute              	
+		THEN
+			MemFnc											:= -1;
+			SocketCreate(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	Connect													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="listen" Id="{e5d90b9d-f3bd-421d-9a7d-a2ebacea11b2}">
+      <Declaration><![CDATA[METHOD PUBLIC listen : BOOL //Return value = TRUE if busy
+//required parameter
+//hListener
+//Host
+//Port
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		SocketListen.bExecute 								:= TRUE;
+	ELSIF NOT SocketListen.bBusy    						
+	THEN                            						
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		SocketListen.bExecute 								:= FALSE;
+	END_IF                          						
+                                        					
+	MemFnc													:= FNC_LISTEN;
+	THIS^.Execute											:= Execute;
+                                        	
+	SocketListen(
+		sSrvNetId	:= SrvNetId,
+		sLocalHost	:= Host,
+		nlocalPort	:= Port,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=>,
+		nErrId		=> ,
+		hListener	=>	hSocket);
+
+	IF NOT SocketListen.bBusy
+		AND NOT SocketListen.bError
+		AND SocketListen.bExecute
+	THEN
+		Done												:= TRUE;
+		hSocket												:= SocketListen.hListener;
+		hSocketText											:= HSOCKET_TO_STRING(hSocket);
+		Request												:= TRUE;
+	ELSE                            						
+		Done												:= FALSE;
+	END_IF                              					
+                                        	
+	IF NOT Busy
+	THEN
+		IF SocketListen.bExecute
+		THEN
+			Error											:=	SocketListen.bError;
+			IF SocketListen.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketListen.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketListen.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF                  						
+		END_IF                      	
+		IF NOT Execute              	
+		THEN                        	
+			MemFnc											:= -1;
+			SocketListen(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	Listen													:= Busy;
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="TCPSocketCtrl">
+      <LineId Id="136" Count="46" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSocketCtrl.accept">
+      <LineId Id="3" Count="58" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSocketCtrl.close">
+      <LineId Id="3" Count="61" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSocketCtrl.closeAll">
+      <LineId Id="3" Count="41" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="46" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSocketCtrl.connect">
+      <LineId Id="3" Count="44" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="49" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSocketCtrl.listen">
+      <LineId Id="3" Count="44" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="49" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

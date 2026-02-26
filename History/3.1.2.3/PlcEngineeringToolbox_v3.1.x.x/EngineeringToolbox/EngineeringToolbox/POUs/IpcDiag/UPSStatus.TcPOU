@@ -1,0 +1,226 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="UPSStatus" Id="{bf943f1d-26aa-4786-8813-7619a6076ed2}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//General UPS function block to make use of differenty types of utility power supplies 
+//Requiered libs : Tc2_SUPS, Tc2_IoFunctions
+FUNCTION_BLOCK UPSStatus
+VAR_OUTPUT CONSTANT
+	MODE_SUPS_CB3011										:	INT := 0; //SUPS for CB3011 Motherboard
+	MODE_SUPS_CX50X0										:	INT := 1; //SUPS for CX50X0
+	MODE_SUPS_CX51X0										:	INT := 2; //SUPS for CX51X0
+	MODE_SUPS_CX9020										:	INT := 3; //SUPS for CX9020
+	MODE_SUPS_BAPI											:	INT := 4; //SUPS for BAPI
+	MODE_UPS_BA												:	INT := 5; //BA UPS Controller CP903x-Card (PCI/ISA) | Beckhoff P24Vxxxx USV | With Beckhoff Industrial PC's delivered APC UPS models supporting smart protocol and configured with Windows UPS Service
+	MODE_UPS_EXTERN_OK										:	INT := 6; //External UPS controller connected via one Digital Input -> TRUE=PowerOK
+	MODE_UPS_EXTERN_FAIL									:	INT := 7; //External UPS controller connected via one Digital Input -> TRUE=PowerFAIL
+END_VAR                     								
+VAR_INPUT                   													
+	Enable													: 	BOOL := FALSE;		// FB will be processed as long as enable is TRUE 
+	NetId													: 	T_AmsNetId 	:= '';	// AmsNet id
+	Port													: 	T_AmsPort 	:= 851; // TC3 PLC RT1 = 851.... , 0 = Windows UPS service 
+	Timeout													: 	TIME := DEFAULT_ADS_TIMEOUT; // Ads timeout / PowerOK/Fault delay at mode = MODE_UPS_EXTERN
+	Mode													: 	INT(MODE_SUPS_CB3011..MODE_UPS_EXTERN_FAIL) := MODE_UPS_BA; // Select used UPS type
+	UpsMode													: 	E_S_UPS_Mode := eSUPS_WrPersistData_Shutdown; // Used by FB_S_UPS instances and adaped for modes <> MODE_SUPS  
+END_VAR
+VAR_OUTPUT
+	BatteryReplace											:	BOOL;
+	PowerFailDetect											:	BOOL; 	//TRUE when power fail is detected 
+	Status													:	E_S_UPS_State := eSUPS_PowerOK; //Reports the status of utility-supplied power into the UPS. 
+	Error													:	BOOL;		//Rising edge of Error informs that an error occurred during the execution of the Function Block  	
+{attribute 'displaymode':='hex'}
+	ErrorID													:	UDINT; 	//Error identification 
+END_VAR      
+VAR              
+//local *****************************************************************
+	State													: 	INT := 0;
+	DigInput										AT %I*	: 	BOOL; //Hardware signal for OK/NOK depending on selected UpsMode
+	
+//Trigger ***************************************************************
+
+//Timer ****************************************************************
+	TonPowerOff												: 	TON;	
+//Instances **********************************************************  
+	UPSPowerStatus											: 	FB_GetUpsStatus;
+	SUPSPowerStatus_CB3011									: 	FB_S_UPS_CB3011 		:= (ePersistentMode := SPDM_2PASS);
+	SUPSPowerStatus_CX50X0									: 	FB_S_UPS 				:= (iUPSPort := 16#4A8 ,ePersistentMode := SPDM_2PASS);	
+	SUPSPowerStatus_CX51x0									: 	FB_S_UPS_CX51x0 		:= (iUPSPort := 16#588 ,ePersistentMode := SPDM_2PASS);
+	SUPSPowerStatus_CX9020									: 	FB_S_UPS_CX9020_U900 	:= (ePersistentMode := SPDM_2PASS);
+	SUPSPowerStatus_BAPI									: 	FB_S_UPS_BAPI			:= (ePersistentMode := SPDM_2PASS);
+	ShutDown												: 	NT_Shutdown;
+	WritePersistentData										: 	FB_WritePersistentData := (Mode := SPDM_2PASS);	
+	TcStop													: 	TC_Stop;
+//Dummy *****************************************************************)       								
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* UPS Wrapper										*)
+	(****************************************************)
+
+(* Sequence *************************************************************************)
+IF Enable THEN
+	CASE state OF	
+	0:
+		CASE MODE OF
+		MODE_SUPS_CB3011:
+			SUPSPowerStatus_CB3011(
+				sNetID				:= NetId,
+				iPLCPort			:= Port,
+				tTimeout			:= ,
+				eUpsMode			:= UpsMode,
+				ePersistentMode		:= ,
+				tRecoverTime		:= ,
+				bPowerFailDetect	=> PowerFailDetect,
+				eState				=> Status);		
+		
+		MODE_SUPS_CX50X0:
+			SUPSPowerStatus_CX50X0(
+				sNetID				:= NetId,
+				iPLCPort			:= Port,
+				iUPSPort			:= ,
+				tTimeout			:= ,
+				eUpsMode			:= UpsMode,
+				ePersistentMode		:= ,
+				tRecoverTime		:= ,
+				bPowerFailDetect	=> PowerFailDetect,
+				eState				=> Status);		
+			
+		MODE_SUPS_CX51X0:
+			SUPSPowerStatus_CX51x0(
+				sNetID				:= NetId,
+				iPLCPort			:= Port,
+				iUPSPort			:= ,
+				tTimeout			:= ,
+				eUpsMode			:= UpsMode,
+				ePersistentMode		:= ,
+				tRecoverTime		:= ,
+				bPowerFailDetect	=> PowerFailDetect,
+				eState				=> Status);		
+			
+		MODE_SUPS_CX9020:
+			SUPSPowerStatus_CX9020(
+				sNetID				:= NetId,
+				iPLCPort			:= Port,
+				tTimeout			:= ,
+				eUpsMode			:= UpsMode,
+				ePersistentMode		:= ,
+				tRecoverTime		:= ,
+				bPowerFailDetect	=> PowerFailDetect,
+				eState				=> Status);		
+				
+		MODE_SUPS_BAPI:
+			SUPSPowerStatus_BAPI(
+				sNetID				:= NetId,
+				iPLCPort			:= Port,
+				tTimeout			:= ,
+				eUpsMode			:= UpsMode,
+				ePersistentMode		:= ,
+				tRecoverTime		:= ,
+				bPowerFailDetect	=> PowerFailDetect,
+				eState				=> Status);				
+
+		MODE_UPS_EXTERN_OK,
+		MODE_UPS_EXTERN_FAIL:
+			TonPowerOff(
+				IN					:= SEL(MODE = MODE_UPS_EXTERN_OK, DigInput, NOT DigInput), 
+				PT					:= Timeout, 
+				Q 					=> PowerFailDetect);
+			Status											:= SEL(TonPowerOff.IN, eSUPS_PowerOK, eSUPS_WaitForRecover);
+			IF TonPowerOff.Q                                
+			THEN				                            
+				Status										:= eSUPS_PowerFailure;
+				state										:= 900;
+			END_IF 
+			
+		MODE_UPS_BA:		
+			UPSPowerStatus(
+				sNetId				:= NetId, 
+				nPort				:= 0, 
+				bEnable				:= TRUE, 
+				bValid				=> , 
+				bError				=> Error, 
+				nErrId				=> ErrorID);
+			BatteryReplace									:= UPSPowerStatus.stStatus.eBatteryStatus = E_BatteryStatus.BatteryReplace AND UPSPowerStatus.bValid;
+			CASE UPSPowerStatus.stStatus.ePowerStatus OF 
+			PowerUnknownStatus: 			// The status of power is unknown
+				PowerFailDetect								:= FALSE;
+				Status										:= eSUPS_PowerOK;	
+ 			PowerOnLine: 		 		  	// Power is OK
+				PowerFailDetect								:= FALSE;
+				Status										:= eSUPS_PowerOK;
+   			PowerOnBattery:					// A power failure has occurred
+				PowerFailDetect								:= UPSPowerStatus.bValid;
+				Status										:= eSUPS_PowerFailure;
+				state										:= 900;
+			END_CASE
+	
+		ELSE
+			state											:= 0;
+			Error											:= TRUE;
+			ErrorID											:= 1798;	
+			PowerFailDetect									:= FALSE;		
+			Status											:= eSUPS_PowerFailure;		
+		END_CASE
+		
+	//Shutdown OS and stop TC ************************************************************)
+	900: 
+		ShutDown(START := FALSE); TcStop(Stop := FALSE); WritePersistentData(Start := FALSE);
+		CASE UpsMode OF
+		eSUPS_WrPersistData_NoShutdown:
+			WritePersistentData(Start := TRUE, Port := Port);		
+			status											:= eSUPS_WritePersistentData;
+		eSUPS_ImmediateShutdown:
+			ShutDown(START := TRUE, TMOUT := T#3S); 
+			status											:= eSUPS_QuickShutdown;			
+		ELSE //eSUPS_WrPersistData_Shutdown
+			ShutDown(START := TRUE, TMOUT := T#3S);
+			status											:= eSUPS_WritePersistentData;
+		END_CASE
+		state												:= state + 1;	
+											
+	901:// Wait for shutdown started     
+		shutDown();  WritePersistentData();  																		
+		IF ShutDown.BUSY OR ShutDown.ERR OR NOT WritePersistentData.BUSY         				
+		THEN                   
+			Error											:= WritePersistentData.ERR OR ShutDown.ERR;
+			ErrorId											:= SEL(WritePersistentData.ERR, ShutDown.ERRID , WritePersistentData.ERRID);
+			IF UpsMode = eSUPS_ImmediateShutdown
+			THEN
+				status										:= eSUPS_WaitForPowerOFF;
+			ELSIF UpsMode = eSUPS_WrPersistData_NoShutdown
+			THEN
+				status										:= eSUPS_WaitForRecover;
+				state										:= 0;
+			ELSE //Stop TC and write persistent data
+				state										:= state + 1;
+			END_IF		
+		END_IF                          				
+													
+	902:(*Tc Stop*)                       	
+		TcStop(STOP := TRUE);
+		IF NOT TcStop.BUSY
+		THEN
+			Error											:= Error OR TcStop.ERR;
+			ErrorId											:= SEL(TcStop.ERR, ErrorId, TcStop.ERRID);
+			status											:= eSUPS_WaitForPowerOFF;
+		END_IF
+			
+	END_CASE
+
+ELSE
+	Status													:= eSUPS_PowerOK;
+	state													:= 0;
+	Error													:= FALSE;
+	ErrorID													:= 0;	
+	PowerFailDetect											:= FALSE;
+END_IF
+
+(********************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="UPSStatus">
+      <LineId Id="3" Count="160" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

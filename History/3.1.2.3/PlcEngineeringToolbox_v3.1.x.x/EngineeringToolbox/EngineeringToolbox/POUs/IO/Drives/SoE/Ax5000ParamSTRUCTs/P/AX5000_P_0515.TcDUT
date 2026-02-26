@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0515" Id="{f5279a02-3358-4db3-96d6-02e6debe1804}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}
+TYPE AX5000_P_0515 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	ST_CONV_Version:UINT;
+//	{attribute 'hide'}
+	Rsvd1:UINT;
+	Filter_type:UINT;
+//	{attribute 'hide'}
+	Rsvd2:UINT;
+	Low_pass_frequency:UDINT;
+	Low_pass_damping:UDINT;
+	High_pass_frequency:UDINT;
+	High_pass_damping:UDINT;
+//	{attribute 'hide'}
+	Rsvd3:UDINT;
+//	{attribute 'hide'}
+	Rsvd4:UDINT;
+	QMath_factor:UINT;
+//	{attribute 'hide'}
+	Rsvd5:UINT;
+	b0:UDINT;
+	b1:UDINT;
+	b2:UDINT;
+	a1:UDINT;
+	a2:UDINT;
+//	{attribute 'hide'}
+	Rsvd6:UDINT;
+//	{attribute 'hide'}
+	Rsvd7:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

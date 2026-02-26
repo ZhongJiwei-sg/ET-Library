@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0309" Id="{1e350a09-f585-49c1-8e6a-14e8be69d361}">
+    <Declaration><![CDATA[TYPE AX5000_P_0309 :
+STRUCT
+	Max_ctrl_loop_time:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

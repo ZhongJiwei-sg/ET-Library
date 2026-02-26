@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0204" Id="{69891ae8-0a8f-4d22-afdf-517e6651be50}">
+    <Declaration><![CDATA[TYPE AX5000_S_0204 :
+STRUCT
+	Motor_shut_down_temperature:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

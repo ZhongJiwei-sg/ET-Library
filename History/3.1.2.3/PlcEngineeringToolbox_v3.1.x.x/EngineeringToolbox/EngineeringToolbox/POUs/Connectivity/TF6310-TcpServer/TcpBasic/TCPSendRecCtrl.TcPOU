@@ -1,0 +1,294 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="TCPSendRecCtrl" Id="{bfad38ec-2c49-4910-8a59-b7751825eff7}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Send or receive data via TCP connection 
+//based on TF6310, required lib: Tc2_TcpIp - see Beckhoff Infosys for more information
+FUNCTION_BLOCK TCPSendRecCtrl EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	FNC_RECEIVE												:	INT := 0;
+	FNC_SEND												:	INT := 1;
+END_VAR                 									
+VAR_INPUT               									
+	Fnc														:	INT (FNC_RECEIVE..FNC_SEND) := FNC_RECEIVE;
+	SrvNetId												: 	T_AmsNetId := ''; (* server ams net id *)
+	Timeout													: 	TIME := DEFAULT_ADS_TIMEOUT; //ADS timeout
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 2#0000_0000; //Options Bit .0 = Do NOT restart receive internally
+	hSocket													:	T_HSOCKET; //Server handle
+	pData													:	POINTER TO BYTE; //Pointer do send/res data field 
+	cbData													:	UDINT; //Size of send/rec data field 
+	EnableDebugMode											:	BOOL; //Write debug information into twincat logger
+END_VAR
+VAR_OUTPUT
+	RecBytes 												:  UDINT;  	// Count of received bytes
+	WinsockErrorId											:	E_WinsockError;  //Winsocket error enum - see TF6310 documentation for further information
+END_VAR
+VAR
+(* cache ************************************************************)
+	MemFnc													:	INT := -1;
+
+(* function-block instances ***************************************************************)
+	SocketSend												:	FB_SocketSend;
+	SocketReceive											:	FB_SocketReceive;
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= SEL(Fnc = FNC_SEND, FNC_RECEIVE , FNC_SEND) ;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_SEND:
+		SEND(Execute:= Execute);
+
+	FNC_RECEIVE:
+		Receive(Execute	:= Execute);
+
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+	END_CASE
+
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Property Name="optDoNotRestartReceiveCyclic" Id="{e2f51fcb-31fc-409e-8f3d-415c8b0c74c7}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optDoNotRestartReceiveCyclic : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8988e8d9-9521-4c8b-9d2d-a44d21e2b32a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optDoNotRestartReceiveCyclic := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c0717275-a0fd-4caa-9235-f00cffe991de}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optDoNotRestartReceiveCyclic;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="receive" Id="{f7fd0b66-0030-43bf-a0f7-b5cf07a5d652}">
+      <Declaration><![CDATA[METHOD PUBLIC receive : BOOL //Return value = TRUE if busy
+//required parameter
+//hSocket
+//pData
+//cbData
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_RECEIVE;
+	THIS^.Execute											:= Execute;
+	                                						
+IF pData = 0                        						
+THEN                                						
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;                         	
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketReceive.bExecute 								:= TRUE;
+	ELSIF NOT SocketReceive.bBusy   						
+	THEN                            						
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketReceive.bExecute 								:= FALSE;
+	END_IF                          	
+                                    	
+	SocketReceive(
+			sSrvNetId	:= SrvNetId,
+			hSocket		:= hSocket,
+			cbLen		:= cbData,
+			pDest		:= pData,
+			bExecute	:= ,
+			tTimeout	:= Timeout,
+			bBusy		=> Busy,
+			bError		=> ,
+			nErrId		=> ,
+			nRecBytes	=> );
+
+	IF NOT SocketReceive.bBusy
+		AND NOT SocketReceive.bError
+		AND SocketReceive.bExecute
+	THEN
+		IF EnableDebugMode
+			AND SocketReceive.nRecBytes > 0
+			AND NOT Done
+		THEN
+			ADSLOGDINT(	ADSLOG_MSGTYPE_ERROR OR ADSLOG_MSGTYPE_LOG, CONCAT('%d Bytes received / ', HSOCKET_TO_STRING(hSocket)) , UDINT_TO_DINT(SocketReceive.nRecBytes));
+		END_IF
+		Done												:= SocketReceive.nRecBytes > 0 OR Options.0; (* Done melden nach jedenm Lesezyklus, egal ob Daten empfangen wurden *)
+		IF NOT Done
+		THEN (* only set Done if something is safely received *)
+			SocketReceive(bExecute := FALSE);
+			SocketReceive(bExecute := TRUE, bBusy => Busy);
+		END_IF
+		RecBytes											:= SEL(Done , 0 ,SocketReceive.nRecBytes);
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF                              	
+                                        	
+	IF NOT Busy
+	THEN
+		IF SocketReceive.bExecute
+		THEN
+			Error											:=	SocketReceive.bError;
+			IF SocketReceive.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_ADSERR.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketReceive.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketReceive.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketReceive(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	//Method return
+	Receive													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="send" Id="{268cf6c0-3cf5-45f2-85d4-91d04f383706}">
+      <Declaration><![CDATA[METHOD PUBLIC send : BOOL //Return value = TRUE if busy
+//required parameter
+//hSocket
+//pData
+//cbData
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_SEND;
+	THIS^.Execute											:= Execute;
+	
+IF pData = 0 THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_ADSErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketSend.bExecute 								:= TRUE;
+	ELSIF NOT SocketSend.bBusy          					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketSend.bExecute 								:= FALSE;
+	END_IF                              	
+	                                    	
+	SocketSend(
+		sSrvNetId	:= SrvNetId,
+		hSocket		:= hSocket,
+		cbLen		:= cbData,
+		pSrc		:= pData,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	IF NOT SocketSend.bBusy
+		AND NOT SocketSend.bError
+		AND SocketSend.bExecute
+	THEN
+		IF NOT Done
+			AND EnableDebugMode
+		THEN
+			ADSLOGDINT(	ADSLOG_MSGTYPE_ERROR OR ADSLOG_MSGTYPE_LOG, CONCAT('%d Bytes sended / ', HSOCKET_TO_STRING(hSocket)) , UDINT_TO_DINT(cbData));
+		END_IF
+		Done												:= TRUE;
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF
+
+	IF NOT Busy
+	THEN
+		IF SocketSend.bExecute
+		THEN
+			Error											:=	SocketSend.bError;
+			IF SocketSend.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketSend.nErrId);
+			ELSE
+				ErrorId										:= SocketSend.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketSend(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	//Method return
+	Send													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="TCPSendRecCtrl">
+      <LineId Id="110" Count="37" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSendRecCtrl.optDoNotRestartReceiveCyclic.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSendRecCtrl.optDoNotRestartReceiveCyclic.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSendRecCtrl.receive">
+      <LineId Id="91" Count="79" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPSendRecCtrl.send">
+      <LineId Id="3" Count="70" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

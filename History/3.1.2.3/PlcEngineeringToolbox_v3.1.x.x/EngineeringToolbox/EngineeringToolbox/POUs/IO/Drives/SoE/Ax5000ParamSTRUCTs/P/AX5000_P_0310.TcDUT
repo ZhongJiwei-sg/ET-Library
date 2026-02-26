@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0310" Id="{7ebe60cd-7182-4bb3-8069-d0b267023cb9}">
+    <Declaration><![CDATA[TYPE AX5000_P_0310 :
+STRUCT
+	Torque_off_Slow_down_according_Open_loop_ramp_Closed_loop_ramp_NC_handling_rsvd:UINT;
+	(*Torque_off 1 Bit; Slow_down_according 1 Bit; Open_loop_ramp 1 Bit; Closed_loop_ramp 1 Bit; NC_handling  1 Bit;  rsvd  11 Bit; *)
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

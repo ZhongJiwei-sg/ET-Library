@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="adsLogwTcEventClass" Id="{b0ff63ca-8841-4426-9b07-7a05c1733cba}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+//Writing string as hint message into the TwinCAT ams logger and windows event log with a Lreal argument
+//Please see Beckhoff information system "ADSLOGLREAL" for detailed information.
+//Intention of this function is to use the handy ADSLOGxxxx without the annoying msgCtrlMask as a parameter :-)  
+//Function "EventHandlingGetClassLevel" is used inside
+FUNCTION adsLogwTcEventClass : DINT
+VAR_INPUT               											
+	MsgFmtStr												:	T_MaxString;
+(*	dintArg													:	DINT; *) 
+(*	strArg													:	T_MaxString; *)
+(*	realArg													:	LREAL; *)
+	TcEventClass											:	E_TcEventClass; 
+END_VAR
+VAR
+	msgCtrlMask												:	DWORD; (* 	ADSLOG_MSGTYPE_HINT Meldungstyp ist Hinweis.
+																				ADSLOG_MSGTYPE_WARN Meldungstyp ist Warnung.  
+																				ADSLOG_MSGTYPE_ERROR Meldungstyp ist Fehler.  
+																				ADSLOG_MSGTYPE_LOG Meldung wird in das Logbuch geschrieben.  
+																				ADSLOG_MSGTYPE_MSGBOX Meldung wird in einer Messagebox ausgegeben.  
+																				ADSLOG_MSGTYPE_RESOURCE Meldung wird aus einer Ressource-Datei geholt. (wird momentan nicht  unterstützt)  
+																				ADSLOG_MSGTYPE_STRING 	Meldung ist direkt angegebener String (default).  *)	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* create fixed message ctrl mask **********************************)
+	CASE GetEventClassPriority(tcEventClass) OF 
+	0:	msgCtrlMask											:= ADSLOG_MSGTYPE_HINT;
+	1:	msgCtrlMask											:= ADSLOG_MSGTYPE_WARN;
+	ELSE
+		msgCtrlMask											:= ADSLOG_MSGTYPE_ERROR;
+	END_CASE
+
+	msgCtrlMask												:= ADSLOG_MSGTYPE_STRING OR msgCtrlMask OR ADSLOG_MSGTYPE_LOG;
+
+(* write string which includes a floating-number ******************)
+	adsLogwTcEventClass 										:= ADSLOGLREAL(msgCtrlMask, msgFmtStr, 0.0);
+	
+(* write string which includes a DINT-number *******************)
+(*	LogWithEventClass 										:= ADSLOGDINT(msgCtrlMask, msgFmtStr, dintArg); *)
+
+(* write string which includes an other string e.g. 'hallo: %s what's up' ***************)
+(*	LogWithEventClass 										:= ADSLOGSTR(msgCtrlMask, msgFmtStr,msgCtrlMaskstrArg); *)
+
+(*****************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="adsLogwTcEventClass">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

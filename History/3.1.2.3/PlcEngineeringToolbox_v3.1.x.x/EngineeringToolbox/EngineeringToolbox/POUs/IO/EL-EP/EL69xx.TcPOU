@@ -1,0 +1,74 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EL69xx" Id="{e9939866-d129-4464-bc29-e687b5df7b68}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EL69xx EXTENDS EcSlaveInfoDataExt
+VAR_INPUT
+(* standard DEVICE Outputs *)
+	Control											AT  %Q* : UINT;	
+END_VAR                         					
+VAR_OUTPUT            
+	FSoEAddr												:	WORD; //CoE index 0xF980
+          					
+(* Device Info Data. Only available if the Checkbox under the register TwinSafe_Logic is selected *)
+{attribute 'displaymode':='hex'}
+	ProjectCRC 										AT  %I* : UINT;
+	SerialNumber									AT  %I* : UDINT;
+                                					
+(* standard DEVICE Inputs *)    					
+	SafetyProjectState								AT  %I* : BYTE; 	//To create the mapping select change Link and select "All Types", then select the variable and press OK
+	LoginActive										AT  %I* : BOOL;	
+	InputSizeMismatch								AT  %I* : BOOL;
+	OutputSizeMismatch								AT  %I* : BOOL;
+	TxPDOState										AT  %I* : BOOL;
+	TxPDOToggle										AT  %I* : BOOL;	
+END_VAR
+VAR
+	EcCoESdoReadEx											:	FB_EcCoESdoReadEx := (tTimeout := DEFAULT_ADS_TIMEOUT); 
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^(); //Get device name
+
+(* Read FSoEAddr *******************************************************************************)
+IF FSOEAddr = 0
+	AND_THEN(
+	ProjectCRC <> 0
+	AND AdsAddr.port <> 0)
+THEN
+	EcCoESdoReadEx(
+		sNetId			:= F_CreateAmsNetId(nIds := AdsAddr.netId ),
+		nSlaveAddr		:= AdsAddr.port,
+		nSubIndex		:= 16#1,
+		nIndex			:= 16#F980,
+		pDstBuf			:= ADR(FSOEAddr),
+		cbBufLen		:= SIZEOF(FSOEAddr),
+		bExecute		:= TRUE,
+		tTimeout		:=  (* Default *),
+		bCompleteAccess	:= ,
+		bBusy			=> ,
+		bError			=> ,
+		nErrId			=> );
+		
+	IF NOT EcCoESdoReadEx.bBusy
+	THEN
+		IF EcCoESdoReadEx.bError 
+		THEN
+			adsLogError(CONCAT(CONCAT('ADS Error ', DWORD_TO_HEXSTR(EcCoESdoReadEx.nErrId,4,FALSE)),' reading FSoE addr. of EL69xx device: %s'), InstancePath);
+			FSoEAddr									:= 16#FFFF;
+		END_IF
+		EcCoESdoReadEx(bExecute := FALSE);
+	END_IF
+END_IF
+
+(************************************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="EL69xx">
+      <LineId Id="2" Count="0" />
+      <LineId Id="26" Count="24" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="51" Count="5" />
+      <LineId Id="25" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

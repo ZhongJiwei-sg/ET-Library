@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="scale" Id="{666c372e-5a6e-4c3a-a85f-545c677f47e6}" SpecialFunc="None">
+    <Declaration><![CDATA[//Discription:	"SCALE" scales the In-Value in the range between InLow to InHigh, to the commited OutLow to OutHigh range (In will be limited by InLow/InHigh).
+//Used for AnalogIn/Out
+FUNCTION scale : LREAL
+VAR_INPUT
+	In				 										: LREAL;
+	InLow 													: LREAL;
+	InHigh 													: LREAL;
+	OutLow 													: LREAL;
+	OutHigh 												: LREAL;
+END_VAR
+VAR
+	Lim														: LREAL;
+	X														: LREAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF OutHigh <> OutLow 
+THEN
+	X														:= InHigh - InLow;
+	IF x <> 0.0             									
+	THEN       
+		Lim 												:= LIMIT(InLow,In,InHigh) - InLow;             									
+		X		 											:= (OutHigh - OutLow) / X;
+		scale 												:= (X * Lim) + OutLow;			
+	ELSE                    									
+		scale												:= 0.0;
+	END_IF
+ELSE
+	scale													:= 0.0;	
+END_IF
+
+ ]]></ST>
+    </Implementation>
+    <LineIds Name="scale">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

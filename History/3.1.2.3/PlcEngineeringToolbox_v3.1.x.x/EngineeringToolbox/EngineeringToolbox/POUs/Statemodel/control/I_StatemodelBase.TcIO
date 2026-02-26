@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <Itf Name="I_StatemodelBase" Id="{3934310b-86b7-4f0f-90cf-9785ac415c70}">
+    <Declaration><![CDATA[INTERFACE I_StatemodelBase Extends __System.IQueryInterface 
+]]></Declaration>
+    <Folder Name="methods" Id="{bfbe4ef8-bf7f-4ea9-8e6f-6af6524847f2}" />
+    <Folder Name="properties" Id="{9de7182e-10c0-43c9-a6a3-58b7a5d7c7cb}" />
+    <Property Name="actMode" Id="{43041f25-da4d-4d24-b78a-8cc57886d48b}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public actMode : eMODE]]></Declaration>
+      <Get Name="Get" Id="{89eef5c0-3a7b-4cc1-af66-bca13c8adef1}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="actState" Id="{f229d2c2-6469-4465-952c-f25c511daafd}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+//Actual state enum, only read access by default, check options for further options 
+PROPERTY public actState : eSTATE]]></Declaration>
+      <Get Name="Get" Id="{9698b78c-dad0-4d3d-ab5a-eed894e7b78a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{4789ccff-2266-49f4-b360-5005f8a34f98}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="isBusy" Id="{286d3cb7-e3a2-4672-95ea-aa3f379fef67}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY isBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a718243b-2fc2-4a86-9ef3-390ce5da15c8}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="setMachineError" Id="{1fc7d333-0710-4abb-acfb-f4c04af5e54b}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setMachineError : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="setStateComplete" Id="{c8a9c7cf-6f5b-4196-8d94-be567aae35f4}" FolderPath="properties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC setStateComplete : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0ad7033e-072e-4020-893c-43500acd5054}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{27f67dcc-b88e-4133-bc5c-74d7ad84f76a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="stateComplete" Id="{c901b422-d957-4e03-a58d-2d3d4b136a93}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC stateComplete : BOOL //Result = TRUE if state completed (BusyIntern=TRUE)
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

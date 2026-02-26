@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0096" Id="{fafbb5eb-57d7-48cc-9502-1fd24ce69811}">
+    <Declaration><![CDATA[TYPE AX5000_P_0096 :
+STRUCT
+	Motor_brake_force_lock:BOOL;
+	Motor_brake_force_unlock:BOOL;
+//	{attribute 'hide'}
+	Rsvd:ARRAY[0..13] OF BOOL;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

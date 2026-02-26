@@ -1,0 +1,300 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FifoExt" Id="{3e639487-9f2c-492a-a34a-841083538feb}" SpecialFunc="None">
+    <Declaration><![CDATA[//FifoBase extended with dynamical memory allocation
+ {attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FifoExt EXTENDS FifoBase
+VAR_OUTPUT CONSTANT
+END_VAR   
+VAR_INPUT
+	MaxNoOfEntrys											: 	UDINT := 10;	//0 = dynamically allocation / <> 0 = pre allcoation of memory based on size of first entry (n * data size) 
+END_VAR
+VAR_OUTPUT
+	pMemory													: 	POINTER TO BYTE := 0; //Pointer to memory	
+	SizeOfMemory											: 	UDINT := 0; //According MaxNoOfEntrys and SizeOfData of first entry
+END_VAR
+VAR
+	MemSizeAllocatedMemory									:	UDINT := 0; //Allocated memory 
+	MemSizeOfData											:	UDINT;
+	MemMaxNoOfEntrys										:	UDINT;
+	ExtInterlock											:	BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="allocate" Id="{f5a880e9-6840-43d4-9ceb-2b5d23197484}">
+      <Declaration><![CDATA[METHOD PROTECTED FINAL allocate : BOOL
+VAR_IN_OUT
+	SizeOfData												:	UDINT;
+END_VAR
+VAR
+	pDummy													:	POINTER TO BYTE;	
+End_Var	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pMemory = 0
+THEN
+	IF SizeOfData = 0 OR MaxNoOfEntrys = 0
+	THEN
+		Allocate											:= FALSE;	
+	ELSE
+		MemSizeOfData										:= SizeOfData;
+		MemMaxNoOfEntrys									:= MaxNoOfEntrys;
+		SizeOfMemory										:= MemSizeOfData * MemMaxNoOfEntrys;
+		MemSizeAllocatedMemory								:= SizeOfMemory;
+		pMemory												:= __NEW(BYTE,SizeOfMemory );
+		
+		IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+		THEN
+			AdsLogHint('EngineeringToolbox | FB FifoExt | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(SizeOfMemory));
+		END_IF
+	END_IF
+
+ELSIF SizeOfData = MemSizeOfData AND MaxNoOfEntrys = MemMaxNoOfEntrys
+THEN
+	Allocate												:= TRUE;
+	
+ELSIF SizeOfData > MemSizeOfData OR MaxNoOfEntrys > MemMaxNoOfEntrys
+THEN //Since increased, allocate new memory
+	MemSizeAllocatedMemory									:= SizeOfData * MaxNoOfEntrys;
+	pDummy													:= __NEW(BYTE, MemSizeAllocatedMemory); 
+	
+	 //Size of data still the same, copy old data to reuse
+	IF MemSizeOfData = SizeOfData AND Count > 0
+	THEN
+		MEMCPY(pDummy,pMemory, SizeOfMemory);
+	END_IF
+	
+	//Copy new settings to local variales
+	MemSizeOfData											:= SizeOfData;
+	MemMaxNoOfEntrys										:= MaxNoOfEntrys;	
+	SizeOfMemory 											:= MemSizeAllocatedMemory;
+
+	__DELETE(pMemory);  //Delete reference to old memory
+	pMemory													:= pDummy; //Take over new pointer to new memory
+	
+	IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+	THEN
+		AdsLogWarn('EngineeringToolbox | FB FifoExt | Value of "MaxNoOfEntrys" or data size increased and one instance allocated additional %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(SizeOfMemory));
+	END_IF
+	
+	Allocate												:= TRUE;
+	
+ELSE //Size decreased
+	IF MemSizeOfData <> SizeOfData AND Count > 0
+	THEN //Size of data changed, erease memory 
+		MEMSET(pMemory,0, MemSizeAllocatedMemory);
+	ELSE //Size of data the same, keep current data
+		;
+	END_IF
+	
+	//Copy new settings to local variales
+	MemSizeOfData											:= SizeOfData;
+	MemMaxNoOfEntrys										:= MaxNoOfEntrys;
+	SizeOfMemory											:= MemSizeOfData * MemMaxNoOfEntrys;
+	Allocate												:= TRUE;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="clear" Id="{fa9f0261-d80b-41ae-8202-f1b22e2454aa}">
+      <Declaration><![CDATA[//Clear out one entry from the Fifo buffer
+METHOD PUBLIC clear : BOOL //TRUE if method was successful
+VAR_INPUT
+	EntryNo													:	UDINT;
+END_VAR             										
+VAR                 										
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Clear := SUPER^._Clear(EntryNo,This^.pMemory,This^.SizeOfMemory);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="clearByDataSet" Id="{c5b0e474-215a-410e-bc6b-0b27fe239b19}">
+      <Declaration><![CDATA[//Clear out defined data set from the Fifo buffer
+METHOD PUBLIC clearByDataSet : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;				
+END_VAR             										
+VAR                 										
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ClearByDataSet := SUPER^._ClearByDataSet(pData,SizeOfEntry,This^.pMemory,This^.SizeOfMemory);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeue" Id="{3b9d5a27-3fa4-4b4a-8fc7-ed5697138830}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO BYTE;	
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Dequeue := SUPER^._Dequeue(pData,SizeOfEntry,This^.pMemory,This^.SizeOfMemory);
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueue" Id="{9617ae4d-3763-4b30-90ea-78109cfea629}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO BYTE;
+	SizeOfData												:	UDINT;
+END_VAR
+VAR
+	CopySize												:	UDINT;
+	pDummy													:	POINTER TO BYTE;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(ExtInterlock) 
+THEN	
+	if Allocate(SizeOfData)
+	then
+		Enqueue 											:= SUPER^._Enqueue(pData,SizeOfData,THIS^.pMemory,THIS^.SizeOfMemory);
+		ExtInterlock										:= FALSE;
+	else
+		Enqueue												:= FALSE;
+	END_IF	
+ELSE
+	Enqueue													:= FALSE;
+END_IF		
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_exit" Id="{390d6cc2-418a-4079-b88b-88d01d4929c1}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode AND pMemory <> 0
+THEN //Release memory in case the PLC stopps
+	__DELETE(pMemory);
+	Full													:= FALSE;
+	Empty													:= TRUE;
+	Count													:= 0;
+	SizeOfMemory											:= 0;
+	MemSizeOfData											:= 0;
+	MemSizeAllocatedMemory									:= 0;
+	MemMaxNoOfEntrys										:= MaxNoOfEntrys;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isEnqueued" Id="{6f72489a-21f0-44f7-889e-48c62b2eef2c}">
+      <Declaration><![CDATA[//Check wheter a value already exist
+METHOD PUBLIC isEnqueued : UDINT //pData entry exist in Fifo at idx as return value 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+END_VAR	
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsEnqueued := SUPER^._IsEnqueued(pData,SizeOfEntry,This^.pMemory,This^.SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isNextEntry" Id="{4b0d2f30-9e32-432d-9a30-5fca7addbf63}">
+      <Declaration><![CDATA[//Check wheter a value will be the next output of the buffer
+METHOD PUBLIC isNextEntry : BOOL //Inputs value is the next output 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsNextEntry := SUPER^._IsNextEntry(pData,SizeOfEntry,This^.pMemory,This^.SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readEntry" Id="{a2ae8a63-b7f4-4563-b96a-60f6f2805645}">
+      <Declaration><![CDATA[METHOD PUBLIC readEntry : BOOL //TRUE if method was successful
+VAR_INPUT
+	idx														:	UDINT;
+	pData													: 	POINTER TO BYTE := 0;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ReadEntry := SUPER^._ReadEntry(idx,pData,SizeOfEntry,This^.pMemory,This^.SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{b8752a94-8972-494b-adaf-e758cdd552cc}">
+      <Declaration><![CDATA[//Reset complete Fifo
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset				:= SUPER^._reset(This^.pMemory,This^.SizeOfMemory);	
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FifoExt">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.allocate">
+      <LineId Id="252" Count="11" />
+      <LineId Id="308" Count="1" />
+      <LineId Id="311" Count="0" />
+      <LineId Id="310" Count="0" />
+      <LineId Id="265" Count="24" />
+      <LineId Id="312" Count="1" />
+      <LineId Id="290" Count="0" />
+      <LineId Id="314" Count="1" />
+      <LineId Id="291" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.clear">
+      <LineId Id="15" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.clearByDataSet">
+      <LineId Id="19" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.dequeue">
+      <LineId Id="3" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.enqueue">
+      <LineId Id="3" Count="1" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="93" Count="1" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="30" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.FB_exit">
+      <LineId Id="3" Count="2" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.isEnqueued">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.isNextEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.readEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoExt.reset">
+      <LineId Id="7" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

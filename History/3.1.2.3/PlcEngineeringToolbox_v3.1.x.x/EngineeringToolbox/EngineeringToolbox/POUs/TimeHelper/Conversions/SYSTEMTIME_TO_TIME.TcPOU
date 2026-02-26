@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SYSTEMTIME_TO_TIME" Id="{26469249-8a42-425b-9343-822d17795861}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION SYSTEMTIME_TO_TIME : TIME //Converts Systemtime (Timestruct) of day to TIME (T#15h23m12s34ms)
+VAR_INPUT
+	IN													: TIMESTRUCT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SYSTEMTIME_TO_TIME											:= TO_TIME(IN.wMilliseconds
+																+ IN.wSecond * 1000
+																+ IN.wMinute * 60000
+																+ IN.wHour * 3600000);
+																
+																]]></ST>
+    </Implementation>
+    <LineIds Name="SYSTEMTIME_TO_TIME">
+      <LineId Id="26" Count="4" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

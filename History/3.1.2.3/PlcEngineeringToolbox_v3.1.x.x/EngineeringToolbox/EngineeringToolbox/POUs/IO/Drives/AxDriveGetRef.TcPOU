@@ -1,0 +1,127 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AxDriveGetRef" Id="{58f69845-a438-4e9e-a653-6a0a53f783e1}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Provides drive reference (Ref -> ST_DriveRef) based on NC-AxisID
+//Drive reference is needed for FB's of lib Drive e.g. FB_SoEAX5000FirmwareUpdate_ByDriveRef
+FUNCTION_BLOCK AxDriveGetRef EXTENDS FbBase
+VAR CONSTANT                								
+	NCIDXG_AXPARMS											: UDINT := 16#0000_4000;	(* Axis with ID: Parameter 			*)
+	NCIDXO_AXP_HWAMSADDR									: UDINT := 16#0000_0031;	
+	MIN_ADSREAD_BUFFER										:	INT := 0;
+	MAX_ADSREAD_BUFFER										:	INT := 9;
+END_VAR 
+VAR_INPUT                   					
+	AmsNetId												: T_AmsNetId := '';	(* netID of PC with NC *)			      
+	AxisId													:	DWORD; //NC axis id	
+END_VAR
+VAR_OUTPUT                  								
+	DriveAmsNetId											: T_AmsNetIdArr; (* Ams net id as array of bytes *)
+    DriveRef												: ST_DriveRef; 	(* contains sNetID of EcMaster, nSlaveAddr of EcDrive, nDriveNo of EcDrive, either preset or read from NC *)
+END_VAR              								                 								
+VAR                         								
+(* cache ********************************************)
+	AdsReadBuffer											: ARRAY[MIN_ADSREAD_BUFFER..MAX_ADSREAD_BUFFER] OF BYTE;
+                						
+(* trigger ******************************************)
+
+(* timer ********************************************)
+	
+(* blocks *******************************************)	
+	AdsRead													: ADSREAD := (TMOUT := DEFAULT_ADS_TIMEOUT);
+	
+(* dummys *******************************************)
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Create drive ref for device 									*)
+	(****************************************************************)
+
+(* Sequence ****************************************)
+	rtExecute(CLK := Execute);
+	CASE state OF 
+	0:	
+		Busy												:= FALSE;
+		IF NOT Execute
+		THEN
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+		ELSIF rtExecute.Q
+		THEN
+			Busy											:= TRUE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			AdsRead(READ := FALSE);
+			MEMSET(ADR(DriveRef), 0, SIZEOF(DriveRef));
+			MEMSET(ADR(AdsReadBuffer), 0, SIZEOF(AdsReadBuffer));
+			state											:= State + 1;
+		END_IF 
+	
+	1: //Get drive slave address
+		AdsRead(
+			NETID	:= AmsNetId,
+			PORT	:= AMSPORT_R0_NC,
+			IDXGRP	:= NCIDXG_AXPARMS + AxisId,
+			IDXOFFS	:= NCIDXO_AXP_HWAMSADDR,
+			LEN		:= SIZEOF(AdsReadBuffer) ,
+			DESTADDR:= ADR(AdsReadBuffer),
+			READ	:= TRUE);
+		IF NOT AdsRead.BUSY
+		THEN
+			IF NOT AdsRead.ERR 
+			THEN
+				MEMCPY(ADR(DriveAmsNetId), ADR(AdsReadBuffer), SIZEOF(DriveAmsNetId)); 							(* AdsreadBuffer[0..5] *)
+				MEMCPY(ADR(DriveRef.nSlaveAddr), ADR(AdsReadBuffer[6]), SIZEOF(DriveRef.nSlaveAddr));  	(* AdsreadBuffer[6..7] *)
+				MEMCPY(ADR(DriveRef.nDriveNo), ADR(AdsReadBuffer[8]), SIZEOF(DriveRef.nDriveNo));  		(* AdsreadBuffer[8..9] *)
+
+				(* create string out of byte array *)
+				DriveRef.sNetId 							:= F_CreateAmsNetId(DriveAmsNetId);
+				
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				state										:= 0;
+			ELSE
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= AdsRead.ERRID;
+				State										:= 0;
+			END_IF
+		END_IF
+	END_CASE
+	
+(**********************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="AxDriveGetRef">
+      <LineId Id="974" Count="2" />
+      <LineId Id="984" Count="11" />
+      <LineId Id="997" Count="3" />
+      <LineId Id="1004" Count="1" />
+      <LineId Id="1002" Count="1" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="904" Count="0" />
+      <LineId Id="909" Count="0" />
+      <LineId Id="926" Count="7" />
+      <LineId Id="939" Count="0" />
+      <LineId Id="951" Count="1" />
+      <LineId Id="954" Count="0" />
+      <LineId Id="941" Count="4" />
+      <LineId Id="934" Count="0" />
+      <LineId Id="1010" Count="0" />
+      <LineId Id="1006" Count="0" />
+      <LineId Id="1009" Count="0" />
+      <LineId Id="959" Count="0" />
+      <LineId Id="946" Count="0" />
+      <LineId Id="955" Count="0" />
+      <LineId Id="960" Count="2" />
+      <LineId Id="956" Count="1" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="1007" Count="1" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

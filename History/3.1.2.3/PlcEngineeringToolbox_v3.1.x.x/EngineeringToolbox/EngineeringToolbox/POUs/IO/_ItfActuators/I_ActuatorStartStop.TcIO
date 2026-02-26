@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorStartStop" Id="{2f4c6c16-e270-4a9f-b923-7191b52f6674}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorStartStop EXTENDS I_ActuatorBase
+]]></Declaration>
+    <Property Name="isStarted" Id="{038ef8c5-3402-4f4b-8523-6bf22a2e3740}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{59dfe0b0-675a-4791-a01d-9f6d96880725}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isStopped" Id="{b9382c80-d2db-4f38-bdfc-fa90ed67707b}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isStopped : BOOL]]></Declaration>
+      <Get Name="Get" Id="{28a90c06-16c5-4982-8cb4-f65d9e296d85}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="start" Id="{7344032b-0c29-438c-bad4-e8c235e48be1}">
+      <Declaration><![CDATA[METHOD public start : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="stop" Id="{86f38d89-3dcb-45ac-9193-b7287b2c500e}">
+      <Declaration><![CDATA[METHOD public stop : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

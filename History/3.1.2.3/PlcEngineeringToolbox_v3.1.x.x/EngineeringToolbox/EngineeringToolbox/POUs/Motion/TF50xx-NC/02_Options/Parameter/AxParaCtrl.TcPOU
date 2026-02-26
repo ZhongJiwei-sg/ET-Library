@@ -1,0 +1,617 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="AxParaCtrl" Id="{578cfd20-4e1c-4391-ba11-23579f51fd70}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//FB to read and write NC axis controller parameter in particular  
+//The FB can be enherided and derivatived methods of SeqRead/SeqWrite used for application specific parameter.
+//The extended methods need to call the super class at the beginning and return true if execution will be finished. The allowed states for new parameter are 1..99
+FUNCTION_BLOCK AxParaCtrl EXTENDS AxRWParaBase
+VAR_OUTPUT CONSTANT
+END_VAR                                 					
+VAR_INPUT                               					                                   	                                        	
+	AxisID													: 	UDINT;				(* ID der Achse *)
+
+	(* Write *)
+	SetPosLoopDeadBandPosDeviation							: 	LREAL;//Positon ctrl loop: 'dead band' in mm for position error (position deviation)(for P/PID-controller with velocity or torque interface)
+	SetPosLoop_Kv											: 	LREAL;//Positon ctrl loop: Proportional amplification factor kp resp. kv (Standstill for two P-Const)
+	SetPosLoop_Kv2Moving									: 	LREAL;//Positon ctrl loop: With two P-Const: Add proportional amplification factor kp resp. kv that applies above a limit velocity in percent 
+	SetPosLoop_Tn											: 	LREAL;//Positon ctrl loop: Integral action time Tn in sec
+	SetPosLoop_Tv											: 	LREAL;//Positon ctrl loop: Derivative action time Tv sec																			
+	SetPosLoop_Td											: 	LREAL;//Positon ctrl loop: Damping time Td in sec																		
+	
+	SetPosLoopVeloThreshold									: 	LREAL;//Positon ctrl loop: Threshold level velocity in percent, above which the additional proportional amplification factor kp resp. kv applies.
+
+	SetPosLoopMinMaxLimit_I_Part							: 	LREAL;//Positon ctrl loop: Min/Maximum output limitation ( ) for I- part in percent (default setting: 0.1 == 10 %)																	
+	SetPosLoopMinMaxLimit_D_Part							: 	LREAL;//Positon ctrl loop: Min/Maximum output limitation ( ) for D- part in percent (default setting: 0.1 == 10 %)																
+	SetPosLoopDisable_I_Part								: 	BOOL;//Positon ctrl loop: Switch off the I-part during an active positioning process (as far as I-part active)? (default setting: 0 = FALSE)										
+ 
+	SetPosLoopFeedFwdAcc_Ka 								: 	LREAL;//Positon ctrl loop: Feed forward acceleration, proportional amplification factor Kv (Acceleration pre control)							
+	SetPosLoopFeedFwdVeloPreCntrlWeight						: 	LREAL;//Positon ctrl loop: Weight of the velocity pre control (standard value: 1.0 = 100 %)
+	
+//Velocity control loop CtrlType 5,6)
+	SetVeloLoopDeadBandVeloDeviation						: 	LREAL;//Velocity ctrl loop: 'dead band' for velocity error (velocity deviation)(for P/PID-controller with velocity or torque interface)
+	SetVeloLoopFilterTimeVeloDeviation						: 	LREAL;//Velocity ctrl loop: PT-2 filter time for velocity error (velocity-difference)
+                                                                         
+	SetVeloLoop_Kv											: 	LREAL;//Velocity ctrl loop: The Proportional Factor Kv is the gain factor of the P-controller.
+	SetVeloLoop_Tn											: 	LREAL;//Velocity ctrl loop: Integral Action Time Tn of the I component of the PID-controller in sec
+	SetVeloLoop_Tv											: 	LREAL;//Velocity ctrl loop: Rate time Tv of the real D component (D-T1 component) of the PID-controller in sec																			
+	SetVeloLoop_Td											: 	LREAL;//Velocity ctrl loop: Damping time Td of the real D component (D-T1 component) of the PID-controller in sec																		
+                                                                         
+	SetVeloLoopMinMaxLimit_D_Part							: 	LREAL;//Velocity ctrl loop: Min/Maximum output limitation ( ) for D- part in percent (default setting: 0.1 == 10 %)	
+	SetVeloLoopMinMaxLimit_I_Part							: 	LREAL;//Velocity ctrl loop: Min/Maximum output limitation ( ) for I- part in percent (default setting: 0.1 == 10 %)																	
+
+END_VAR
+VAR_OUTPUT    
+	CtrlType												: 	UDINT;(* Controller Type:
+																			0 NOT DEFINED
+																			1 Position-controller (standard) (Position)
+																			2 Position-controller with two P-constants (with ka) (Position)
+																			3 Position-controller PID (with ka)(Position)
+																			5 Position and velocity P-controller(with ka) (Velocity)
+																			6 PI controller (Velocity)
+																			7 High/low speed controller (Position)
+																			8 Stepper motor controller(Position)
+																			9 SERCOS controller(Position in the drive)
+																			10 RESERVED
+																			11 RESERVED
+																			12 RESERVED
+																			13 RESERVED
+																			14 TCom Controller (Soft Drive)(Position in the drive)*)
+
+																		
+//Position control loop
+	PosLoopDeadBandPosDeviation								: 	LREAL;//Positon ctrl loop: 'dead band' in mm for position error (position deviation)(for P/PID-controller with velocity or torque interface)
+	PosLoop_Kv												: 	LREAL;//Positon ctrl loop: Proportional amplification factor kp resp. kv (Standstill for two P-Const)
+	PosLoop_Kv2Moving										: 	LREAL;//Positon ctrl loop: With two P-Const: Add proportional amplification factor kp resp. kv that applies above a limit velocity in percent 
+	PosLoop_Tn												: 	LREAL;//Positon ctrl loop: Integral action time Tn in sec
+	PosLoop_Tv												: 	LREAL;//Positon ctrl loop: Derivative action time Tv sec																			
+	PosLoop_Td												: 	LREAL;//Positon ctrl loop: Damping time Td in sec																		
+	
+	PosLoopVeloThreshold									: 	LREAL;//Positon ctrl loop: Threshold level velocity in percent, above which the additional proportional amplification factor kp resp. kv applies.
+
+	PosLoopMinMaxLimit_I_Part								: 	LREAL;//Positon ctrl loop: Maximum output limitation ( ) for I- part in percent (default setting: 0.1 == 10 %)																	
+	PosLoopMinMaxLimit_D_Part								: 	LREAL;//Positon ctrl loop: Maximum output limitation ( ) for D- part in percent (default setting: 0.1 == 10 %)																
+	PosLoopDisable_I_Part									: 	BOOL; //Positon ctrl loop: Switch off the I-part during an active positioning process (as far as I-part active)? (default setting: 0 = FALSE)										
+ 
+	PosLoopFeedFwdAcc_Ka 									: 	LREAL;//Positon ctrl loop: Feed forward acceleration, proportional amplification factor Kv (Acceleration pre control)							
+	PosLoopFeedFwdVeloPreCntrlWeight						: 	LREAL;//Positon ctrl loop: Weight of the velocity pre control (standard value: 1.0 = 100 %)
+
+//Velocity control loop	(CtrlType 5,6)
+	VeloLoopDeadBandVeloDeviation							: 	LREAL;//Velocity ctrl loop: 'dead band' for velocity error (velocity deviation)(for P/PID-controller with velocity or torque interface)
+	VeloLoopFilterTimeVeloDeviation							: 	LREAL;//Velocity ctrl loop: PT-2 filter time for velocity error (velocity-difference)
+                                                                          
+	VeloLoop_Kv												: 	LREAL;//Velocity ctrl loop: The Proportional Factor Kv is the gain factor of the P-controller.
+	VeloLoop_Tn												: 	LREAL;//Velocity ctrl loop: Integral Action Time Tn of the I component of the PID-controller in sec
+	VeloLoop_Tv												: 	LREAL;//Velocity ctrl loop: Rate time Tv of the real D component (D-T1 component) of the PID-controller in sec																			
+	VeloLoop_Td												: 	LREAL;//Velocity ctrl loop: Damping time Td of the real D component (D-T1 component) of the PID-controller in sec																		
+                                                                         
+	VeloLoopMinMaxLimit_D_Part								: 	LREAL;//Velocity ctrl loop: Min/Maximum output limitation ( ) for D- part in percent (default setting: 0.1 == 10 %)																
+	VeloLoopMinMaxLimit_I_Part								: 	LREAL;//Velocity ctrl loop: Min/Maximum output limitation ( ) for I- part in percent (default setting: 0.1 == 10 %)																	
+		
+END_VAR                         	
+VAR
+(* Zwischenspeicher ************************************************************)
+	
+(* Deklaration Trigger **********************************************************)
+
+(* Zeiten ******************************************************************)
+
+(* Bausteine ***************************************************************)
+	ReadAdsPara												: ADSREAD := (NetId	:= '' , Port := AMSPORT_R0_NC, TmOut	:= DEFAULT_ADS_TIMEOUT);
+	WriteAdsPara											: ADSWRITE := (NetId:= '' , Port := AMSPORT_R0_NC, TmOut	:= DEFAULT_ADS_TIMEOUT);
+
+(* Dummy Speicher **********************************************************)
+
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(************************************************************************************)
+	(*																					*)
+	(*		B E C K H O F F   N E W   A U T O M A T I O N   T E C H N O L O G Y    		*)
+	(*																					*)
+	(*		Eiserstr.5	D-33415 Verl	Germany	phone:	+49-5246-0	www.Beckhoff.Com	*)
+    (*																					*)
+    (*		Bausteinbeschreibung	:	Read/Write axis NC controller parameter			*)
+	(*		TwinCAT-Version			:	3.x or higher									*)
+	(*																					*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	Super^();			
+	
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Property Name="deviceAddrIsValid" Id="{49b48e03-39c7-4263-841f-202e19099996}">
+      <Declaration><![CDATA[PROPERTY PROTECTED deviceAddrIsValid : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3d13ea43-fceb-41a6-972b-be41231c1edf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[deviceAddrIsValid := AxisId > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="getValue" Id="{e0e498c9-bc4c-48cb-a805-03f5bc988aed}">
+      <Declaration><![CDATA[METHOD PROTECTED getValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	IDxGrp						:	UDINT;
+	IDxOffs						:	UDINT;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value
+	pSetValue					:	PVOID; //Address of variable for ser value variable, can be zero if no corresponding SetVariable exists
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+ReadAdsPara	(Read := TRUE, IDxGrp:=IDxGrp+AxisId, IDxOffs:=IDxOffs,LEN:=Len,DestAddr:=pActValue );
+IF NOT ReadAdsPara.BUSY
+THEN
+	IF NOT ReadAdsPara.ERR 
+	THEN 
+		IF pSetValue <> 0 THEN MEMCPY(pSetValue, pActValue, Len); END_IF			
+		state 												:= state + 1; 
+	ELSE 		
+		Busy												:= FALSE;
+		Error												:= TRUE;
+		ErrorId												:= ReadAdsPara.ERRID;
+		ErrorText											:= CONCAT('Error read parameter in state:' , TO_STRING(state * -1));
+		ErrorText											:= CONCAT(ErrorText , ' Id:');
+		ErrorText											:= CONCAT(ErrorText , TO_STRING(ErrorId));
+		State												:= 9999;
+	END_IF	
+	ReadAdsPara(Read := FALSE); 
+	getValue												:= TRUE;									
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqRead" Id="{a9166abb-4c1e-4118-b089-ed0de3247815}">
+      <Declaration><![CDATA[METHOD PROTECTED seqRead : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	State							:	INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Execute read axis parameter ************************************)
+	CASE state OF
+	1..99: //read application spec parameter 
+		seqRead												:= TRUE;
+		
+	1001: (* Type **********************************************************************************)
+		IF CtrlType <> 0 AND NOT ReadAdsPara.BUSY
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#3,	LEN := SIZEOF(CtrlType),	pActValue := ADR(CtrlType), 	pSetValue := 0);
+		END_IF
+
+	1002: (* Pos Ctrl loop. dead band (2,3,12,13 ****************************************************************************************)
+		IF CtrlType <> 2 AND CtrlType <> 3 AND CtrlType <> 12 AND CtrlType <> 13 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#10D,	LEN := SIZEOF(PosLoopDeadBandPosDeviation),	pActValue := ADR(PosLoopDeadBandPosDeviation), 	pSetValue := ADR(SetPosLoopDeadBandPosDeviation));
+		END_IF
+
+	1003: (* Pos control Kv (Standstill) (1,2,3,5,6,10,11,12,13 ****************************************************************************************)
+		IF CtrlType > 6 AND CtrlType < 10 OR CtrlType > 13 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#102,	LEN := SIZEOF(PosLoop_Kv),	pActValue := ADR(PosLoop_Kv), pSetValue := ADR(SetPosLoop_Kv));
+		END_IF
+		
+	1004: (* Pos control Kv (Moving) (2, ****************************************************************************************)
+		IF CtrlType <> 2 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#106,	LEN := SIZEOF(PosLoop_Kv2Moving),	pActValue := ADR(PosLoop_Kv2Moving), pSetValue := ADR(SetPosLoop_Kv2Moving));
+		END_IF
+	
+	1005: (* Pos control Integral action time Tn (3,10,11 ***********************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#103,	LEN := SIZEOF(PosLoop_Tn),	pActValue := ADR(PosLoop_Tn),  pSetValue := ADR(SetPosLoop_Tn) );	
+		END_IF
+		
+	1006: (* Pos control Derivative action time Tv (3,10,11 ***********************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#104,	LEN := SIZEOF(PosLoop_Tv),	pActValue := ADR(PosLoop_Tv),  pSetValue := ADR(SetPosLoop_Tv) );
+		END_IF
+		
+	1007: (* Pos control Damping time Td (3,10,11 ***************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#105,	LEN := SIZEOF(PosLoop_Td),	pActValue := ADR(PosLoop_Td), pSetValue := ADR(PosLoop_Td));
+		END_IF
+
+	1008: (* Pos control with 2 P-Const, Threshold level velocity in percent (2,) ***************************************************************)
+		IF CtrlType <> 2 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#107,	LEN := SIZEOF(PosLoopVeloThreshold),	pActValue := ADR(PosLoopVeloThreshold), pSetValue := ADR(SetPosLoopVeloThreshold));
+		END_IF
+		
+	1009: (* Pos control Maximum output limitation ( ) for I- part in percent (3,10,11 ***************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#116,	LEN := SIZEOF(PosLoopMinMaxLimit_I_Part),	pActValue := ADR(PosLoopMinMaxLimit_I_Part), pSetValue := ADR(SetPosLoopMinMaxLimit_I_Part));
+		END_IF
+		
+	1010: (* Pos control Maximum output limitation ( ) for D- part in percent (3,10,11 ***************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#117,	LEN := SIZEOF(PosLoopMinMaxLimit_D_Part),	pActValue := ADR(PosLoopMinMaxLimit_D_Part), pSetValue := ADR(SetPosLoopMinMaxLimit_D_Part));
+		END_IF		
+
+	1011: (* Pos control Switch off the I-part during an active positioning process (3,)***************************************************************)
+		IF CtrlType <> 3 
+		THEN
+			state											:= state + 1;
+		ELSIF getValue(IDxGrp:= 16#6000,	IDxOffs := 16#118,	LEN := SIZEOF(_UINT),	pActValue := ADR(_UINT),  pSetValue := 0)
+		THEN
+			SetPosLoopDisable_I_Part :=PosLoopDisable_I_Part := TO_BOOL(_UINT);
+		END_IF
+	
+	1012:(* Pos control Feed forward acceleration (1,2,3,5,6,10,11,12,13 ***************************************************************)
+		IF CtrlType > 6 AND CtrlType < 10 OR CtrlType > 13 
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#108,	LEN := SIZEOF(PosLoopFeedFwdAcc_Ka),	pActValue := ADR(PosLoopFeedFwdAcc_Ka), pSetValue := ADR(SetPosLoopFeedFwdAcc_Ka));
+		END_IF	
+
+	1013:(* Pos control Weight of the velocity pre contr *(1,2,3,5,6,10,11,12,13,14,..)  **************************************************************)
+		getValue(IDxGrp:= 16#6000,	IDxOffs := 16#B,	LEN := SIZEOF(PosLoopFeedFwdVeloPreCntrlWeight),	pActValue := ADR(PosLoopFeedFwdVeloPreCntrlWeight), pSetValue := ADR(SetPosLoopFeedFwdVeloPreCntrlWeight));
+
+//Velocity control 
+	1014:(* Velocity control dead band velocity deviation (12, ***************************************************************)
+		IF CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#20D,	LEN := SIZEOF(VeloLoopDeadBandVeloDeviation),	pActValue := ADR(VeloLoopDeadBandVeloDeviation), pSetValue := ADR(SetVeloLoopDeadBandVeloDeviation));
+		END_IF	
+		
+	1015:(* Velocity control Filter time velocity deviation (12, ***************************************************************)
+		IF CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#220,	LEN := SIZEOF(VeloLoopFilterTimeVeloDeviation),	pActValue := ADR(VeloLoopFilterTimeVeloDeviation), pSetValue := ADR(SetVeloLoopFilterTimeVeloDeviation));
+		END_IF			
+		
+	1016:(* Velocity control: Proportional Factor Kv (5,6,12,13 ***************************************************************)
+		IF CtrlType <> 5 AND CtrlType <> 6 AND CtrlType <> 12 AND CtrlType <> 13
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#202,	LEN := SIZEOF(VeloLoop_Kv),	pActValue := ADR(VeloLoop_Kv), pSetValue := ADR(SetVeloLoop_Kv));
+		END_IF		
+	
+   	1017:(* Velocity control: Integral Action Time Tn (6,12***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#203,	LEN := SIZEOF(VeloLoop_Tn),	pActValue := ADR(VeloLoop_Tn), pSetValue := ADR(SetVeloLoop_Tn));
+		END_IF										
+
+   	1018:(* Velocity control: Derivative Action Time Tv (6,12 ***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#204,	LEN := SIZEOF(VeloLoop_Tv),	pActValue := ADR(VeloLoop_Tv), pSetValue := ADR(SetVeloLoop_Tv));
+		END_IF	
+		
+   	1019:(* Velocity control: Damping Time Td (6,12 ***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#205,	LEN := SIZEOF(VeloLoop_Td),	pActValue := ADR(VeloLoop_Td), pSetValue := ADR(SetVeloLoop_Td));
+		END_IF	
+		
+   	1020:(* Velocity control Min/Max limit I Part (6,12,13 ***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12 AND CtrlType <> 13
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#206,	LEN := SIZEOF(VeloLoopMinMaxLimit_I_Part),	pActValue := ADR(VeloLoopMinMaxLimit_I_Part), pSetValue := ADR(SetVeloLoopMinMaxLimit_I_Part));
+		END_IF	
+
+   	1021:(* Velocity Min/max limit D Part (6,12 ***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(IDxGrp:= 16#6000,	IDxOffs := 16#207,	LEN := SIZEOF(VeloLoopMinMaxLimit_D_Part),	pActValue := ADR(VeloLoopMinMaxLimit_D_Part), pSetValue := ADR(SetVeloLoopMinMaxLimit_D_Part));
+		END_IF	
+			
+	ELSE
+		state												:= 1;
+	END_CASE
+
+(*********************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqWrite" Id="{a2d0e33d-d825-4767-88a1-576de7d0136e}">
+      <Declaration><![CDATA[METHOD PROTECTED seqWrite : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	State							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Write axis parameter ********************************************************************)
+	CASE state OF
+	1..99: //Wite application spec parameter 
+		seqWrite											:= TRUE;
+			
+	1001: (* Pos Ctrl loop. dead band  ****************************************************************************************)
+		IF CtrlType <> 2 AND CtrlType <> 3 AND CtrlType <> 12 AND CtrlType <> 13 
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#10D,	LEN := SIZEOF(PosLoopDeadBandPosDeviation),	pActValue := ADR(PosLoopDeadBandPosDeviation), 	pSetValue := ADR(SetPosLoopDeadBandPosDeviation));
+		END_IF
+
+	1002: (* Pos control Kv (Standstill) ****************************************************************************************)
+		IF CtrlType > 6 AND CtrlType < 10 OR CtrlType > 13 
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#102,	LEN := SIZEOF(PosLoop_Kv),	pActValue := ADR(PosLoop_Kv), pSetValue := ADR(SetPosLoop_Kv));
+		END_IF
+		
+	1003: (* Pos control Kv (Moving) ****************************************************************************************)
+		IF CtrlType <> 2 
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#106,	LEN := SIZEOF(PosLoop_Kv2Moving),	pActValue := ADR(PosLoop_Kv2Moving), pSetValue := ADR(SetPosLoop_Kv2Moving));
+		END_IF
+	
+	1004: (* Pos control Integral action time Tn ***********************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#103,	LEN := SIZEOF(PosLoop_Tn),	pActValue := ADR(PosLoop_Tn),  pSetValue := ADR(SetPosLoop_Tn) );	
+		END_IF
+		
+	1005: (* Pos control Derivative action time Tv ***********************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#104,	LEN := SIZEOF(PosLoop_Tv),	pActValue := ADR(PosLoop_Tv),  pSetValue := ADR(SetPosLoop_Tv) );
+		END_IF
+		
+	1006: (* Pos control Damping time Td ***************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#105,	LEN := SIZEOF(PosLoop_Td),	pActValue := ADR(PosLoop_Td), pSetValue := ADR(PosLoop_Td));
+		END_IF
+
+	1007: (* Pos control with 2 P-Const, Threshold level velocity in percent ***************************************************************)
+		IF CtrlType <> 2 
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#107,	LEN := SIZEOF(PosLoopVeloThreshold),	pActValue := ADR(PosLoopVeloThreshold), pSetValue := ADR(SetPosLoopVeloThreshold));
+		END_IF
+		
+	1008: (* Pos control Maximum output limitation ( ) for I- part in percent ***************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#116,	LEN := SIZEOF(PosLoopMinMaxLimit_I_Part),	pActValue := ADR(PosLoopMinMaxLimit_I_Part), pSetValue := ADR(SetPosLoopMinMaxLimit_I_Part));
+		END_IF
+		
+	1009: (* Pos control Maximum output limitation ( ) for D- part in percent ***************************************************************)
+		IF CtrlType <> 3 AND CtrlType <> 10 AND CtrlType <> 11
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#117,	LEN := SIZEOF(PosLoopMinMaxLimit_D_Part),	pActValue := ADR(PosLoopMinMaxLimit_D_Part), pSetValue := ADR(SetPosLoopMinMaxLimit_D_Part));
+		END_IF		
+
+	1010: (* Pos control Switch off the I-part during an active positioning process ***************************************************************)
+		IF NOT (SetPosLoopDisable_I_Part XOR PosLoopDisable_I_Part)
+			AND NOT WriteAdsPara.BUSY
+			OR CtrlType <> 3 
+		THEN 
+			state 											:= state + 1;
+		ELSE
+			_UINT											:= TO_UINT(SetPosLoopDisable_I_Part);
+			PosLoopDisable_I_Part							:= SetPosLoopDisable_I_Part;
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#118,	LEN := SIZEOF(_UINT),		pActValue := 0,		pSetValue := ADR(_UINT));
+		END_IF
+		
+	
+	1011:(* Pos control Feed forward acceleration ***************************************************************)
+		IF CtrlType > 6 AND CtrlType < 10 OR CtrlType > 13 
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#108,	LEN := SIZEOF(PosLoopFeedFwdAcc_Ka),	pActValue := ADR(PosLoopFeedFwdAcc_Ka), pSetValue := ADR(SetPosLoopFeedFwdAcc_Ka));
+		END_IF	
+
+	1012:(* Pos control Weight of the velocity pre contr ***************************************************************)
+		setValue(IDxGrp:= 16#6000,	IDxOffs := 16#B,	LEN := SIZEOF(PosLoopFeedFwdVeloPreCntrlWeight),pActValue := ADR(PosLoopFeedFwdVeloPreCntrlWeight),	pSetValue := ADR(SetPosLoopFeedFwdVeloPreCntrlWeight));
+		
+//Velocity control 
+	1013:(* Velocity control dead band velocity deviation ***************************************************************)
+		IF CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#20D,	LEN := SIZEOF(VeloLoopDeadBandVeloDeviation),	pActValue := ADR(VeloLoopDeadBandVeloDeviation), pSetValue := ADR(SetVeloLoopDeadBandVeloDeviation));
+		END_IF	
+		
+	1014:(* Velocity control Filter time velocity deviation ***************************************************************)
+		IF CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#220,	LEN := SIZEOF(VeloLoopFilterTimeVeloDeviation),	pActValue := ADR(VeloLoopFilterTimeVeloDeviation), pSetValue := ADR(SetVeloLoopFilterTimeVeloDeviation));
+		END_IF			
+		
+	1015:(* Velocity control: Proportional Factor Kv ***************************************************************)
+		IF CtrlType <> 5 AND CtrlType <> 6 AND CtrlType <> 12 AND CtrlType <> 13
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#202,	LEN := SIZEOF(VeloLoop_Kv),	pActValue := ADR(VeloLoop_Kv), pSetValue := ADR(SetVeloLoop_Kv));
+		END_IF		
+	
+   	1016:(* Velocity control: Integral Action Time Tn ***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#203,	LEN := SIZEOF(VeloLoop_Tn),	pActValue := ADR(VeloLoop_Tn), pSetValue := ADR(SetVeloLoop_Tn));
+		END_IF										
+
+   	1017:(* Velocity control: Derivative Action Time Tv ***************************************************************)
+		IF  CtrlType <> 6 AND CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#204,	LEN := SIZEOF(VeloLoop_Tv),	pActValue := ADR(VeloLoop_Tv), pSetValue := ADR(SetVeloLoop_Tv));
+		END_IF	
+		
+   	1018:(* Velocity control: Damping Time Td ***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#205,	LEN := SIZEOF(VeloLoop_Td),	pActValue := ADR(VeloLoop_Td), pSetValue := ADR(SetVeloLoop_Td));
+		END_IF	
+		
+   	1019:(* Velocity control Min/Max limit I Part ***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12 AND CtrlType <> 13
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#206,	LEN := SIZEOF(VeloLoopMinMaxLimit_I_Part),	pActValue := ADR(VeloLoopMinMaxLimit_I_Part), pSetValue := ADR(SetVeloLoopMinMaxLimit_I_Part));
+		END_IF	
+
+   	1020:(* Velocity Min/max limit D Part ***************************************************************)
+		IF CtrlType <> 6 AND CtrlType <> 12
+		THEN
+			state											:= state + 1;
+		ELSE
+			setValue(IDxGrp:= 16#6000,	IDxOffs := 16#207,	LEN := SIZEOF(VeloLoopMinMaxLimit_D_Part),	pActValue := ADR(VeloLoopMinMaxLimit_D_Part), pSetValue := ADR(SetVeloLoopMinMaxLimit_D_Part));
+		END_IF	
+
+	ELSE
+		state 												:= 1 ;
+	END_CASE
+	
+(***********************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setValue" Id="{daf8d278-471e-4242-94d8-29b256489c72}">
+      <Declaration><![CDATA[METHOD PROTECTED setValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	IDxGrp						:	UDINT;
+	IDxOffs						:	UDINT;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value, can be zero if no corresponding acual value variable exists
+	pSetValue					:	PVOID; //Address of variable for set value variable
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+IF pActValue <> 0 AND pSetValue <> 0 AND_THEN MEMCMP(pSetValue, pActValue, Len) = 0
+THEN //Skip write parameter if set and actual value are equel
+	state													:= state + 1;	
+	setValue												:= TRUE;
+ELSE
+	WriteAdsPara( Write := TRUE, IdxGrp :=IDxGrp+AxisId, IdxOffs:=IDxOffs, LEN:=Len, SrcAddr:=pSetValue );
+	IF NOT WriteAdsPara.BUSY
+	THEN
+		IF NOT WriteAdsPara.ERR
+		THEN
+			IF pActValue <> 0 THEN MEMCPY(pActValue, pSetValue, Len); END_IF	
+			state											:= state + 1;
+		ELSE
+			Busy											:= FALSE;
+			Error											:= TRUE;
+			ErrorId											:= WriteAdsPara.ERRID;
+			ErrorText										:= CONCAT('Error write parameter in state:' , TO_STRING(state * -1));
+			ErrorText										:= CONCAT(ErrorText , ' Id:');
+			ErrorText										:= CONCAT(ErrorText , TO_STRING(ErrorId));
+			State											:= 9999;
+		END_IF
+		WriteAdsPara (Write := FALSE);
+		setValue											:= TRUE;
+	END_IF		
+END_IF
+	
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxParaCtrl">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxParaCtrl.deviceAddrIsValid.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxParaCtrl.getValue">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxParaCtrl.seqRead">
+      <LineId Id="3" Count="173" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxParaCtrl.seqWrite">
+      <LineId Id="3" Count="169" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxParaCtrl.setValue">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

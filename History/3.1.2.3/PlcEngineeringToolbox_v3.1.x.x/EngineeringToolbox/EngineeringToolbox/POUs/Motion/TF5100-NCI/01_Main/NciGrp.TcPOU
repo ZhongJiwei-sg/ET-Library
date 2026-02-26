@@ -1,0 +1,487 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="NciGrp" Id="{f5ca93c3-578f-4e66-a5da-00fd8fc84f90}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Nci group FB used to build,reconfig Nci groups as well to add and econfig single axis for group
+//based on Tc2_NCI
+FUNCTION_BLOCK NciGrp EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	FNC_BUILD												:	INT := 0; //Build Nci Grp
+	FNC_RECONFIG											:	INT := 1; //Reconfig/loose group
+	FNC_ADD_AXIS											:	INT := 2; //Add axis to group 
+	FNC_RECONFIG_AXIS										:	INT := 3; //Reconfig axis out of grp
+END_VAR                     								
+VAR_INPUT                   								
+	Fnc														:	INT (FNC_BUILD..FNC_RECONFIG_AXIS):= FNC_BUILD;
+	XAxisId													: UDINT := 0;
+	YAxisId													: UDINT := 0;
+	ZAxisId													: UDINT := 0;
+	Q1AxisId												: UDINT := 0;
+	Q2AxisId												: UDINT := 0;
+	Q3AxisId												: UDINT := 0;
+	Q4AxisId												: UDINT := 0;
+	Q5AxisId												: UDINT := 0;
+	AxisIndex												:	NCI_AXCONFIG ;//contains the location of the axis within the group to add or release axis into group 
+	rNCIRef													:	REFERENCE TO NCI_REF := 0;
+END_VAR                         							
+VAR_IN_OUT                      							
+END_VAR                         							
+VAR_OUTPUT                      							
+	ErrorText												:	STRING(40);
+END_VAR
+VAR
+(* Buffer **************************************************************************)
+	MemFnc													:	INT := -1;
+
+(* Trigger *)
+
+(* Instanzierung der MC Bausteine *******************************************************)
+	CfgBuildExt3DGroup										:	CfgBuildExt3DGroup := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	CfgReconfigGroup										:	CfgReconfigGroup := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	CfgReconfigAxis											:	CfgReconfigAxis := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	CfgAddAxisToGroup										:	CfgAddAxisToGroup:= (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+
+(* Dummy Speicher **********************************************************)
+	K														:	UDINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Nci Group control																*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute );
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		ErrorText											:= '';
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_BUILD							:	
+		Build(Execute	:= Execute);
+			
+	FNC_RECONFIG						:	
+		Reconfig(Execute := Execute);
+		
+	FNC_ADD_AXIS						:
+		CASE AxisIndex OF
+		1:	K 												:= XAxisId;
+		2:	K 												:= YAxisId;
+		3:	K 												:= ZAxisId;
+		4:	K 												:= Q1AxisId;
+		5:	K 												:= Q2AxisId;
+		6:	K 												:= Q3AxisId;
+		7:	K 												:= Q4AxisId;
+		8:	K 												:= Q5AxisId;
+		ELSE
+			K 												:= 0;
+		END_CASE
+		
+		AddAxis(
+			Execute		:= Execute,
+			AxisIndex	:= AxisIndex,
+			AxisId		:= k); //location of axis within a group
+
+	FNC_RECONFIG_AXIS					:	
+
+		CASE AxisIndex OF
+		1 : K 												:= XAxisId;
+		2:	K 												:= YAxisId;
+		3:	K 												:= ZAxisId;
+		4:	K 												:= Q1AxisId;
+		5:	K 												:= Q2AxisId;
+		6:	K 												:= Q3AxisId;
+		7:	K 												:= Q4AxisId;
+		8:	K 												:= Q5AxisId;
+		ELSE
+			K 												:= 0;
+		END_CASE
+
+		ReconfigAxis(
+			Execute	:= Execute, 
+			AxisId	:= K);
+		
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorText										:= '';
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+		ErrorText											:= CONCAT('invalid parameter value(s) Fnc no: ' , INT_TO_STRING(MemFnc));
+	END_CASE
+
+
+(**************************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="addAxis" Id="{1dea40d0-5383-45c1-b454-0ea420f78b83}">
+      <Declaration><![CDATA[METHOD PUBLIC addAxis : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+//AxisIndex -> XAxisId..Q5AxisId
+VAR_INPUT
+	Execute													:	BOOL;
+	AxisIndex												:	NCI_AXCONFIG; //contains the location of the axis within the group
+	AxisId													:	UDINT; //Axis ID which should be added to group - if 0 then ID of input parameters is used based on parameter AxisIndex
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_ADD_AXIS;
+	THIS^.Execute											:= Execute;
+	THIS^.AxisIndex											:= AxisIndex;
+	
+IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_adsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		CfgAddAxisToGroup.bExecute 							:= TRUE;
+	ELSIF NOT CfgAddAxisToGroup.bBusy   					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		CfgAddAxisToGroup.bExecute 							:= FALSE;
+
+	END_IF
+	
+	IF AxisId > 0
+	THEN
+		CfgAddAxisToGroup.nAxisId							:= AxisId;
+	ELSE		
+		CASE AxisIndex OF
+		1:	CfgAddAxisToGroup.nAxisId 						:= XAxisId ;
+		2:	CfgAddAxisToGroup.nAxisId 						:= YAxisId ;
+		3:	CfgAddAxisToGroup.nAxisId 						:= ZAxisId ;
+		4:	CfgAddAxisToGroup.nAxisId 						:= Q1AxisId ;
+		5:	CfgAddAxisToGroup.nAxisId 						:= Q2AxisId ;
+		6:	CfgAddAxisToGroup.nAxisId 						:= Q3AxisId ;
+		7:	CfgAddAxisToGroup.nAxisId 						:= Q4AxisId ;
+		8:	CfgAddAxisToGroup.nAxisId 						:= Q5AxisId ;
+		ELSE
+			CfgAddAxisToGroup.nAxisId 						:= 0;
+		END_CASE
+	END_IF
+	
+	CfgAddAxisToGroup(
+		bExecute	:= ,
+		nGroupId	:= rNCIRef.NciToPlc.GrpId,
+		nAxisId		:= ,
+		nIndex		:= DINT_TO_UDINT(AxisIndex),
+		tTimeOut	:= ,
+		bBusy		=> busy,
+		bErr		=> ,
+		nErrId		=> );
+
+	Done													:= NOT CfgAddAxisToGroup.bBusy
+																AND NOT CfgAddAxisToGroup.bErr
+																AND CfgAddAxisToGroup.bExecute;
+                                        					
+	IF NOT Busy                                         	
+	THEN                                                	
+		IF CfgAddAxisToGroup.bExecute                   	
+		THEN                                            	
+			Error											:=	CfgAddAxisToGroup.bErr;
+			ErrorId											:= CfgAddAxisToGroup.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error CfgAddAxisToGroup id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF                                          	
+		IF NOT Execute                                  	
+		THEN                                            	
+			MemFnc											:= -1 ;
+			CfgAddAxisToGroup(bExecute := FALSE);       	
+		END_IF                                          	
+	END_IF                                              	
+                                                        	
+	AddAxis													:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="build" Id="{141e3130-611c-4f9a-ac50-71df15f6ea25}">
+      <Declaration><![CDATA[METHOD PUBLIC build : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+//XAxisId
+//YAxisId
+//ZAxisId
+//Q1AxisId
+//Q2AxisId
+//Q3AxisId
+//Q4AxisId
+//Q5AxisId
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_BUILD;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;                                             	
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		CfgBuildExt3DGroup.bExecute 						:= TRUE;
+	ELSIF NOT CfgBuildExt3DGroup.bBusy  					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		CfgBuildExt3DGroup.bExecute 						:= FALSE;
+                                        	
+	END_IF
+
+	CfgBuildExt3DGroup(
+		bExecute	:= ,
+		nGroupId	:= rNciRef.NciToPlc.GrpId,
+		nXAxisId	:= XAxisId,
+		nYAxisId	:= YAxisId,
+		nZAxisId	:= ZAxisId,
+		nQ1AxisId	:= Q1AxisId,
+		nQ2AxisId	:= Q2AxisId,
+		nQ3AxisId	:= Q3AxisId,
+		nQ4AxisId	:= Q4AxisId,
+		nQ5AxisId	:= Q5AxisId,
+		tTimeOut	:= ,
+		bBusy		=> busy,
+		bErr		=> ,
+		nErrId	=> );
+
+	Done													:= NOT CfgBuildExt3DGroup.bBusy
+																AND NOT CfgBuildExt3DGroup.bErr
+																AND CfgBuildExt3DGroup.bExecute;
+                                        					
+	IF NOT Busy
+	THEN
+		IF CfgBuildExt3DGroup.bExecute
+		THEN
+			Error											:=	CfgBuildExt3DGroup.bErr;
+			ErrorId											:= CfgBuildExt3DGroup.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error CfgBuildExt3DGroup id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1 ;
+			CfgBuildExt3DGroup(bExecute := FALSE);
+		END_IF
+	END_IF
+
+	Build													:= Busy;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reconfig" Id="{a720d3ed-30bc-49d2-b2df-192cf0bf4962}">
+      <Declaration><![CDATA[METHOD PUBLIC reconfig : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+	MemFnc													:= FNC_RECONFIG;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		CfgReconfigGroup.bExecute 							:= TRUE;
+	ELSIF NOT CfgReconfigGroup.bBusy    					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		CfgReconfigGroup.bExecute 							:= FALSE;
+
+	END_IF
+
+	CfgReconfigGroup(
+		bExecute	:= ,
+		nGroupId	:= rNCIRef.NciToPlc.GrpId,
+		tTimeOut	:= ,
+		bBusy		=> busy,
+		bErr		=> ,
+		nErrId		=> );
+
+	Done													:= NOT CfgReconfigGroup.bBusy
+																AND NOT CfgReconfigGroup.bErr
+																AND CfgReconfigGroup.bExecute;
+                                        					
+	IF NOT Busy
+	THEN
+		IF CfgReconfigGroup.bExecute
+		THEN
+			Error											:=	CfgReconfigGroup.bErr;
+			ErrorId											:= CfgReconfigGroup.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error CfgReconfigGroup id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF                      						
+		IF NOT Execute              						
+		THEN                        						
+			MemFnc											:= -1 ;
+			CfgReconfigGroup(bExecute := FALSE,);
+		END_IF
+	END_IF
+	
+	Reconfig												:= Busy;
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reconfigAxis" Id="{85bd4e2f-d5b6-48f2-ba60-56f855042d6e}">
+      <Declaration><![CDATA[METHOD PUBLIC reconfigAxis : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+//AxisId
+VAR_INPUT
+	Execute													:	BOOL;
+	AxisId													:	UDINT; //Axis ID which should be released from group - if 0 then ID of input parameters is used based on parameter AxisIndex
+END_VAR             									
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_ADD_AXIS;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc);
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		CfgReconfigAxis.bExecute 							:= TRUE;
+	ELSIF NOT CfgReconfigAxis.bBusy     					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		CfgReconfigAxis.bExecute 							:= FALSE;
+
+	END_IF
+
+	IF AxisId > 0
+	THEN
+		CfgReconfigAxis.nAxisId								:= AxisId;
+	ELSE
+		CASE AxisIndex OF
+		1:	CfgReconfigAxis.nAxisId 						:= XAxisId ;
+		2:	CfgReconfigAxis.nAxisId 						:= YAxisId ;
+		3:	CfgReconfigAxis.nAxisId 						:= ZAxisId ;
+		4:	CfgReconfigAxis.nAxisId 						:= Q1AxisId ;
+		5:	CfgReconfigAxis.nAxisId 						:= Q2AxisId ;
+		6:	CfgReconfigAxis.nAxisId 						:= Q3AxisId ;
+		7:	CfgReconfigAxis.nAxisId 						:= Q4AxisId ;
+		8:	CfgReconfigAxis.nAxisId 						:= Q5AxisId ;
+		ELSE
+			CfgReconfigAxis.nAxisId 						:= 0;
+		END_CASE
+	END_IF
+
+	CfgReconfigAxis(
+		bExecute	:= ,
+		nAxisId		:= ,
+		tTimeOut	:= ,
+		bBusy		=> busy,
+		bErr		=> ,
+		nErrId		=> );
+
+	Done													:= NOT CfgReconfigAxis.bBusy
+																AND NOT CfgReconfigAxis.bErr
+																AND CfgReconfigAxis.bExecute;
+                                        					
+	IF NOT Busy
+	THEN
+		IF CfgReconfigAxis.bExecute
+		THEN
+			Error											:=	CfgReconfigAxis.bErr;
+			ErrorId											:= CfgReconfigAxis.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error CfgReconfigAxis id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1 ;
+			CfgReconfigAxis(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	ReconfigAxis											:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciGrp">
+      <LineId Id="3" Count="79" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciGrp.addAxis">
+      <LineId Id="3" Count="77" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciGrp.build">
+      <LineId Id="3" Count="63" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciGrp.reconfig">
+      <LineId Id="3" Count="57" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciGrp.reconfigAxis">
+      <LineId Id="3" Count="73" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

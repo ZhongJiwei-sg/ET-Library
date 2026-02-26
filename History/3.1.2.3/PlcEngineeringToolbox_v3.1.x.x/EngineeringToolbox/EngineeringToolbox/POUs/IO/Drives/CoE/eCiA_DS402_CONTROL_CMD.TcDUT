@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="eCiA_DS402_CONTROL_CMD" Id="{59b25c00-1304-4a50-a10d-26f6052437c9}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+TYPE eCiA_DS402_CONTROL_CMD :
+(
+	DISABLE_VOLTAGE											:= 2#0000_0000, //2#0xxx_xx0x -> back to switch on disabled
+	SHUTDOWN												:= 2#0000_0110, //2#0xxx_x110 -> Voltage Enable - Ready to switch on
+ 	SWITCH_ON												:= 2#0000_0111, //2#0xxx_0111 -> Switched On = Disable operation (Switch on + NOT Enable operation)
+	ENABLE_OPERATION										:= 2#0000_1111, //2#0xx0_1111 -> Operation enabled (Enable Voltage + Quick Stop OK + Switch on + Enable operation)	
+	QUICK_STOP												:= 2#0000_1011, //2#0xxx_x01x 
+	FAULT_RESET												:= 2#1000_0000  //2#1xxx_xxxx 
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

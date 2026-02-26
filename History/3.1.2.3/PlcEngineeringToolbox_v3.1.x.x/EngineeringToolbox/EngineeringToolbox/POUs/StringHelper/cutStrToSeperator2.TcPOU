@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="cutStrToSeperator2" Id="{3cf12add-9b7d-4e74-8f91-d72d20deb283}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Uses pointer to string of variable lenght 
+//Returns string found on left site of seperator and cut of the return part from the origin pStrline variabel , empty if seperator is not found
+//Attention! do not use variables smaller then T_MaxString for return value of function
+FUNCTION cutStrToSeperator2 : T_MaxString
+VAR_INPUT
+	Seperator												:	STRING(10) :=';';
+	pStrline												:	POINTER TO STRING; //pointer to STRING variable with any length 
+END_VAR             										
+VAR       
+	lenght,pos												:	UDINT;          	
+	tmp														:	T_MaxString;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pStrline = 0 THEN
+	cutStrToSeperator2 										:= '';
+ELSE
+	pos 													:= FIND2(pStrline, ADR(seperator));
+	IF pos > 0 AND pos < 255
+	THEN
+		MEMCPY(ADR(cutStrToSeperator2), pStrline, pos-1);	// Copy String to output
+		MEMSET(ADR(cutStrToSeperator2) + pos-1 , 0, 1); 	// add NULL delimiter	
+		lenght												:= LEN2(pStrline);	
+		IF lenght > pos 
+		THEN // shrink original string without seperator		
+			MEMMOVE(pStrline, pStrline + pos-1 + TO_LWORD(LEN(seperator)), lenght);
+		ELSE //Delete stringline because seperator is at the end
+			MEMSET(pStrline, 0, TO_UDINT(Lenght));//delete complete string
+		END_IF              								
+	ELSE                    								
+		cutStrToSeperator2									:= '';
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="cutStrToSeperator2">
+      <LineId Id="1" Count="18" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

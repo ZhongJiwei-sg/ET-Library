@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.6">
+  <POU Name="RF_TRIG" Id="{ac3a7049-9881-4c0e-855e-3492f6e76a6d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Rising and falling trigger
+FUNCTION_BLOCK RF_TRIG
+VAR_INPUT
+	CLK										:	BOOL;
+END_VAR
+VAR_OUTPUT
+	M										:	BOOL;
+	Q										:	BOOL;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF CLK XOR M
+THEN
+	M										:= NOT M;
+	Q										:= TRUE;
+ELSE
+	Q										:= FALSE;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="RF_TRIG">
+      <LineId Id="31" Count="5" />
+      <LineId Id="17" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

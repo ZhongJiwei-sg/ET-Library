@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SWAP_WORDS_OF_DWORD" Id="{070d2ce1-d032-415e-95e3-e8b9b3578635}" SpecialFunc="None">
+    <Declaration><![CDATA[//Swaps high and low word of an DWORD variable
+FUNCTION SWAP_WORDS_OF_DWORD : DWORD
+VAR_INPUT
+	in														:	DWORD;
+END_VAR
+VAR
+	pTmp													:	POINTER TO WORD;
+	WordArray												:	ARRAY[1..2] OF WORD;
+	i														:	INT; 
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	ptmp														:= ADR(In);
+	WordArray[2]												:= ptmp^; // [1]
+	ptmp														:= ptmp + 2;
+	WordArray[1]												:= ptmp^; // [2]
+
+	MEMCPY(ADR(SWAP_WORDS_OF_DWORD),ADR(WordArray),SIZEOF(WordArray));
+]]></ST>
+    </Implementation>
+    <LineIds Name="SWAP_WORDS_OF_DWORD">
+      <LineId Id="34" Count="5" />
+      <LineId Id="31" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

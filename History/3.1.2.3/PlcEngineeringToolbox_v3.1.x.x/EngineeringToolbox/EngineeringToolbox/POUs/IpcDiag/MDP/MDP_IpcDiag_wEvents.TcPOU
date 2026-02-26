@@ -1,0 +1,170 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MDP_IpcDiag_wEvents" Id="{a36818cc-701b-4d93-979f-56ca90164329}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//General IPC diagnosis based on Beckhoff MDP - invalid values are reported via EventLogger 
+//based on Tc2_MDP.lib - please see Beckhoff documentation for further information about Tc2_MDP.lib (IPC diagnostics)
+//EventHandlingGrp10 instance used inside
+//Info:
+// 0x   	a    	nn   	x   
+// 0x   	8   	03   	1   
+// a 	= Area Code (e.g. 8 = Configuration Area) 
+// nn 	= Modul-ID (e.g. dynamic modul id from list F020) 
+// x	= Tabel id (e.g. 1 = Table 0x8nn1 - NIC Properties at area code 8) 
+FUNCTION_BLOCK MDP_IpcDiag_wEvents EXTENDS MDP_IpcDiag         									
+VAR_INPUT               									
+	ConfirmTrig												:	BOOL := FALSE;	//Resets error with rising edge
+	SourceId												:	UDINT := 100001; //EventLogger source id - Initinal value collaborates with SOURCE_ID structure 
+
+END_VAR                 									
+VAR_OUTPUT              							
+	EventStatus												:	DWORD;	//state of event
+END_VAR	
+VAR
+(* function-blocks *****************************************************************)
+	Event													:	EventHandlingGrp10:= (  
+																	No := [(eClass := TC2_SYSTEM.TCEVENTCLASS_ALARM),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_ALARM),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_ALARM),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_ALARM),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_ALARM),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_ALARM),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_ALARM),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_ALARM),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_WARNING),
+																			(eClass := TC2_SYSTEM.TCEVENTCLASS_WARNING)]);
+	
+(* internal used variables **********************************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* MDP IPC diag compact						V1.1	*)
+(****************************************************)
+
+(* call base *******************************************************)
+	SUPER^();
+
+	//Leave error state by confirm trigger too
+	IF State = 99 AND ConfirmTrig
+	THEN
+		state											:= 0;
+		Error											:= FALSE;
+		ErrorId											:= 0;
+		ErrorGrp										:= eMDP_Err_NoError;
+		Busy											:= FALSE;
+		Valid											:= FALSE;
+		MDP_Read(bExecute := FALSE);						
+	END_IF
+	
+(* Meldungen *******************************************************)
+	_callEvents();
+
+(******************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <Method Name="_callEvents" Id="{11ebf8d1-a4c3-4e0f-9ba2-05927c076a84}">
+      <Declaration><![CDATA[METHOD _callEvents : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF state = 90 
+		OR ConfirmTrig AND Valid
+	THEN //Nur nach lesen Ende auswerten
+		event.no[1].Flag 									:= FALSE ; 
+		event.no[2].Flag 									:= MAX(CPU_Temp[1],CPU_Temp[2]) > MaxTempCPU; event.no[2].Text1 := INT_TO_STRING(MAX(CPU_Temp[1],CPU_Temp[2])); 
+		event.no[3].Flag 									:= MB_Temp > MaxTempMB; event.no[3].Text1 := INT_TO_STRING(MB_Temp); 
+	
+		IF Fan_Count > 0
+		THEN
+			event.no[4].Flag := FALSE;
+			FOR k := MIN_FAN TO MIN(Fan_Count,MAX_FAN)
+			DO
+				IF FAN_Speed[k] < MinSpeedFan 
+					AND_THEN GETBIT32(TO_DWORD(FanMask), TO_SINT(k-1)) //Only check for active marked fans
+				THEN
+					event.no[4].Text1 						:= INT_TO_STRING(k); 
+					event.no[4].Text2 						:= INT_TO_STRING(FAN_Speed[k]); 				
+					event.no[4].Flag 						:= TRUE;
+					EXIT;
+				END_IF
+			END_FOR		 
+		ELSE
+			event.no[4].Flag 								:= FALSE;
+		END_IF
+		
+		IF Voltage_Count > 0
+		THEN
+			event.no[5].Flag 								:= FALSE;
+			FOR k := MIN_VOLTAGE TO MIN(MAX_VOLTAGE,Voltage_Count)
+			DO
+				IF MB_NominalVoltage[k] <> 0
+					AND(
+					INT_TO_LREAL(MB_Voltage[k]) < INT_TO_LREAL(MB_NominalVoltage[k]) * VoltageFactor
+					OR INT_TO_LREAL(MB_Voltage[k]) > INT_TO_LREAL(MB_NominalVoltage[k]) * (1.0 + (1.0 - VoltageFactor)))
+				THEN
+					event.no[5].Text1 						:= INT_TO_STRING(MB_Voltage[k]); 
+					event.no[5].Text2 						:= INT_TO_STRING(MB_NominalVoltage[k]); 				
+					event.no[5].Flag 						:= TRUE;
+					EXIT;
+				END_IF
+			END_FOR		 
+		ELSE
+			event.no[5].Flag 								:= FALSE;
+		END_IF
+	
+		event.no[6].Flag 									:= FALSE;
+		event.no[7].Flag 									:= FALSE; 
+		event.no[8].Flag 									:= FALSE; 
+		event.no[9].Flag 									:= MAX(CPU_Temp[1],CPU_Temp[2]) > MaxTempCPU - TempWarningThreshold ; event.no[9].Text1 := INT_TO_STRING(MAX(CPU_Temp[1],CPU_Temp[2])); 
+		event.no[10].Flag 									:= MB_Temp > MaxTempMB - TempWarningThreshold; event.no[10].Text1 := INT_TO_STRING(MB_Temp); 
+	END_IF
+	
+	Event(
+		ConfirmTrig	:= ConfirmTrig,
+		SourceId	:= SourceId,
+		no			:= ,
+		Disable		:= NOT Enable,
+		AutoConfirm := ,
+		MIN_EVENT	=> ,
+		MAX_EVENT	=> ,
+		Status		=> EventStatus);]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="MDP_IpcDiag_wEvents">
+      <LineId Id="3" Count="4" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="77" Count="6" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="15" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_IpcDiag_wEvents._callEvents">
+      <LineId Id="63" Count="12" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="76" Count="45" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
