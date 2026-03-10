@@ -1,0 +1,49 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="Ax580x" Id="{94375498-4cef-41bb-82db-d6ebdea16a27}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//AX5000 safety card option IOs - AX5805/AX5806 FSoE slave inputs 
+FUNCTION_BLOCK Ax580x 
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	STO												AT %I*		:	BOOL;	//option Safe Torque Off
+	SSM_1											AT %I*		:	BOOL;	//option Safe Speed Monitor 1
+	SSM_2											AT %I*		:	BOOL;	//option Safe Speed Monitor 2
+	SOS_1											AT %I*		:	BOOL;	//option Safe Operating Speed 1
+	SSR_1											AT %I*		:	BOOL;	//option Safe Speed Range 1
+	SDIp											AT %I*		:	BOOL;	//option Safe Direction positive
+	SDIn											AT %I*		:	BOOL;	//option Safe Direction negative
+	Error											AT %I*		:	BOOL;	//Error active or error ack 
+	SLS_1											AT %I*		:	BOOL;	//special config (Safe Limited Speed)
+	
+	PositionActualValue								AT %I*	:	DINT;		//contains actual position value of drive 
+	VelocityActualValue								AT %I*	:	DINT;		//contains actual velocity value of drive	
+END_VAR         								
+VAR             								
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* AX5805/06 AX5000 servo drives safety card FSoE slave inputs		*)
+(********************************************************************)
+
+(* Input Signals Valid ******************************************************)
+(* not in use
+	STO														:= SafeDataByte.0;
+	SSM_1													:= SafeDataByte.1;
+	SSM_2													:= SafeDataByte.2;
+	SOS_1													:= SafeDataByte.3;
+	SSR_1													:= SafeDataByte.4;
+	SDIp													:= SafeDataByte.5;
+	SDIn													:= SafeDataByte.6;
+	Error													:= SafeDataByte.7;
+	SLS_1													:= SafeDataByte.8; // Special Config
+*)
+(**********************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="Ax580x">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

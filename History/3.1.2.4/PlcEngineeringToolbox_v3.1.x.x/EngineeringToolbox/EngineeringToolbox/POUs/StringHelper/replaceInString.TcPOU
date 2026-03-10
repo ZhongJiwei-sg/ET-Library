@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="replaceInString" Id="{cdfc770c-3ea1-46bd-9131-068f8d61f7f6}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Replace a part of a string with another string 
+FUNCTION replaceInString : BOOL
+VAR_INPUT
+	SearchStr												:	STRING(10); //e.g. '/r/n_
+	ReplaceStr												:	STRING(10); //e.g. '-'
+END_VAR             										
+VAR_IN_OUT         										
+	Strline													: 	T_MaxString;
+END_VAR             										
+VAR                 	
+	StrLen, i,pos											:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF strline = '' 
+THEN 
+	replaceInString											:= TRUE;
+ELSE
+	StrLen													:= LEN(strline);
+	FOR i := 0 TO StrLen
+	DO
+		pos 												:= FIND(strline,SearchStr);
+		IF pos >= 1 
+		THEN
+			strline											:= REPLACE(strline,ReplaceStr,LEN(SearchStr),pos);
+		ELSE
+			replaceInString									:= i > 0; 
+			EXIT;						
+		END_IF	
+	END_FOR
+END_IF
+]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="replaceInString">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

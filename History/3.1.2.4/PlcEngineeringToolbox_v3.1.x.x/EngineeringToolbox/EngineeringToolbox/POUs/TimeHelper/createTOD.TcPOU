@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="createTOD" Id="{05889676-621e-45e7-826f-39b15cb18f0d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Creates a TOD value based on the input parameter
+FUNCTION createTOD : TOD
+VAR_INPUT
+   Hour            											: WORD;
+   Minute          											: WORD;
+   Second          											: WORD;
+   Milliseconds    											: WORD;
+END_VAR
+VAR
+	X														:	UDINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[createTOD 													:= UDINT_TO_TOD(	Milliseconds 
+																				+ (Second * 1000)
+																				+ (Minute * 60000)
+																				+ (Hour * 3600000));]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="createTOD">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

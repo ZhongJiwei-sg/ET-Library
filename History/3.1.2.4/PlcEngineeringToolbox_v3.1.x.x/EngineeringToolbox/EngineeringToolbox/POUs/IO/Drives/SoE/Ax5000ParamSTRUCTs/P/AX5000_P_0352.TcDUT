@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0352" Id="{859697d7-d334-4e7b-b7f1-cddc943dca1d}">
+    <Declaration><![CDATA[TYPE AX5000_P_0352 :
+STRUCT
+	Drive_halt_jerk_bipolar:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

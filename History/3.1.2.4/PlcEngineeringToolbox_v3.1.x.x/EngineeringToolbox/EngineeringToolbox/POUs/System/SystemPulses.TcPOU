@@ -1,0 +1,514 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="SystemPulses" Id="{15ae0d84-fc28-4a80-86bd-0456c4c4448a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Provides various puslse signals as default
+FUNCTION_BLOCK SystemPulses
+VAR_INPUT
+{attribute 'displaymode':='binary'}
+	Options													:	WORD := 2#0000_0001_1110_1110; //Set bit in Options word to enable ot disable existing pulse instances
+	PT_ON_Custom											:	TIME := T#30S;	
+	PT_OFF_Custom											:	TIME := T#30S;
+END_VAR
+VAR_OUTPUT
+	BlinkSlow												: 	BOOL;
+	Blink													: 	BOOL;
+	BlinkFast												: 	BOOL;
+	BlinkVeryFast											:	BOOL;
+	BlinkFlash												:	BOOL;
+	
+	_20ms													: 	Pulse := (IN := TRUE,	PT_OFF := T#20MS, 		PT_ON := T#20MS);	//20ms						Options .0
+	_100ms													: 	Pulse := (IN := TRUE,	PT_OFF := T#100MS, 		PT_ON := T#100MS); 	//10Hz (0.1s) pulse			Options .1
+	_250ms													: 	Pulse := (IN := TRUE,	PT_OFF := T#250MS, 		PT_ON := T#250MS); 	//4 Hz - Blink very Fast	Options .2
+	_400ms													: 	Pulse := (IN := TRUE,	PT_OFF := T#400MS, 		PT_ON := T#400MS); 	//2.5Hz - Blink Fast *)		Options .3
+	_500ms													: 	Pulse := (IN := TRUE,	PT_OFF := T#500MS, 		PT_ON := T#500MS); 	//2Hz / 500ms				Options .4
+	_800ms													: 	Pulse := (IN := TRUE,	PT_OFF := T#800MS, 		PT_ON := T#800MS); 	//1.25Hz - Blink normal 	Options .5
+	_1s														: 	Pulse := (IN := TRUE,	PT_OFF := T#1S, 		PT_ON := T#1S); 	//1Hz /1s					Options .6
+	_1s600ms												: 	Pulse := (IN := TRUE,	PT_OFF := T#1S600MS, 	PT_ON := T#1S600MS);//0.625Hz - Blink slow 		Options .7
+	_2s														: 	Pulse := (IN := TRUE,	PT_OFF := T#2S, 		PT_ON := T#2S); 	//0.5Hz						Options .8
+	_5s														: 	Pulse := (IN := TRUE,	PT_OFF := T#5S, 		PT_ON := T#5S); 	//5s						Options .9
+	_10s													: 	Pulse := (IN := TRUE, 	PT_OFF := T#10S, 		PT_ON := T#10S); 	//10s						Options .10
+	_1m														: 	Pulse := (IN := TRUE, 	PT_OFF := T#1M, 		PT_ON := T#1M); 	//1m						Options .11	
+	_5m														: 	Pulse := (IN := TRUE, 	PT_OFF := T#5M, 		PT_ON := T#5M); 	//5m						Options .12
+	_10m													: 	Pulse := (IN := TRUE, 	PT_OFF := T#10M, 		PT_ON := T#10M); 	//10m						Options .13
+	_60m													: 	Pulse := (IN := TRUE, 	PT_OFF := T#60M, 		PT_ON := T#60M); 	//60m						Options .14
+	_Custom													: 	Pulse := (IN := TRUE, 	PT_OFF := T#30S, 		PT_ON := T#60M); 	//60m						Options .15
+	_Flash													: 	Pulse := (IN := TRUE, 	PT_OFF := T#800MS, 		PT_ON := T#80MS);	//800ms/80ms Blink as flash light
+END_VAR                                                            
+VAR                                                                
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(************************************************************************************************************)
+(* function-block generates different pulse signals															*)
+(************************************************************************************************************)
+
+(* impuls generator *****************************************************************************************)
+_Flash(Q => BlinkFlash); 
+IF Options.0 THEN _20ms(Q => ); 				END_IF
+IF Options.1 THEN _100ms(Q => ); 				END_IF
+IF Options.2 THEN _250ms(Q => BlinkVeryFast); 	END_IF
+IF Options.3 THEN _400ms(Q => BlinkFast); 		END_IF
+IF Options.4 THEN _500ms(Q => ); 				END_IF
+IF Options.5 THEN _800ms(Q => Blink); 			END_IF
+IF Options.6 THEN _1s(Q => ); 					END_IF
+IF Options.7 THEN _1s600ms(Q => BlinkSlow); 	END_IF
+IF Options.8 THEN _2s(Q => ); 					END_IF
+IF Options.9 THEN _5s(Q => ); 					END_IF
+IF Options.10 THEN _10s(Q => ); 				END_IF
+IF Options.11 THEN _1m(Q => ); 					END_IF
+IF Options.12 THEN _5m(Q => ); 					END_IF
+IF Options.13 THEN _10m(Q => ); 				END_IF
+IF Options.14 THEN _60m(Q => ); 				END_IF
+IF Options.15 THEN _Custom(PT_OFF := PT_OFF_Custom, PT_ON := PT_ON_Custom ,Q => );	END_IF
+
+(************************************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="optAllOn" Id="{08814ee4-61df-4f15-b382-d54d265306ac}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAllOn : bool]]></Declaration>
+      <Get Name="Get" Id="{42daba94-9f39-43ab-b567-6b0a49237a3f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAllOn := OPtions = 2#1111_1111_1111_1111;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{06e0a980-3b85-44d4-8ca5-6ae7c8d88420}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[If optAllOn then OPtions := 2#1111_1111_1111_1111; End_if]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable100ms" Id="{bbc7eb1e-99db-4356-99a7-0b384e3b5b2a}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable100ms : bool]]></Declaration>
+      <Get Name="Get" Id="{6d32e743-02bb-427b-8fad-05e21342e8d0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable100ms := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{5a24b544-8b6b-4f5f-a4b1-03f8e5ca06b7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnable100ms;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable10m" Id="{c9131b79-41db-4c56-93e2-69935845fe6e}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable10m : bool]]></Declaration>
+      <Get Name="Get" Id="{5e8ba200-8982-479e-9b4c-b75d23a6ff38}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable10m := Options.13;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b9aedd27-5ff4-4ab2-ab63-c26daf32f191}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.13 := optEnable10m;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable10s" Id="{e355ee92-253c-4b87-8d03-b769e734cf16}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable10s : bool]]></Declaration>
+      <Get Name="Get" Id="{109cae2d-01e7-47a1-993f-ef0690f6f875}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable10s := Options.10;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{616aa7ad-8590-489f-bd4a-0da5a62cbaf4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.10 := optEnable10s;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable1m" Id="{4ac6ae70-c318-4ab1-a53d-10cc4d4da8de}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable1m : bool]]></Declaration>
+      <Get Name="Get" Id="{11f9f59e-751c-4d4f-8167-5b9321e1b667}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable1m := Options.11;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{8d728c67-29f4-4ccd-8882-81cbfa5aa8f9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.11 := optEnable1m;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable1s" Id="{be446ac6-589b-468d-9a1a-d41785c164e0}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable1s : bool]]></Declaration>
+      <Get Name="Get" Id="{c0fc3e90-ef10-4c0e-b94c-7f9b4c8abfe1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable1s := Options.6;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{4fe89afb-d148-4d5c-b0f3-23d96676f304}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.6 := optEnable1s;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable1s600msBlinkSlow" Id="{37325497-4e22-412b-8d7f-772a0e52047c}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable1s600msBlinkSlow : bool]]></Declaration>
+      <Get Name="Get" Id="{a3e13f1c-ecee-4b27-a296-1c36bb4af002}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable1s600msBlinkSlow := Options.7;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9c5203f6-aca2-4c3a-8fcf-d847c94cf0b3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.7 := optEnable1s600msBlinkSlow;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable20ms" Id="{17cf3e12-dea4-4254-a42c-9c1109b473ae}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable20ms : bool]]></Declaration>
+      <Get Name="Get" Id="{04ad6eaf-3748-4a97-b450-669c2ca4e8ed}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable20ms := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{442285d9-f14c-41c5-83b7-6faed11e40a2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnable20ms;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable250msBlinkVeryFast" Id="{45987aed-bcc4-4d40-b0e2-a9f38bca4202}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable250msBlinkVeryFast : bool]]></Declaration>
+      <Get Name="Get" Id="{b9456cf4-75fd-4695-8da3-5dc6cf13af9f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable250msBlinkVeryFast := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{25e6c401-9cdc-405b-bbdf-d5fe7544450d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.2 := optEnable250msBlinkVeryFast;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable2s" Id="{819cc88a-e19e-4e9e-8d4f-2259fa3e7723}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable2s : bool]]></Declaration>
+      <Get Name="Get" Id="{0b0bcbf0-5f64-40be-a4b1-71ef6293ca06}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable2s := Options.8;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f3811e58-c386-4eea-8a3c-3580ad2c801e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.8 := optEnable2s;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable400msBlinkFast" Id="{e6fb2afa-93fe-4234-822e-04831246f1de}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable400msBlinkFast : bool]]></Declaration>
+      <Get Name="Get" Id="{3c8dbc3c-a05c-46b6-8976-22748a9a1cfd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable400msBlinkFast := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{a8920e5c-fc93-44f7-bf2a-543289cd6ecc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optEnable400msBlinkFast;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable500ms" Id="{b740ef2e-d69a-4560-a88b-3e22089586b5}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable500ms : bool]]></Declaration>
+      <Get Name="Get" Id="{b528678c-1d2b-4971-9dc2-f418c5c6ca4a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable500ms := Options.4;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1e00a0f7-0174-4384-9413-e59987d79b91}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.4 := optEnable500ms;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable5m" Id="{6bccac6c-fd30-4a08-9394-2a79e3a94695}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable5m : bool]]></Declaration>
+      <Get Name="Get" Id="{03281bd0-354c-4678-bec6-ceaa76324834}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable5m := Options.12;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e044f23a-6bad-4175-94be-6ff17cffc45e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.12 := optEnable5m;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable5s" Id="{177ee6a5-b154-41b4-bb13-2c913840635e}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable5s : bool]]></Declaration>
+      <Get Name="Get" Id="{efd9a763-27ec-47cf-90fe-7c8b2692f537}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable5s := Options.9;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9001b8b9-1695-4c3e-be6c-1fc92764749a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.9 := optEnable5s;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable60m" Id="{ebed0ce1-5388-4ac9-81c9-069d46a3f9e2}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable60m : bool]]></Declaration>
+      <Get Name="Get" Id="{4414a645-4d45-4383-a6c3-1cabd115f1b7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable60m := Options.14;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d0d207fe-56cd-48ae-adee-fedfa0141f90}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.14 := optEnable60m;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnable800msBlink" Id="{7b428a39-3b69-4374-ac4f-b8a235f6edcb}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnable800msBlink : bool]]></Declaration>
+      <Get Name="Get" Id="{26a2a59f-5806-4097-9c6d-0b8ebcf183d9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnable800msBlink := Options.5;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e0e95917-79ab-40bb-bf85-e9120ab86ed4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.5 := optEnable800msBlink;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableCustom" Id="{6b530879-1661-484b-ba2d-33933d5ee033}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableCustom : bool]]></Declaration>
+      <Get Name="Get" Id="{941a3474-4845-48c6-b190-1e38ed224cbe}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableCustom:= Options.15;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{81eef1cd-7bc1-4c82-9d29-7b44b0c7fda3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.15 := optEnableCustom;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="SystemPulses">
+      <LineId Id="3" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optAllOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optAllOn.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable100ms.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable100ms.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable10m.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable10m.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable10s.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable10s.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable1m.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable1m.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable1s.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable1s.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable1s600msBlinkSlow.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable1s600msBlinkSlow.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable20ms.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable20ms.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable250msBlinkVeryFast.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable250msBlinkVeryFast.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable2s.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable2s.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable400msBlinkFast.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable400msBlinkFast.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable500ms.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable500ms.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable5m.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable5m.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable5s.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable5s.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable60m.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable60m.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable800msBlink.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnable800msBlink.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnableCustom.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemPulses.optEnableCustom.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

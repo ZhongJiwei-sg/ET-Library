@@ -1,0 +1,271 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="TCPDeviceCom_SendRecBytes" Id="{3724470e-9c0b-4f18-8060-4f5d5f3426a0}" SpecialFunc="None">
+    <Declaration><![CDATA[//FB sends a "command" out and waits for response of the connected device (handshake mode)
+//By setting pDest = 0 the FB will turn into only send mode and with pSrc = 0 into only receive mode (ClrComBuffer will be ignored)
+FUNCTION_BLOCK TCPDeviceCom_SendRecBytes EXTENDS fbBase
+VAR CONSTANT
+	TIMEOUT_LOGIC											: TIME 		:= T#20S;
+	TIMEOUT_SOCKET											: TIME 		:= T#10S;
+	DEL_WRITE_READ											: TIME 		:= T#0MS; //Delay between write and read data
+END_VAR
+VAR_INPUT
+	hSocket													: T_HSOCKET;
+	ClrComBuffer											: BOOL := TRUE; //TRUE Clears com buffer before start
+	
+	pSrc													: POINTER TO BYTE; //Pointer to data source, in case the pointer is empty (0) the FB will only start to wait for data
+	cbSrcLen												: UDINT;
+	pDest													: POINTER TO BYTE; //Pointer to receive buffer, in case the pointer is empty (0) the FB will only send data and not wait for a response 
+	cbDestLen												: UDINT;
+END_VAR
+VAR_OUTPUT
+	RecBytes												: UDINT;
+	WinsockErrorId											: E_WinsockError;
+END_VAR
+
+VAR
+(*  Memory *****************************************************)
+	
+	ClrBufferLoop											: INT;
+	offset													:	UDINT;
+(*  Timer ******************************************************)
+	Timer1													: Ton;
+(*  Trigger ****************************************************)
+
+(*  Blocks *****************************************************)
+	SocketSend												: FB_SocketSend := (tTimeout := TIMEOUT_SOCKET);
+	SocketReceive											: FB_SocketReceive := (tTimeout := TIMEOUT_SOCKET);
+	
+(* Cache ******************************************************)
+	i														: INT;
+END_VAR
+
+	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* state machine ********************************************************)
+rtExecute(CLK := Execute);
+
+	CASE state OF
+	0 : 
+		Busy 												:= FALSE;
+		IF NOT Execute THEN
+			Done 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorID 										:= 0;
+			WinsockErrorId									:= WSOK;
+			SocketSend(bExecute	:= FALSE);
+			SocketReceive(bExecute := FALSE);
+		END_IF
+		IF rtExecute.Q THEN
+			Busy 											:= TRUE;
+			Done											:= FALSE;		
+			SocketSend(bExecute	:= FALSE , sSrvNetId	:= '', tTimeout := TIMEOUT_SOCKET);
+			SocketReceive(bExecute := FALSE, sSrvNetId	:= '', tTimeout := TIMEOUT_SOCKET);
+			IF TRUE			
+			THEN
+				Error 										:= FALSE;
+				ErrorID 									:= 0;
+				RecBytes									:= 0;
+				offset										:= 0;
+				WinsockErrorId								:= WSOK;
+				
+				Timer1(IN := FALSE);
+				ClrBufferLoop								:= 1;
+
+					
+				IF pSrc = 0 AND pDest <> 0
+				THEN //No command start to received data
+					SocketReceive(
+						hSocket		:= hSocket, 
+						cbLen		:= cbDestLen,  
+						pDest		:= pDest, 
+						bExecute	:= TRUE);
+					state 									:= 4;
+				ELSIF pSrc <> 0 AND pDest = 0
+				THEN //Just send command, do not wait for response 
+					SocketSend(
+						hSocket		:= hSocket, 
+						cbLen		:= cbSrcLen, 
+						pSrc		:= pSrc, 
+						bExecute	:= TRUE);
+					state									:= 2;
+				ELSE //Clear received buffer before starting to send data
+					SocketReceive(
+						hSocket		:= hSocket, 
+						cbLen		:= cbDestLen,  
+						pDest		:= pDest, 
+						bExecute	:= TRUE);
+					state 									:= SEL(ClrComBuffer, 2 , state + 1);
+				END_IF
+				
+			END_IF
+		END_IF
+		
+	1 : // clear communication buffer
+		SocketReceive(
+			hSocket		:= hSocket, 
+			cbLen		:= cbDestLen,  
+			pDest		:= pDest, 
+			bExecute	:= TRUE);
+		IF NOT SocketReceive.bBusy THEN
+			IF SocketReceive.nRecBytes > 0
+			THEN
+				ClrBufferLoop								:= ClrBufferLoop + 1;
+			ELSE
+				SocketSend(
+					hSocket		:= hSocket, 
+					cbLen		:= cbSrcLen, 
+					pSrc		:= pSrc, 
+					bExecute	:= TRUE);
+				state										:= state + 1;
+			END_IF
+			SocketReceive(bExecute := FALSE);
+		END_IF
+
+	2 :
+		SocketSend(
+			hSocket		:= hSocket, 
+			cbLen		:= cbSrcLen, 
+			pSrc		:= pSrc, 
+			bExecute	:= TRUE);
+		IF NOT SocketSend.bBusy THEN
+			IF NOT SocketSend.bError THEN
+				state 										:= SEL(pDest = 0, state + 1 , 0);				
+			ELSE
+				Error 										:= TRUE;
+				ErrorID 									:= SocketSend.nErrId;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(ErrorId);
+				
+				state 										:= 0;
+			END_IF
+			SocketSend(bExecute	:= FALSE);
+		END_IF
+
+	3 : 
+		Timer1(IN := TRUE, PT := DEL_WRITE_READ);
+		IF Timer1.Q THEN
+			MEMSET(pDest,0,cbDestLen);  //Clear destination
+			Timer1(IN := FALSE);
+			Timer1(IN := TRUE, PT := TIMEOUT_LOGIC); //Timeout
+			state 											:= state + 1;
+		END_IF
+
+	4 : 
+		Timer1();
+		SocketReceive(
+			hSocket		:= hSocket, 
+			cbLen		:= cbDestLen - offset, 
+			pDest		:= pDest + offset, 
+			bExecute	:= TRUE);
+		IF NOT SocketReceive.bBusy 
+		THEN
+			IF NOT SocketReceive.bError 
+			THEN				
+				IF SocketReceive.nRecBytes>0 
+				THEN
+					RecBytes								:= RecBytes + SocketReceive.nRecBytes;
+					offset									:= RecBytes;
+					IF RecBytes > cbDestLen 
+					THEN //Received data exeeded buffer size
+						State								:= 0;
+						Error 								:= TRUE;
+						ErrorID 							:= E_AdsErr.DEVICE_NOMEMORY;
+						WinsockErrorId						:= ADSERROR_TO_WSERROR(ErrorId);	
+					ELSE //Just response received data
+						state								:= 0;
+					END_IF
+				ELSIF SocketReceive.nRecBytes = 0 AND RecBytes > 0
+				THEN //no more data received 
+					state									:= 0;
+				ELSIF Timer1.Q 
+				THEN
+					Timer1(IN := FALSE);
+					Error 									:= TRUE;
+					ErrorID 								:= E_AdsErr.DEVICE_TIMEOUT;
+					WinsockErrorId							:= WSAETIMEDOUT;
+					state 									:= 0;
+				END_IF	
+				
+			ELSE
+				State										:= 0;
+				Error 										:= TRUE;
+				ErrorID 									:= SocketReceive.nErrId;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(ErrorId);
+			END_IF
+	
+			SocketReceive(bExecute := FALSE);	// retry as long as state didn't change
+		END_IF
+
+	END_CASE
+
+(* reset busy ******************************************************************)
+IF Busy AND state = 0 THEN
+	Busy 													:= FALSE;
+	Done													:= NOT Error;
+END_IF
+(********************************************************************************)
+
+	
+	]]></ST>
+    </Implementation>
+    <LineIds Name="TCPDeviceCom_SendRecBytes">
+      <LineId Id="552" Count="15" />
+      <LineId Id="1357" Count="0" />
+      <LineId Id="568" Count="1" />
+      <LineId Id="947" Count="0" />
+      <LineId Id="942" Count="0" />
+      <LineId Id="950" Count="1" />
+      <LineId Id="1047" Count="0" />
+      <LineId Id="1094" Count="0" />
+      <LineId Id="952" Count="3" />
+      <LineId Id="960" Count="0" />
+      <LineId Id="1139" Count="2" />
+      <LineId Id="1212" Count="3" />
+      <LineId Id="1211" Count="0" />
+      <LineId Id="1264" Count="1" />
+      <LineId Id="1272" Count="0" />
+      <LineId Id="1267" Count="4" />
+      <LineId Id="1273" Count="6" />
+      <LineId Id="1143" Count="0" />
+      <LineId Id="1142" Count="0" />
+      <LineId Id="582" Count="0" />
+      <LineId Id="961" Count="0" />
+      <LineId Id="583" Count="9" />
+      <LineId Id="594" Count="0" />
+      <LineId Id="596" Count="1" />
+      <LineId Id="746" Count="3" />
+      <LineId Id="745" Count="0" />
+      <LineId Id="616" Count="8" />
+      <LineId Id="786" Count="0" />
+      <LineId Id="626" Count="16" />
+      <LineId Id="1005" Count="0" />
+      <LineId Id="643" Count="0" />
+      <LineId Id="1318" Count="0" />
+      <LineId Id="644" Count="10" />
+      <LineId Id="1146" Count="0" />
+      <LineId Id="655" Count="0" />
+      <LineId Id="1147" Count="0" />
+      <LineId Id="658" Count="0" />
+      <LineId Id="660" Count="0" />
+      <LineId Id="937" Count="0" />
+      <LineId Id="874" Count="0" />
+      <LineId Id="1095" Count="1" />
+      <LineId Id="1099" Count="2" />
+      <LineId Id="1098" Count="0" />
+      <LineId Id="1398" Count="0" />
+      <LineId Id="1400" Count="0" />
+      <LineId Id="1097" Count="0" />
+      <LineId Id="1089" Count="0" />
+      <LineId Id="1091" Count="1" />
+      <LineId Id="682" Count="8" />
+      <LineId Id="1199" Count="0" />
+      <LineId Id="691" Count="0" />
+      <LineId Id="693" Count="6" />
+      <LineId Id="876" Count="0" />
+      <LineId Id="700" Count="0" />
+      <LineId Id="1194" Count="4" />
+      <LineId Id="705" Count="3" />
+      <LineId Id="81" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

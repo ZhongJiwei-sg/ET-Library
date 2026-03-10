@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_Logbook" Id="{060ec937-dca9-4090-92f9-b4364d95b4b2}">
+    <Declaration><![CDATA[INTERFACE I_Logbook Extends __System.IQueryInterface 
+]]></Declaration>
+    <Method Name="delete" Id="{5d0f3ff0-4582-4e29-b598-8180ef1c27ab}">
+      <Declaration><![CDATA[METHOD PUBLIC delete : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="getOldestMsg" Id="{e62a14b0-f40b-403c-b50e-a90b9189328e}">
+      <Declaration><![CDATA[METHOD PUBLIC getOldestMsg : BOOL //Return value TRUE = if finished successful -> new message flag of entry will be reset
+VAR_IN_OUT
+	data													: LogbookData;								
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="rCntAddedMessages" Id="{1dc6039c-cecf-4f6e-9bb2-bd2d1bf6effd}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC rCntAddedMessages : Reference to INT]]></Declaration>
+      <Get Name="Get" Id="{692fa4a6-ac90-4faf-84d1-cc51766ca342}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="readMsg" Id="{51fed694-06b1-4f06-ae90-c82ee9213ba8}">
+      <Declaration><![CDATA[METHOD PUBLIC readMsg : REFERENCE TO LogbookData //Return value is a REFERENCE to the by Index selected entry.  
+VAR_INPUT
+	Index											:	INT;						
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="write" Id="{6a5a4bb1-bc25-4063-8b09-7bbf95afba5c}">
+      <Declaration><![CDATA[METHOD PUBLIC write : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	Msg														:	STRING(PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT);
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

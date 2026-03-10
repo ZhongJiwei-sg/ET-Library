@@ -1,0 +1,245 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AxDriveCoE_StaeubliCS8" Id="{a71ac323-fb99-4e9f-a417-b667663766f6}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Staeubli CS8 robot control with CoE EtherCAT interface  
+//EventHandling instance use inside
+FUNCTION_BLOCK AxDriveCoE_StaeubliCS8 EXTENDS AxDriveBase                         						
+VAR_INPUT                           						
+	EnableEvent												:	BOOL := TRUE;
+	ConfirmTrig												:	BOOL := FALSE; (* Reset event Flag *)
+	SourceId												:	UDINT := 102200; //CoE Drive default multisource Id + Ax id
+	Name													:	STRING(30) := '';
+	ErrorLimitPos											:	BOOL := FALSE;
+	ErrorLimitNeg											:	BOOL := FALSE;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	LiveCountTimeout										:	BOOL;
+	LiveCount										AT %I* 	:	USINT;	(* Wenn diese Variable nicht vorhanden ist bitte mit NCtoPLC *)
+	CanNodeState									AT %I* 	:	USINT; (* Master- AND Slave-Mode:
+   																						0 = No error
+                        							
+																						Master-Mode:
+																						   1 = Node deactivated
+																						   2 = Node not found
+																						   4 = SDO syntax error at StartUp
+																						   5 = SDO data mismatch at StartUp
+																						   8 = Node StartUp in progress
+																						  11 = FC510x Bus-OFF
+																						  12 = Pre-Operational
+																						  13 = Severe bus fault
+																						  14 = Guarding: toggle error
+																						  20 = TxPDO too short
+																						  22 = Expected TxPDO is missing
+																						  23 = Node is Operational but not all TxPDOs were received
+																						  31 = only for EtherCAT gateways: WC-State of cyclic EtherCAT frame is 1
+                        							
+																						Slave-Mode:
+																						 128 = Node is Operational but not all RxPDOs were received
+																						 129 = Node is Pre-Operational
+																						 130 = Node is Stopped *)
+	Status													:	CiA_DS402Statusword_StaeubliCS8;	
+	EventStatus												:	DWORD;
+	NoOfActiveEvents										:	INT;
+	Busy													:	BOOL;
+	Error													:	BOOL;
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT;
+END_VAR                             						
+VAR
+
+END_VAR
+VAR
+
+(* Cache *********************************************************************)
+	MemLiveCount											:	USINT;
+	
+(* Timer ********************************************************************************)
+	TON_LiveCountTimeout									:	TON;
+	TON_NotEnabled											:	TON;
+                                    						
+(* Trigger ******************************************************************************)
+
+(* Bausteine ****************************************************************************)
+	Event													:	EventHandlingGrp25;
+
+(* Dummy Speicher **********************************************************)
+	i														:	INT;
+(****************************************************************************)
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* CS8 Staeubli Robot Control as Ethercat Slave Drive 								*)
+	(************************************************************************************)
+
+(* abort function-call if the reference is invalid *****************************)
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Fault													:= TRUE;
+	SwitchedOn												:= FALSE;
+	Ready													:= FALSE;
+	Error													:= TRUE;
+	ErrorId													:= 16#4B30;
+	RETURN;         										
+END_IF
+
+(* Read Statusword ********************************************************)
+	(* LiveCount Timeout ************************************)
+	TON_LiveCountTimeout(
+		IN := MemLiveCount = LiveCount AND NOT rAxis.Status.OpMode.SimulationAxis,
+		PT := t#1s,
+		Q	=> LiveCountTimeout);
+	
+	(* DriveStatusword *****************************)
+	IF LiveCountTimeout 
+	THEN 
+		Status.readStatusword(0);
+	ELSE	
+		IF rAxis.Status.OpMode.SimulationAxis
+		THEN
+			IF rAxis.PlcToNc.ControlDWord.0
+			THEN
+				Status.readStatusword(TO_UINT(eCiA_DS402_STATUS_STATE.OPERATION_ENABLED) OR 2#0100_0000_0000_0000);
+			ELSE
+				Status.readStatusword(TO_UINT(eCiA_DS402_STATUS_STATE.SWITCHED_ON) OR 2#0100_0000_0000_0000);	
+			END_IF
+		ELSE
+			Status.readStatusword(Statusword);
+		END_IF		
+	END_IF
+
+																															
+	(*
+	Bits 	Value 	Description
+	15		 X 		Reserved
+	14 	0/1 		Status OF position feedback value.  1: the robot axis is calibrated.  0: the robot axis is NOT calibrated.
+	13 	0/1 		No following error /Following error
+	12 	0/1 		Follwing command value
+	11 	0/1 		Internal LIMIT active
+	10 	0/1		Target reached
+	9 		0/1 		Remote
+	8 		0/1 		Manufacturer specific
+	7 		0/1 		Warning
+	6 		0/1 		Switch on disabled
+	5 		1 			Quick stop. NS
+	4 		0/1 		Voltage enable
+	3 		0/1 		Fault
+	2 		0/1 		Operation enabled
+	1 		0/1 		Switched on
+	0 		0/1 		Ready TO switch on
+	*)
+
+(* DriveStatusBits ***********************************************)
+	Fault													:= Status.Fault
+																OR Status.FollowingError
+																OR NOT Status.Calibrated(* Nur bei Absolut Encoder Achsen *)
+																OR rAxis.NcToPlc.StateDWord.28 (* DriveDeviceError *)
+																OR rAxis.NcToPlc.StateDWord.30; (* IODataInvalid *)
+            												
+	Ready 													:= NOT Fault
+																AND(Status.ReadyToSwitchOn OR Status.SwitchedOn);
+
+	SwitchedOn												:= Status.SwitchedOn AND NOT Fault AND(Status.FollowCmdValue OR Status.RemoteActive);
+	
+(* Event Logger Meldungen *****************************************************)
+	TON_NotEnabled(
+		IN := Status.SwitchedOn AND NOT Status.OperationEnabled AND Ready,
+		PT := t#2s);
+
+	Event.no[1].Flag 										:= NOT Status.ReadyToSwitchOn; 
+	Event.no[2].Flag 										:= Status.Fault;
+	Event.no[3].Flag 										:= Status.Warning; 				
+	Event.no[4].Flag 										:= Status.InternalLimitActive;
+	Event.no[5].Flag 										:= Status.SwitchOnDisabled;
+	Event.no[6].Flag 										:= NOT Status.FollowCmdValue AND Status.SwitchedOn AND NOT rAxis.Status.OpMode.SimulationAxis;		
+	Event.no[7].Flag 										:= FALSE;									
+	Event.no[8].Flag 										:= ErrorLimitPos;
+	Event.no[9].Flag 										:= ErrorLimitNeg;
+	Event.no[10].Flag 										:= FALSE;
+	
+	Event.no[11].Flag 										:= NOT Status.RemoteActive;
+	Event.no[12].Flag 										:= Status.FollowingError ;	
+	Event.no[13].Flag 										:= NOT Status.Calibrated ; 	(* Nur bei Absolut Encoder Achsen *)
+	Event.no[14].Flag 										:= CanNodeSTATE = 128; 					(* Node is Operational but not all RxPDOs were received *)
+	Event.no[15].Flag 										:= CanNodeSTATE = 129; 					(* Node is Pre-Operational *)
+	Event.no[16].Flag 										:= CanNodeSTATE = 130;					(* Node is Stopped *)
+	Event.no[17].Flag 										:= TON_NotEnabled.Q; 			
+	Event.no[18].Flag 										:= LiveCountTimeout ; 			
+(*	Event.no[19].Flag 										:= FALSE;
+	Event.no[20].Flag 										:= FALSE;
+	Event.no[21].Flag 										:= FALSE;
+	Event.no[22].Flag 										:= FALSE;
+	Event.no[23].Flag 										:= FALSE;
+	Event.no[24].Flag 										:= FALSE;
+	Event.no[25].Flag 										:= FALSE; *)
+
+(* Check if msg activ and init some parameter ***********************)
+	IF Event.no[1].Text2 <> Name AND Name <> '' OR Event.no[1].Text2 = '' AND rAxis.NcToPlc.AxisId <> 0
+	THEN
+		Event.no[1].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[3].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		Event.no[4].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		Event.no[5].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[6].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+
+		Event.no[11].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[17].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		Event.no[18].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		
+		(* Init axisname *)
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+		(*	Event.no[i].Text1								:= '';*)
+			Event.no[i].Text2								:= SEL(LEN(name)>1,CONCAT('Axis id:',DWORD_TO_STRING(rAxis.NcToPlc.AxisId)),name);
+		END_FOR
+	END_IF
+
+(* workl Event Ctrl *************************************************)
+	Event(
+		ConfirmTrig 	:= ConfirmTrig,
+		Disable			:= rAxis.NcToPlc.AxisId = 0 OR NOT EnableEvent,
+		SourceId		:= SourceId + rAxis.NcToPlc.AxisId,
+		Status			=> EventStatus,
+		NoOfActiveEvents => NoOfActiveEvents);
+
+(******************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="confirm" Id="{9f627db4-e866-4146-82b9-ef9bb6f7f078}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[confirm								:= Event.confirm();]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveCoE_StaeubliCS8">
+      <LineId Id="3" Count="132" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_StaeubliCS8.confirm">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

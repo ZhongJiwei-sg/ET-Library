@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="LogbookData" Id="{c51af13e-348f-4a29-904d-b9edc111ce4f}">
+    <Declaration><![CDATA[TYPE LogbookData :
+STRUCT
+	Timestamp												:	TIMESTRUCT;						//Stored timestamp for each message
+	Msg														:	STRING(PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT); //Stored message
+{attribute 'displaymode':='binary'}	
+	Options													:	WORD;							//Stored option for each message
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

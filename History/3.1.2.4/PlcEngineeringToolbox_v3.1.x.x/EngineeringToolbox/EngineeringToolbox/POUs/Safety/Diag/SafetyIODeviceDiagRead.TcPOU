@@ -1,0 +1,438 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="SafetyIODeviceDiagRead" Id="{9552c7a2-2b7d-41b8-ad2d-c962699fcb4f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK SafetyIODeviceDiagRead EXTENDS FbBase
+VAR CONSTANT
+	bitTwinSAFETerm											:	BYTE := 0; //Ex1918,ELx9xx, etc. (2nd generation of TwinSAFE devices with CoE Index 10F3 Diag History included)
+	bitSafetyTerm											:	BYTE := 1; //EL1904,EL2904,EK1914,EP1908 (Diagnoses provided via CoE Index 0x800E FSOE Internal Data, Debug 1..x) 
+ 	bitAX58xx												:	BYTE := 2; //AX5805,AX5806 (Diag via CoE index 0xFA10)
+END_VAR
+VAR_INPUT
+	EcMasterDevId											:	UINT;	//EtherCAT Master DevId
+END_VAR                 									
+VAR_OUTPUT              									 
+	AdsAddr											AT %I*	:	AMSADDR; //Link to terminal/box/device AMS Net Addr.
+	{attribute 'displaymode':='binary'}
+	MsgInfoDiag										AT %I*	:	USINT; 	//Link to connection messagediag of EL69xx (Needs to be enabled for alias of device)
+//	{attribute 'displaymode':='hexadecimal'}
+//	MsgInfoState									AT %I*	:	USINT; 	//Link to connection message state of EL69xx (Needs to be enabled for alias of device)	
+	DevType													:	STRING(15); //CoE index 1008 / e.g. EL1908, EP1957-0022, etc...
+	Name													:	STRING(31);	//Device name as defined in system manager configuration								
+	FSoEAddr												:	WORD; //CoE index 0xF980
+	DiagMsgSeverity											:	UINT; //Info (0) Warning (1) or Error (2)
+	{attribute 'displaymode':='hexadecimal'}
+	DiagMsgTextId											: 	UINT; //CoE Index 10F3 newest diagnoses message TextID (xyzz -> X =Type | y = Source | zz = Message ID)
+	{attribute 'displaymode':='hexadecimal'}
+	pDebugData												:	POINTER TO ARRAY[0..64] OF WORD; //Pointer to CoE index 0x800E - FSOE Internal Data - Debug 1-x for diag of "Safety Terminals" (or CoE Index 0xFA10 for AX58xx)
+	DebugDataMaxId											:	UINT; //Max index for pointer pDebugData to array of word (Debug 1..x) if 0 data are invalid		
+END_VAR                 									
+
+VAR(* internal *)    
+	{attribute 'displaymode':='bin'}
+	DevCategory												:	BYTE;
+	IOF_GetBoxNameByAddr									:	IOF_GetBoxNameByAddr := (TMOUT	:= DEFAULT_ADS_TIMEOUT);
+	EcCoEReadDiagMsg										:	EcCoEReadNewestDiagMsg ;              									
+	EcCoESdoReadEx											:	FB_EcCoESdoReadEx := (tTimeout := DEFAULT_ADS_TIMEOUT);       
+	i														:	INT;  								                            	
+END_VAR
+(*
+Tabelle 2-4: Diagnose-Informationen einer Connection
+Wert Beschreibung
+xxxx 0001 invalid command
+xxxx 0010 unknown command
+xxxx 0011 invalid connection ID
+xxxx 0100 invalid CRC
+xxxx 0101 Watchdog run out of time
+xxxx 0110 invalid FSoE-Adress
+xxxx 0111 invalid data
+xxxx 1000 invalid length of communicatoin parameter Kommunikationsparameterlänge
+xxxx 1001 invalid communicatoin parameter
+xxxx 1010 invalid operator parameter length
+xxxx 1011 invalid operator parameter
+xxxx 1100 FSoE Master Reset
+xxxx 1101 Module fault on slave detected with activated option "Modulfault is ComError"
+xxxx 1110 Module fault on EL290x at activated with option "Error achnowledge active"
+xxxx 1111 Slave not started or unexpected error argument
+
+xxx1 xxxx FSoE Slave error detected
+xx1x xxxx FSoE Slave notifies Failsafe Value active
+x1xx xxxx StartUp
+1xxx xxxx FSoE Master notifies Failsafe Value active
+*)]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* IO Safety Terminal Status Diag		V2.0	*)
+(************************************************)
+
+(* Trigger to read diag **********************************************)
+	rtExecute(CLK := Execute);
+	
+(* Read adress and type ***********************************************)
+	CASE state OF
+	0:
+		Busy 												:= FALSE;
+		IF NOT Execute
+		THEN
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;					
+		END_IF
+		
+		IF rtExecute.Q
+		THEN
+			Busy 											:= TRUE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			DiagMsgTextId									:= 0;
+			DiagMsgSeverity									:= 0;
+
+			EcCoESdoReadEx(bExecute := FALSE, bCompleteAccess := FALSE);
+			IOF_GetBoxNameByAddr(Start := FALSE);
+			EcCoEReadDiagMsg(Execute := FALSE);
+			
+			IF DevCategory.bitTwinSAFETerm
+			THEN
+				state 										:= 10;	
+			ELSIF DevCategory.bitSafetyTerm
+			THEN
+				state 										:= SEL(DebugDataMaxId = 0, 21, 20);
+			ELSIF DevCategory.bitAX58xx				
+			THEN 
+				state 										:= 30;
+				
+			ELSE //Read more device information 
+				state										:= state + 1;				
+			END_IF
+		
+		END_IF
+
+	1: (* read FSOE adress *)
+		EcCoESdoReadEx(
+			sNetId			:= F_CreateAmsNetId(nIds := AdsAddr.netId ),
+			nSlaveAddr		:= AdsAddr.port,
+			nSubIndex		:= 16#1,
+			nIndex			:= 16#F980,
+			pDstBuf			:= ADR(FSOEAddr),
+			cbBufLen		:= SIZEOF(FSOEAddr),
+			bExecute		:= TRUE,
+			tTimeout		:=  (* Default *),
+			bCompleteAccess	:= False,
+			bBusy			=> ,
+			bError			=> ,
+			nErrId			=> );
+			
+		IF NOT EcCoESdoReadEx.bBusy
+		THEN
+			IF EcCoESdoReadEx.bError 
+			THEN
+				Busy 										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcCoESdoReadEx.nErrId;
+				DiagMsgTextId								:= TO_UINT(state);
+				state										:= 0;
+			ELSE      									
+				state 										:= state + 1;
+			END_IF
+			EcCoESdoReadEx(bExecute := FALSE);
+		END_IF
+
+	2: //Ready name from system manager configuration
+		IOF_GetBoxNameByAddr(
+			NETID		:='' , (* Local *)
+			DEVICEID	:= UINT_TO_UDINT(EcMasterDevId) ,
+			BOXADDR		:= AdsAddr.port ,
+			START		:= EcMasterDevId <> 0,
+			BOXNAME		=> );
+			
+		IF NOT IOF_GetBoxNameByAddr.Busy
+		THEN
+			IF IOF_GetBoxNameByAddr.Err 
+			THEN
+				Busy 										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= IOF_GetBoxNameByAddr.ERRID;
+				DiagMsgTextId								:= TO_UINT(state);
+				state										:= 0;
+			ELSIF IOF_GetBoxNameByAddr.Start
+			THEN
+				state 										:= state + 1;
+			ELSE //No box name to read
+				Name										:= CONCAT('EtherCAT Addr.',TO_STRING(AdsAddr.port));
+			END_IF
+			IOF_GetBoxNameByAddr(START := FALSE);
+		END_IF
+		
+	3:  (* read device name e.g. EL1904 *)
+		EcCoESdoReadEx(bExecute	:= TRUE, nIndex	:= 16#1008, nSubIndex := 16#0, pDstBuf := ADR(DevType),cbBufLen	:= SIZEOF(DevType), bCompleteAccess := FALSE);
+
+		IF NOT EcCoESdoReadEx.bBusy
+		THEN
+			IF EcCoESdoReadEx.bError 
+			THEN
+				Busy 										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcCoESdoReadEx.nErrId;
+				DiagMsgTextId								:= TO_UINT(state);
+				state										:= 0;
+			ELSE       
+				 //Delte type from name if in brakets 
+				Name										:= DELETE(IOF_GetBoxNameByAddr.BOXNAME, LEN(DevType) + 2 , FIND(IOF_GetBoxNameByAddr.BOXNAME,DevType) - 1);
+                             	
+				IF DevType = 'AX5806' OR_ELSE DevType = 'AX5805'
+				THEN
+					DevCategory.bitAX58xx					:= TRUE;
+					state 									:= 30;
+				ELSIF DevType = 'EL1904' OR_ELSE DevType = 'EL2904' OR_ELSE DevType = 'EK1914' OR_ELSE DevType = 'EP1908'
+				THEN
+					DevCategory.bitSafetyTerm 				:= TRUE;
+					state 									:= SEL(DebugDataMaxId = 0, 21, 20);
+				ELSE
+					DevCategory.bitTwinSAFETerm				:= TRUE;
+					state 									:= 10;
+				END_IF
+				
+			END_IF
+			EcCoESdoReadEx(bExecute := FALSE);
+		END_IF
+
+	(* Read diagnoses latest entry from diag history ***********************************)	
+	10: 
+		EcCoEReadDiagMsg(Execute := TRUE, AdsAddr := AdsAddr);
+		IF NOT EcCoEReadDiagMsg.Busy
+		THEN
+			IF EcCoEReadDiagMsg.Error 
+			THEN
+				Busy 										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcCoEReadDiagMsg.ErrorID;
+				DiagMsgTextId								:= TO_UINT(state);
+				state										:= 0;				
+			ELSE
+				DiagMsgTextId								:= EcCoEReadDiagMsg.MsgId;
+				DiagMsgSeverity								:= EcCoEReadDiagMsg.MsgSeverity;
+				Done										:= TRUE;
+				Busy										:= FALSE;
+				State										:= 0;
+			END_IF
+		END_IF
+		
+	(* Read lenght of 0x800E:0 FSOE internal data.Debug terminal *********************************)
+	20:
+		EcCoESdoReadEx(bExecute	:= DebugDataMaxId = 0, nIndex	:= 16#800E, nSubIndex := 16#0, pDstBuf := ADR(DebugDataMaxId),cbBufLen	:= SIZEOF(DebugDataMaxId), bCompleteAccess := FALSE);
+
+		IF NOT EcCoESdoReadEx.bBusy
+		THEN
+			IF EcCoESdoReadEx.bError 
+			THEN
+				Busy 										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcCoESdoReadEx.nErrId;
+				DiagMsgTextId								:= TO_UINT(state);
+				state										:= 0;
+			ELSIF DebugDataMaxId = 0
+			THEN
+				Busy 										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_INVALIDPARM; //Lenght of index cannot be 0
+				DiagMsgTextId								:= TO_UINT(state);
+				state										:= 0;				
+			ELSIF pDebugData = 0
+			THEN                                  	
+				pDebugData									:= __NEW(WORD,TO_UDINT(DebugDataMaxId + 1)); //e.g. 16 words = 32 bytes + 1 word for index 0 (which is in fact a byte  				
+				IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+				THEN
+					AdsLogHint('EngineeringToolbox | FB SafetyIOReadDiag | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING((DebugDataMaxId * 2) + 2));
+				END_IF
+				state 										:= state + 1;
+			ELSE
+				state 										:= state + 1;
+			END_IF
+			EcCoESdoReadEx(bExecute := FALSE);
+		END_IF	
+		
+	21://Read all debug data from terminal
+		EcCoESdoReadEx(bExecute	:= TRUE, nIndex	:= 16#800E, nSubIndex := 16#0, pDstBuf := pDebugData ,cbBufLen := TO_UDINT(DebugDataMaxId * 2) + SIZEOF(DebugDataMaxId) , bCompleteAccess := TRUE);
+
+		IF NOT EcCoESdoReadEx.bBusy
+		THEN
+			IF EcCoESdoReadEx.bError 
+			THEN
+				IF pDebugData = 0
+				THEN
+					DebugDataMaxId							:= 0;
+				END_IF
+				Busy 										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcCoESdoReadEx.nErrId;
+				DiagMsgTextId								:= TO_UINT(state);
+				state										:= 0;
+			ELSE                                    		
+				Done										:= TRUE;
+				Busy										:= FALSE;
+				DiagMsgSeverity								:= 2;
+				State										:= 0;					
+			END_IF
+			EcCoESdoReadEx(bExecute := FALSE, bCompleteAccess := FALSE );
+		END_IF			
+	
+	(* Read diag data from AX58xx *********************************)
+	30:
+		IF pDebugData = 0
+		THEN
+			DebugDataMaxId									:= 16#8;
+			pDebugData										:= __NEW(WORD,TO_UDINT(DebugDataMaxId + 1));
+			
+			IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+			THEN
+				AdsLogHint('EngineeringToolbox | FB SafetyIOReadDiag | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', '18');
+			END_IF				
+		END_IF
+		
+		EcCoESdoReadEx(bExecute	:= TRUE, nIndex	:= 16#FA10, nSubIndex := 16#0, pDstBuf := pDebugData, cbBufLen	:= TO_UDINT(DebugDataMaxId * 2) + SIZEOF(DebugDataMaxId),bCompleteAccess := TRUE);
+
+		IF NOT EcCoESdoReadEx.bBusy
+		THEN
+			IF EcCoESdoReadEx.bError 
+			THEN
+				IF pDebugData = 0
+				THEN
+					DebugDataMaxId							:= 0;
+				END_IF
+				Busy 										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcCoESdoReadEx.nErrId;
+				DiagMsgTextId								:= TO_UINT(state);
+				state										:= 0;
+			ELSE                                    		
+				Done										:= TRUE;
+				Busy										:= FALSE;
+				DiagMsgSeverity								:= 2;
+				State										:= 0;	
+			END_IF
+			EcCoESdoReadEx(bExecute := FALSE, bCompleteAccess := FALSE);
+		END_IF	
+	ELSE
+		;
+	END_CASE
+			
+(*********************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="FB_exit" Id="{0086b941-a938-476a-96c0-65d13bfeb929}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode AND pDebugData <> 0
+THEN //Release memory in case the PLC stopps
+	__DELETE(pDebugData);
+	DebugDataMaxId								:= 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="msgSevyIsError" Id="{085cef6c-ff42-4dab-b974-a6edd8ee4669}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC msgSevyIsError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{7cf42402-eb07-45c3-b36e-261dc9665e38}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[msgSevyIsError := DiagMsgSeverity = 2;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="msgSevyIsInfo" Id="{b706c638-2b38-44fe-938e-9742be87d70c}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC msgSevyIsInfo : BOOL]]></Declaration>
+      <Get Name="Get" Id="{081e4d0d-0f9a-4d8c-9810-6778f259514d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[msgSevyIsInfo := DiagMsgSeverity = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="msgSevyIsWarning" Id="{73a77c19-abf5-4149-8e93-c91ab0d643f4}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC msgSevyIsWarning : BOOL]]></Declaration>
+      <Get Name="Get" Id="{282aa999-8ce7-4100-b042-318c51b285a6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[msgSevyIsWarning := DiagMsgSeverity = 1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="SafetyIODeviceDiagRead">
+      <LineId Id="2440" Count="23" />
+      <LineId Id="2747" Count="0" />
+      <LineId Id="2464" Count="49" />
+      <LineId Id="2541" Count="12" />
+      <LineId Id="2812" Count="0" />
+      <LineId Id="2555" Count="5" />
+      <LineId Id="2568" Count="5" />
+      <LineId Id="2906" Count="1" />
+      <LineId Id="2910" Count="11" />
+      <LineId Id="3073" Count="0" />
+      <LineId Id="3071" Count="1" />
+      <LineId Id="2922" Count="2" />
+      <LineId Id="2936" Count="0" />
+      <LineId Id="2925" Count="2" />
+      <LineId Id="2935" Count="0" />
+      <LineId Id="2928" Count="1" />
+      <LineId Id="2934" Count="0" />
+      <LineId Id="2930" Count="3" />
+      <LineId Id="2908" Count="0" />
+      <LineId Id="2574" Count="7" />
+      <LineId Id="2813" Count="0" />
+      <LineId Id="2583" Count="4" />
+      <LineId Id="2745" Count="1" />
+      <LineId Id="2589" Count="13" />
+      <LineId Id="2814" Count="0" />
+      <LineId Id="2604" Count="3" />
+      <LineId Id="2998" Count="1" />
+      <LineId Id="3001" Count="3" />
+      <LineId Id="3000" Count="0" />
+      <LineId Id="2608" Count="0" />
+      <LineId Id="3007" Count="0" />
+      <LineId Id="2609" Count="5" />
+      <LineId Id="3008" Count="1" />
+      <LineId Id="2615" Count="14" />
+      <LineId Id="2815" Count="0" />
+      <LineId Id="2631" Count="6" />
+      <LineId Id="2751" Count="0" />
+      <LineId Id="2638" Count="8" />
+      <LineId Id="3133" Count="0" />
+      <LineId Id="2647" Count="0" />
+      <LineId Id="3069" Count="0" />
+      <LineId Id="2649" Count="15" />
+      <LineId Id="2819" Count="0" />
+      <LineId Id="2666" Count="6" />
+      <LineId Id="2750" Count="0" />
+      <LineId Id="2673" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiagRead.FB_exit">
+      <LineId Id="3" Count="2" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiagRead.msgSevyIsError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiagRead.msgSevyIsInfo.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyIODeviceDiagRead.msgSevyIsWarning.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

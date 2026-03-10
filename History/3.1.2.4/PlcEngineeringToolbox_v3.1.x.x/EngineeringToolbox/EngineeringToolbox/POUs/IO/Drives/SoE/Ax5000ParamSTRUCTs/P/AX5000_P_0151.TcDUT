@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0151" Id="{b2adede0-c8fc-42e5-b10c-32ee3f14ad4c}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0151 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Manufacturer:UINT;
+	Feedback_type:UINT;
+	Feedback_type_string:STRING(29);
+//{attribute 'hide'}
+	Rsvd1:ARRAY[0..4] OF UINT;
+	Process_channel:ARRAY[0..11] OF UINT;
+	Parameter_channel:ARRAY[0..77] OF UINT;
+	Manufacturer_limits_settings:ARRAY[0..5] OF UINT;
+//{attribute 'hide'}
+	Rsvd2:ARRAY[0..7] OF UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

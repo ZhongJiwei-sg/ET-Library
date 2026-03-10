@@ -1,0 +1,228 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="NCiReadWriteRParam" Id="{d7a5ce43-5f79-426d-9c19-9566d70a4b5e}" SpecialFunc="None">
+    <Declaration><![CDATA[// To Start read or write, set inpult values and call action read/write. Busy and Done show the status of the operation
+FUNCTION_BLOCK NCiReadWriteRParam EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	FNC_READ												:	INT := 0;
+	FNC_WRITE												:	INT := 1;
+END_VAR         											
+VAR_INPUT       											
+	Fnc														:	INT (FNC_READ..FNC_WRITE) := FNC_READ;
+  	pAddr    												: 	PVOID; //Address of parameter destination variable
+   	Index   												: 	DINT; //Index to parameter to read
+   	Count   												: 	DINT; //
+	rNCIRef													:	REFERENCE TO NCI_REF := 0;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+(* cache *******************************************************************)
+	MemFnc													:	INT := -1;
+
+(* trigger *****************************************************************)
+
+(* function-block instances	************************************************)
+	ItpReadRParamsEx										:	ItpReadRParamsEx := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	ItpWriteRParamsEx										:	ItpWriteRParamsEx := (tTimeout := DEFAULT_ADS_TIMEOUT);
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read/Write Nci group R parameter													*)
+	(************************************************************************************)
+
+(* Execute ******************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= SEL(Fnc = FNC_WRITE, FNC_READ , FNC_WRITE) ;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+	END_IF
+
+(* Call Method ***************************************************************************)
+	CASE MemFnc OF
+	FNC_READ:
+		Read(Execute );
+
+	FNC_WRITE:
+		Write(Execute );
+
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+	END_CASE
+
+(*************************************************************************************************)
+]]></ST>
+    </Implementation>
+    <Method Name="read" Id="{fb898a0c-b89e-4be9-bb8f-700cf2551fc4}">
+      <Declaration><![CDATA[METHOD PUBLIC read : BOOL //Return value = TRUE if busy
+//required parameter
+//pAddr
+//Index
+//Count
+//rNCIRef
+VAR_INPUT 
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc 													:= FNC_READ;
+	This^.Execute											:= Execute;
+IF NOT __ISVALIDREF(rNCIRef) OR pAddr = 0 
+THEN
+	Busy													:= NOT Error;
+	ErrorId													:= E_adsErr.DEVICE_INVALIDPARM;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+	
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpReadRParamsEx.bExecute 							:= TRUE;
+	ELSIF NOT ItpReadRParamsEx.bBusy    					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpReadRParamsEx.bExecute 							:= FALSE;
+
+	END_IF
+
+	ItpReadRParamsEx(
+		bExecute	:= ,
+		pAddr		:= pAddr,
+		nIndex		:= Index,
+		nCount		:= Count,
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> Busy,
+		bErr		=> ,
+		nErrId		=> );
+
+	Done													:= NOT ItpReadRParamsEx.bBusy
+																AND NOT ItpReadRParamsEx.bErr
+																AND ItpReadRParamsEx.bExecute;
+                                                        	
+	IF NOT Busy                                         	
+	THEN                                                	
+		IF ItpReadRParamsEx.bExecute                    	
+		THEN                                            	
+			Error											:=	ItpReadRParamsEx.bErr;
+			ErrorId											:= ItpReadRParamsEx.nErrId;
+		END_IF                          					
+		IF NOT Execute                  					
+		THEN                            	            	
+			MemFnc											:= -1;
+			ItpReadRParamsEx(bExecute := FALSE , sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+	
+	read													:= Busy;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="write" Id="{b124341e-0550-47f1-9296-1860a22193d7}">
+      <Declaration><![CDATA[METHOD PUBLIC write : BOOL //Return value = TRUE if busy
+//required parameter
+//pAddr
+//Index
+//Count
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc 													:= FNC_WRITE;
+	THIS^.Execute											:= Execute;
+
+IF NOT __ISVALIDREF(rNCIRef) OR pAddr = 0 
+THEN
+	Busy													:= NOT Error;
+	ErrorId													:= E_adsErr.DEVICE_INVALIDPARM;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpWriteRParamsEx.bExecute 							:= TRUE;
+	ELSIF NOT ItpWriteRParamsEx.bBusy   					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpWriteRParamsEx.bExecute 							:= FALSE;
+
+	END_IF
+
+	ItpWriteRParamsEx(
+		bExecute	:= ,
+		pAddr		:= pAddr,
+		nIndex		:= Index,
+		nCount		:= Count,
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> Busy,
+		bErr		=> ,
+		nErrId		=> );
+
+	Done													:= NOT ItpWriteRParamsEx.bBusy
+																AND NOT ItpWriteRParamsEx.bErr
+																AND ItpWriteRParamsEx.bExecute;
+                                        					
+	IF NOT Busy
+	THEN
+		IF ItpWriteRParamsEx.bExecute
+		THEN
+			Error											:=	ItpWriteRParamsEx.bErr;
+			ErrorId											:= ItpWriteRParamsEx.nErrId;
+		END_IF                          					
+		IF NOT Execute                  					
+		THEN                            	
+			MemFnc											:= -1;
+			ItpWriteRParamsEx(bExecute := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+	
+	write													:= Busy;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NCiReadWriteRParam">
+      <LineId Id="3" Count="38" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NCiReadWriteRParam.read">
+      <LineId Id="3" Count="55" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NCiReadWriteRParam.write">
+      <LineId Id="3" Count="56" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

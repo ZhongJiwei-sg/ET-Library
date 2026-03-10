@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="AX5000_P_0060" Id="{40d7bc5f-5b08-4d83-b5da-48161b77db64}">
+    <Declaration><![CDATA[TYPE AX5000_P_0060 :
+STRUCT
+	Motor_type_and_usage:WORD;	(* "0"-->no brake;standard holding brake, "1"-->currentless locked,standard holding brake, "16"-->no brake; Holding emergency break, "17"-->currentless locked, olding emergency break*)
+//	{attribute 'hide'}
+	rsvd:ARRAY[0..7] OF UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

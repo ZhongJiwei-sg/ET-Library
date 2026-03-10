@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0313" Id="{8857ad0a-371a-4580-a62d-a1258c1d3d50}">
+    <Declaration><![CDATA[TYPE AX5000_P_0313 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	String_output_mode:UINT;
+	Backlight_mode:UINT;
+	Keypad_mode:UINT;
+//	{attribute 'hide'}
+	Rsvd:UINT;
+	Output_string:STRING(39);
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

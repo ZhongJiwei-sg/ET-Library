@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EL95xxPowerTerminal" Id="{5cec1844-dd9d-4af4-afc3-6c3ca41c7603}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EL95xxPowerTerminal 
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT
+END_VAR
+VAR_OUTPUT	
+	PowerOK			 									AT  %I* : BOOL;
+	Overload											AT  %I* : BOOL;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* EL95xx Power supply terminal			*)
+	(****************************************)
+	
+(* Work objects ****************************************)
+;
+(*******************************************************)
+	]]></ST>
+    </Implementation>
+    <LineIds Name="EL95xxPowerTerminal">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

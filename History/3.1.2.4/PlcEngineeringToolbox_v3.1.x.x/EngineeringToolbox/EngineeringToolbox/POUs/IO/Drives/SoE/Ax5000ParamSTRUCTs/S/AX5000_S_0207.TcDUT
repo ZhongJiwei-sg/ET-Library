@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0207" Id="{4f593121-6a1c-40aa-a1bc-4ade1a17f04d}">
+    <Declaration><![CDATA[TYPE AX5000_S_0207 :
+STRUCT
+	Drive_delay_time:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

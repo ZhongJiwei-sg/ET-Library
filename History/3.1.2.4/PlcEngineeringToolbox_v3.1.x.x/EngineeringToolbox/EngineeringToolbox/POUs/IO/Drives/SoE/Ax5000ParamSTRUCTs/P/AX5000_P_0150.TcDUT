@@ -1,0 +1,110 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0150" Id="{dc59453f-64ad-49b8-9c0f-e5b408548e86}">
+    <Declaration><![CDATA[TYPE AX5000_P_0150 EXTENDS ST_AX5000_P_0150 :
+STRUCT
+(*
+	Actual_lenght:UINT:=224;
+	Max_lenght:UINT:=224;
+
+	Manufacturer:UINT:=2;
+	Feedback_type:UINT:=1;
+	Feedback_type_string:STRING(29):='hallo';
+	Feedback_use:UINT:=3;
+	Feedback_direction:UINT:=1;
+//{attribute 'hide'}
+	Rsvd1:ARRAY[0..2] OF UINT;
+
+	(*Powersettlings*)
+	Control_voltage:UINT;
+	Wait_time_after_power_up:UINT;
+	Connector:UINT;
+//	{attribute 'hide'}	
+	Rsvd2:ARRAY[0..2] OF UINT;
+
+	(*Process channel*)
+		Process_interface:UINT;
+		Conector2:UINT;
+			(*rsvd*)
+			// {attribute 'hide'}
+				Rsvd3:ARRAY[0..1] OF UINT;
+			(*Data*)
+				(*Sin/Cos*)
+					Resulution_per_rotation:UDINT;
+					Length_per_signal_period:UDINT;
+					Sin_gain_correction:UINT;
+					Sin_offset_correction:UINT;
+					Cos_gain_correction:UINT;
+					Cos_offset_correction:UINT;
+					Sin_Cos_1Vss_monitoring:UINT;
+					// {attribute 'hide'}
+					Rsvd4:ARRAY[0..10] OF UINT;
+				(*TTL*)
+					(*Resolution_per_rotation:UDINT;
+					Length_per_signal_period:UDINT;
+					rsvd5:ARRAY[0..15] OF UINT;*)
+				(*Resolver*)
+					(*Control_word:UINT;
+					Number_of_poles:USINT;
+					Exibition_frequency:USINT;
+					Transformation_ratio:UINT;
+					Phase_shift:UINT;
+					Sin_cos_amplitude_monitoring:UINT;
+						 {attribute 'hide'}
+					rsvd6:UINT;
+					Amplitude_monitoring_max_limit:UINT;
+					Amplitude_monitoring_min_limit:UINT;
+					Observer_bandwidth:UINT;
+					Observer_correction_factor_Iq_to_acc:UINT;
+						 {attribute 'hide'}
+					rsvd7:ARRAY[0..4] OF UDINT;*)
+				(*MES*)
+					(*Control_word:UINT;
+						 {attribute 'hide'}
+					rsvd8:UINT;
+					sin_offset:UINT;
+					cos_offset:UINT;
+					Sin_cos_Amplitude_correction:UINT;
+						 {attribute 'hide'}
+					rsvd9:UINT;
+					Amplitude_monitoring_max_limit:UINT;
+					Amplitude_monitoring_min_limit:UINT;
+					Observer_bandwidth:UINT;
+					Observer_correction_factor_Iq_to_acc:UINT;
+						 {attribute 'hide'}
+					rsvd10:ARRAY[0..4] OF UDINT;*)
+				(*HTL*)
+					(*Resulution_per_rotation:UDINT;
+					Length_per_signal_period:UDINT;
+						 {attribute 'hide'}
+					rsvd11:ARRAY[0..15] OF UINT;*)
+	(*Parameter channel*)
+		Parameter_interface:UINT;
+		Conector3:UINT;
+		Identifier:UDINT;
+		Bit_resolution_singelturn_position:UINT;
+		Bit_resolution_multiturn_position:UINT;
+		Number_of_clockcycles_to_get_singelturn_position:UINT;
+		Number_of_clockcycles_to_get_multiturn_position:UINT;
+		Digital_name_plate:UINT;
+		commutation_mode_adjustable_commutation_offset:UINT;
+		Linear_resolution_about_digital_interface_in_nm:UDINT;
+		//	 {attribute 'hide'}
+		Rsvd12:ARRAY[0..3] OF UINT;
+		data:ARRAY[0..29] OF UINT;
+	(*manufacturer limits settings*)
+		Maximum_continous_operation_speed:UINT;
+		Maximum_continous_mechenical_speed:UINT;
+		Maximum_temperature:UINT;
+		//	 {attribute 'hide'}
+		Rsvd13:ARRAY[0..2] OF UINT;
+
+	FeedbackOption :UDINT:=1;
+	//	 {attribute 'hide'}
+	Reserve :ARRAY[0..5] OF UINT;
+
+*)
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

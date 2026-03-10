@@ -1,0 +1,260 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="VALUE_6D" Id="{8f92ea71-93b2-4d67-90f9-c0a6f6f92a79}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK VALUE_6D 
+VAR_INPUT
+	Valid													:	BOOL ;
+	X														:	LREAL;
+	Y														:	LREAL;
+	Z														:	LREAL;
+	A														:		LREAL; //Rx
+	B														:		LREAL; //Ry
+	C														:		LREAL; //Rz	
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="copy" Id="{e5bcea79-3351-44ba-9dee-0cddd6f2542d}">
+      <Declaration><![CDATA[METHOD PUBLIC copy : BOOL //Return value = TRUE if execution finished
+VAR_IN_OUT
+	Source													:	VALUE_6D;
+END_VAR
+
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	Valid													:= Source.Valid;
+	X														:= Source.X;
+	Y														:= Source.Y;
+	Z														:= Source.Z;
+	A														:= Source.A;
+	B														:= Source.B;
+	C														:= Source.C;
+	copy													:= TRUE;
+	
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="delete" Id="{ba52151f-b05f-403e-bcbe-3b82c643eb5f}">
+      <Declaration><![CDATA[METHOD PUBLIC delete : BOOL //Return value = TRUE if execution finished - Valid bit will not change
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	X					 									:= 0.0;	
+	Y					 									:= 0.0;	
+	Z					 									:= 0.0;	
+	A						 								:= 0.0;	
+	B						 								:= 0.0;	
+	C						 								:= 0.0;	
+	delete													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="inPos" Id="{5764c6e2-613a-4bc0-a2f6-b9eec9cb524e}">
+      <Declaration><![CDATA[METHOD PUBLIC inPos : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	VALUE_6D;
+	Window													:	VALUE_6D;
+END_VAR             										
+VAR CONSTANT        										
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPos 														:= CAM(CheckPos.X, X, Window.X)
+																AND CAM(CheckPos.Y, Y ,Window.Y)
+																AND CAM(CheckPos.Z, Z,Window.Z)
+																AND CAM(CheckPos.A, A, Window.A)
+																AND CAM(CheckPos.B, B ,Window.B)
+																AND CAM(CheckPos.C, C,Window.C);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InPosABC" Id="{19836092-0641-44aa-8087-edd6e4ebb040}">
+      <Declaration><![CDATA[METHOD PUBLIC InPosABC : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	VALUE_6D;
+	Window													:	VALUE_6D;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosABC												 	:= CAM(CheckPos.A, A ,Window.A)
+																AND CAM(CheckPos.B, B ,Window.B)
+																AND CAM(CheckPos.C, C ,Window.C);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InPosAC" Id="{00cfa1d2-c823-4968-aab8-52a93757d30f}">
+      <Declaration><![CDATA[METHOD PUBLIC InPosAC : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	VALUE_6D;
+	Window													:	VALUE_6D;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosAC													 	:= CAM(CheckPos.A, A ,Window.A)
+																AND CAM(CheckPos.C, C ,Window.C);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="inPosByAxisNo" Id="{58cb5e23-c719-48ef-bfe1-6a2de833357f}">
+      <Declaration><![CDATA[METHOD PUBLIC inPosByAxisNo : BOOL //Return value = TRUE selected axis is within window of checkPos values
+VAR_INPUT
+	No					:	INT;
+END_VAR
+VAR_IN_OUT
+	CheckPos			:	VALUE_6D;
+	Window				:	VALUE_6D;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[inPosByAxisNo													:= (CAM(CheckPos.X, X ,Window.X) OR No <> 1)
+																AND (CAM(CheckPos.Y, Y ,Window.Y) OR No <> 2)
+																AND (CAM(CheckPos.Z, Z ,Window.Z) OR No <> 3)
+																AND (CAM(CheckPos.A, A ,Window.A) OR No <> 4)
+																AND (CAM(CheckPos.B, B ,Window.B) OR No <> 5)
+																AND (CAM(CheckPos.C, C ,Window.C) OR No <> 6);
+																]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="inPosXY" Id="{579cd1af-65bc-48e5-9b1f-f779cce4f2e6}">
+      <Declaration><![CDATA[METHOD PUBLIC inPosXY : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	VALUE_6D;
+	Window													:	VALUE_6D;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosXY													 	:= CAM(CheckPos.X, X ,Window.X)
+																AND CAM(CheckPos.Y, Y ,Window.Y);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InPosXYZ" Id="{a3554f3e-00c4-414d-a7b2-824eba9999c3}">
+      <Declaration><![CDATA[METHOD PUBLIC InPosXYZ : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	VALUE_6D;
+	Window													:	VALUE_6D;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosXYZ												 	:= CAM(CheckPos.X, X ,Window.X)
+																AND CAM(CheckPos.Y, Y ,Window.Y)
+																AND CAM(CheckPos.Z, Z ,Window.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="inPosXZ" Id="{a94f122e-9548-49b0-8a10-76c1a1826d16}">
+      <Declaration><![CDATA[METHOD PUBLIC inPosXZ : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	VALUE_6D;
+	Window													:	VALUE_6D;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosXZ												 	:= CAM(CheckPos.X, X ,Window.X)
+																AND CAM(CheckPos.Z, Z ,Window.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="inPosYZ" Id="{d52946e8-da18-40d0-9394-a9f3b02054d2}">
+      <Declaration><![CDATA[METHOD PUBLIC inPosYZ : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	VALUE_6D;
+	Window													:	VALUE_6D;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosYZ													 	:= CAM(CheckPos.Y, Y ,Window.Y)
+																AND CAM(CheckPos.Z, Z ,Window.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{a1a264d3-133b-4492-bc0f-1341f1df6111}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Delete data and reset valid , TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Delete(); 
+Valid														:= FALSE;
+reset														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="VALUE_6D">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.copy">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.delete">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.inPos">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.InPosABC">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.InPosAC">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.inPosByAxisNo">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.inPosXY">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.InPosXYZ">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.inPosXZ">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.inPosYZ">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_6D.reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

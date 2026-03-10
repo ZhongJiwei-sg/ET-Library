@@ -1,0 +1,77 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="ComPortEL6x22BEasyConnect" Id="{b61c25a2-74c3-4080-a3d8-37ec662a8159}" SpecialFunc="None">
+    <Declaration><![CDATA[//FB handles the backround communication to an EL6xxx in 22byte mode via FB  ComPortBackground and provides and handle to be used for FBs DeviceCom_SendRecBytes/String
+FUNCTION_BLOCK ComPortEL6x22BEasyConnect
+VAR_INPUT
+	Enable													: BOOL; 
+	Reset													: BOOL; //Calls ComReset FB
+	ComOut											AT %Q*	:	EL6OutData22B;
+END_VAR		
+VAR_IN_OUT
+	
+END_VAR
+VAR_OUTPUT
+	Connected												: BOOL;
+	ComIn											AT %I*	:	EL6inData22B;
+	Handle													:	ComPortDeviceCom_BufferHandle;
+	Error													: BOOL;
+	{attribute 'displaymode':='hex'}  
+	ErrorId													: ComError_t;
+END_VAR
+
+VAR
+(*  Memory *****************************************************)
+	
+(*  Timer ******************************************************)
+
+(*  Trigger ****************************************************)
+
+(*  Blocks *****************************************************)
+	ComBackground		 									:	ComPortBackground;
+END_VAR
+	
+VAR CONSTANT
+END_VAR
+	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[ComBackground(
+	Enable		:= Enable, 
+	ResetTrig	:= Reset, 
+	Mode		:= SERIALLINEMODE_EL6_22B, 
+	pComIn		:= ADR(ComIn), 
+	pComOut		:= ADR(ComOut), 
+	SizeComIn	:= SIZEOF(ComIn), 
+	Cfg			:= , 
+	TXBuffer	:= Handle.TXBuffer, 
+	RXBuffer	=> Handle.RXBuffer, 
+	PortOpened	=> Connected, 
+	Busy		=> , 
+	Error		=> Error, 
+	ErrorId		=> , 
+	ComErrorId	=> ErrorId);]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{a97a717f-ad12-470f-b20e-368c18058853}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset := ComBackground.reset();
+IF reset THEN Handle.Clear(); END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ComPortEL6x22BEasyConnect">
+      <LineId Id="624" Count="8" />
+      <LineId Id="638" Count="1" />
+      <LineId Id="635" Count="2" />
+      <LineId Id="415" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortEL6x22BEasyConnect.reset">
+      <LineId Id="5" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="39" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

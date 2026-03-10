@@ -1,0 +1,257 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="InOutExt" Id="{647d3063-11a8-4a21-977c-94974abe8c89}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK InOutExt EXTENDS InOut IMPLEMENTS I_ActuatorOnOff
+VAR_INPUT
+	ResetTrig												:	BOOL;	//Resets error with rising edge
+	Invert													:	BOOL ;			//Inverts the logic of varibale In (AT  %I*)
+	PT_Timeout												:	TIME := T#3S;  	//Time value until Timeout of process (Error)
+END_VAR                     				
+VAR_OUTPUT                  				
+	Busy													:	BOOL;			//Busy is TRUE at the rising edge of Execute and FALSE when one of the outputs Done, Aborted, or Error is set 
+	ErrorOn													:	BOOL;			//Timeout error waiting for IN changing to TRUE
+	ErrorOff												:	BOOL;			//Timeout error waiting for IN changing to FALSE
+	Done													:	BOOL;			//The Done output is set when the commanded action has been completed successfully 
+	Status													:	BYTE;			//8 different query Options (conditions see below)
+END_VAR                     	
+VAR                         	
+	tonRM													:	ton;			
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Actuator with feedback								*)
+(********************************************************)
+
+(********************************************************)
+	IF Q 
+	THEN
+		SwitchOn();
+	ELSE
+		SwitchOff();
+	END_IF
+	_runtimeChk();
+	_writeStatus();
+
+(********************************************************)
+	
+]]></ST>
+    </Implementation>
+    <Method Name="_runtimeChk" Id="{c378e84c-1691-41ed-abb0-7adccf5ff7ec}">
+      <Declaration><![CDATA[METHOD PROTECTED _runtimeChk : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	tonRM(
+		IN	:= Busy AND NOT ResetTrig,  
+		PT 	:= PT_Timeout,
+		Q	=> );
+		
+	ErrorOff 												:= tonRM.Q AND NOT Q;
+	ErrorOn 												:= tonRM.Q AND Q;
+
+	_runtimeChk									:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_writeStatus" Id="{efd782ea-5bf8-4af3-9115-6ca3f81749da}">
+      <Declaration><![CDATA[METHOD PROTECTED _writeStatus : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	Status.0 												:= NOT Q;
+	Status.1 												:= Q;
+	Status.2 												:= NOT (In XOR Invert);
+	Status.3 												:= In XOR Invert;
+	Status.4 												:= NOT ErrorOff;
+	Status.5 												:= NOT ErrorOn;
+	Status.6 												:= NOT Status.7;
+	Status.7 												:= ErrorOff OR ErrorOn;
+	
+	(* Result *)
+	_writeStatus											:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enable" Id="{86bedca1-f719-4711-8781-0f50125c7139}">
+      <Declaration><![CDATA[METHOD PUBLIC enable : BOOL //Result value = TRUE if successful executed (
+VAR_INPUT 
+	IN								: BOOL; //TRUE = ON/FALSE = OFF	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF IN
+THEN
+	enable							:= switchOn();
+ELSE
+	enable							:= switchOff();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="inError" Id="{e3e54c52-7e54-4a15-ae08-dc142e11ee2c}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public inError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5079d0d8-7e67-4176-9be8-f0e22561bc8c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inError := ErrorON or ErrorOff;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isBusy" Id="{41494301-3070-46bf-b762-5f50494b65a9}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isBusy : bool]]></Declaration>
+      <Get Name="Get" Id="{920aff45-75c7-4ee7-94eb-11fc38b2997b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy := Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOff" Id="{b60603c5-5ab3-45b8-9656-e62f4d164d45}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a555be63-d0f1-492b-b638-86b618d50d97}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOff := not Q;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOn" Id="{cd78518c-c0e0-4a25-b47b-635fd7d5fdc2}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4ea17b2c-a073-4535-b3de-be72bf4e1d60}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOn := Q;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="noFeed" Id="{407b63e6-b490-4105-9631-cfb901263134}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Public noFeed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{52428678-f59c-4b10-bd9f-9e67ad035cb0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[noFeed := FALSE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ok" Id="{48afc5da-6ad2-4cac-97de-41bc37fdbf80}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY Public ok : bool]]></Declaration>
+      <Get Name="Get" Id="{aeeb9e1f-c434-4f2e-bf01-133abc827e9f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ok := Q and Done or not Q and not Done;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{aca3af89-2235-470b-8b07-f4b22d382f8a}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[tonRM(IN := FALSE);
+reset := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOff" Id="{8454ad3e-73c9-42fa-a74e-209c840da13c}">
+      <Declaration><![CDATA[METHOD public switchOff : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	
+	Q														:= FALSE;
+	Done													:= NOT (In XOR Invert);
+	Busy													:= NOT Done;
+	switchOff												:= Done;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{6122d92e-c616-4361-85ed-87d86a564481}">
+      <Declaration><![CDATA[METHOD public switchOn : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	Q														:= TRUE;
+	Done													:= (In XOR Invert);
+	Busy													:= NOT Done;
+	switchOn												:= Done;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="InOutExt">
+      <LineId Id="87" Count="4" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="119" Count="2" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="92" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt._runtimeChk">
+      <LineId Id="20" Count="5" />
+      <LineId Id="14" Count="2" />
+    </LineIds>
+    <LineIds Name="InOutExt._writeStatus">
+      <LineId Id="49" Count="6" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="30" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.enable">
+      <LineId Id="6" Count="1" />
+      <LineId Id="9" Count="2" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.inError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.isOff.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.isOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.noFeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.ok.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.reset">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.switchOff">
+      <LineId Id="6" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="InOutExt.switchOn">
+      <LineId Id="15" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

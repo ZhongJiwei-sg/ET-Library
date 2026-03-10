@@ -1,0 +1,47 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="CiA_DS402Statusword_Lenze" Id="{82764e5a-29f2-49a1-8508-32a278c8d5ea}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Statusword_Lenze EXTENDS CiA_DS402Statusword
+VAR_INPUT
+END_VAR
+VAR_OUTPUT	
+	RPDOsNotActive				:	 BOOL; //Manufacturer specific_Bit8	
+
+	TargetReached				: BOOL; // Bit 10 in velocity 
+
+	BrakeOpened					: BOOL; //Manufacturer specific_Bit14
+	StoNotActive				: BOOL; //Manufacturer specific_Bit15
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="readStatusword" Id="{018869bc-0c41-4ff5-819a-4728df3b4f1d}">
+      <Declaration><![CDATA[METHOD PUBLIC readStatusword : BOOL
+VAR_INPUT
+	Statusword 					:	UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	RPDOsNotActive											:= Statusword.8;
+
+	TargetReached											:= Statusword.10;
+
+	BrakeOpened												:= Statusword.14;
+	StoNotActive											:= Statusword.15;
+
+	readStatusword											:= SUPER^.readStatusword(Statusword);
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Statusword_Lenze">
+      <LineId Id="110" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Statusword_Lenze.readStatusword">
+      <LineId Id="107" Count="4" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="95" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

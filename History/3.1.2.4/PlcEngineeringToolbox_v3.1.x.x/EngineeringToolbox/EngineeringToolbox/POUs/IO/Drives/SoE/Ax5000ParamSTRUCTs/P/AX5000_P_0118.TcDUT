@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0118" Id="{8c3ea191-ce10-4dd1-8528-d7a2d7d328fd}">
+    <Declaration><![CDATA[TYPE AX5000_P_0118 :
+STRUCT
+	ASM_slip_compension_factor:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,138 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EP9214" Id="{a4f8ede8-9181-4cb7-839e-b8777fc85c30}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EP9214
+VAR_OUTPUT CONSTANT
+	MIN_CHANNEL												: INT := 1;
+	MAX_CHANNEL												: INT := 4;
+END_VAR
+VAR_INPUT
+	EnableControlViaFieldbus					AT  %Q* 	: 	BOOL := FALSE;	//FB will be processed as long as enable is TRUE
+	ResetTrig									AT  %Q* 	: 	BOOL := FALSE;	//The box will be reseted with a rising edge 
+	
+	Channel													:	ARRAY[MIN_CHANNEL..MAX_CHANNEL] OF EP9214_CHANNEL;
+END_VAR     								
+VAR_OUTPUT  	
+	TempWarning									AT  %I* 	: 	BOOL;	//TRUE when temperature warning occurs
+	TempError									AT  %I* 	: 	BOOL;	//TRUE when temperature error occurs
+	UsWarning									AT  %I* 	: 	BOOL;	//TRUE when system voltage warning occurs
+	UsError										AT  %I* 	: 	BOOL;	//TRUE when system voltage error occurs
+	UpWarning									AT  %I* 	: 	BOOL;	//TRUE when peripheral voltage warning occurs
+	UpError										AT  %I* 	: 	BOOL;	//TRUE when peripheral voltage error occurs
+	GlobalError									AT  %I* 	: 	BOOL;	//TRUE when global error occurs
+	ResetInput									AT  %I* 	: 	BOOL;	//Resets box with a rising edge
+	TxPDOState									AT  %I* 	: 	BOOL;	
+	TxPDOToggle									AT  %I* 	: 	BOOL;	
+END_VAR     								
+VAR
+	i														:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Property Name="channelErrorUp" Id="{611851a2-a068-42bf-a3d8-0c105d3eb83e}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC channelErrorUp : int]]></Declaration>
+      <Get Name="Get" Id="{5d49fe8b-0a36-4c83-93a8-6936e300cc4b}">
+        <Declaration><![CDATA[VAR
+		i	:	int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ChannelErrorUp				:= 0;
+FOR i := MIN_CHANNEL TO MAX_CHANNEL do
+	IF Channel[i].ErrorUp
+	THEN
+		ChannelErrorUp			:= i;
+		EXIT;
+	END_IF	
+END_FOR
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="channelErrorUs" Id="{c1908eeb-7522-4a62-9124-70916dbee492}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC channelErrorUs : int]]></Declaration>
+      <Get Name="Get" Id="{95e34936-afd0-4d18-9d7c-d757c664718b}">
+        <Declaration><![CDATA[VAR
+		i	:	int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ChannelErrorUs				:= 0;
+FOR i := MIN_CHANNEL TO MAX_CHANNEL do
+	IF Channel[i].ErrorUs
+	THEN
+		ChannelErrorUs			:= i;
+		EXIT;
+	END_IF	
+END_FOR
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="channelWarningUp" Id="{fa88be83-7378-48cd-9837-8cc739e07773}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC channelWarningUp : int]]></Declaration>
+      <Get Name="Get" Id="{30a76b86-e5fe-4779-b04d-70803ca8a6ee}">
+        <Declaration><![CDATA[VAR
+		i	:	int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ChannelWarningUp					:= 0;
+FOR i := MIN_CHANNEL TO MAX_CHANNEL do
+	IF Channel[i].WarningUp	
+	THEN
+		ChannelWarningUp			:= i;
+		EXIT;
+	END_IF	
+END_FOR
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="channelWarningUs" Id="{25f37ab3-5fb0-46aa-9f8d-1cf081d94251}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC channelWarningUs : int]]></Declaration>
+      <Get Name="Get" Id="{4a15ca08-bf93-45a1-91b9-6092ffb105a3}">
+        <Declaration><![CDATA[VAR
+		i	:	int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ChannelWarningUs					:= 0;
+FOR i := MIN_CHANNEL TO MAX_CHANNEL do
+	IF Channel[i].WarningUs	
+	THEN
+		ChannelWarningUs			:= i;
+		EXIT;
+	END_IF	
+END_FOR
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="EP9214">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EP9214.channelErrorUp.Get">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EP9214.channelErrorUs.Get">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EP9214.channelWarningUp.Get">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EP9214.channelWarningUs.Get">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

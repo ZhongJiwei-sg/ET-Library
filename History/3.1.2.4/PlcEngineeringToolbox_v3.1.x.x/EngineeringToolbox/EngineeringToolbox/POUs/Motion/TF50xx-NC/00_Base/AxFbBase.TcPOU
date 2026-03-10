@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AxFbBase" Id="{d5ae11fd-111e-4a31-8bab-919faba6d9fa}" SpecialFunc="None">
+    <Declaration><![CDATA[//Axis FB template, inherited Execute, Busy etc from FbBase   
+FUNCTION_BLOCK AxFbBase EXTENDS FbBase 
+VAR_INPUT
+	rAxis													: REFERENCE TO AXIS_REF := 0; //Reference to AXIS_REF 
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	Active													: BOOL ; // If the axis movement is controlled by several functions, the Active output of each block indicates that the axis executes the command. 
+	CmdAborted												: BOOL ; // TRUE if a command is interrupted through another block (Busy and Error = FALSE)
+	ErrorText												: STRING(40); //Error text with name of internal used FB which causes the error
+END_VAR
+VAR 
+	LastErrorId												: UDINT := 0; //Last error id
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+]]></ST>
+    </Implementation>
+    <LineIds Name="AxFbBase">
+      <LineId Id="90" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

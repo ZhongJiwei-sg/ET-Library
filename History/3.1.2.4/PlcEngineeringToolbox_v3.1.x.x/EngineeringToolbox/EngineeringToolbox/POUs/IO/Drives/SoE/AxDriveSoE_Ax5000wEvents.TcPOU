@@ -1,0 +1,205 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxDriveSoE_Ax5000wEvents" Id="{18b28803-facd-419a-803a-b2b611a27ee5}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//AX5000 SoE status and diagnosis FB with eventlogger 
+FUNCTION_BLOCK AxDriveSoE_Ax5000wEvents EXTENDS AxDriveSoE_Ax5000
+VAR_INPUT
+	EnableEvent												:	BOOL := TRUE;
+	ConfirmTrig												:	BOOL ;
+	SourceId												:	UDINT := 102000; //SoE Drive default multisource Id + Ax id
+	Name													:	STRING(30) := '';
+	ErrorLimitPos											:	BOOL := FALSE;
+	ErrorLimitNeg											:	BOOL := FALSE;
+END_VAR                 									
+VAR_IN_OUT              									
+END_VAR                 									
+VAR_OUTPUT              	                    										
+	EventStatus												:	DWORD;
+	NoOfActiveEvents										:	INT;
+	Error													: 	BOOL; //ADS error SoE FBs
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT; //ADS error id of SoE FBs
+	ErrorText												: 	STRING(40);
+END_VAR
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR
+
+(* Zwischenspeicher *********************************************************************)
+
+
+(* Timer ********************************************************************************)
+
+(* Trigger ******************************************************************************)
+
+(* Bausteine ****************************************************************************)
+	Event													:	EventHandlingGrp10;
+
+(* Dummy Speicher **********************************************************)
+	i														: INT := 0 ;
+
+
+(****************************************************************************)
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(************************************************************************************)
+	(*																					*)
+	(*		B E C K H O F F   N E W   A U T O M A T I O N   T E C H N O L O G Y    		*)
+	(*																					*)
+	(*		Eiserstr.5	D-33415 Verl	Germany	phone:	+49-5246-0	www.Beckhoff.Com	*)
+    (*																					*)
+    (*		Bausteinbeschreibung	:	AX5000 Drive Ctrl								*)
+	(*		TwinCAT-Version			:	3.x or higher 									*)
+	(*		Version					:	V3.0 											*)
+ 	(*		Autor					:	Daniel Schlingmann								*)
+	(*		Lib						:	TcMc2Drive.lib / TcDrive.Lib					*)
+	(*																					*)
+	(************************************************************************************)
+
+(* Trigger reset if by active quit **********)
+	IF ConfirmTrig
+	THEN
+		confirm();
+	END_IF
+
+(* Call super *****************************)
+	SUPER^();
+	
+(* Call events ****************************************************)
+	_callEvents();
+
+(******************************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <Method Name="_callEvents" Id="{d239870f-f4ba-4bcc-8b6b-8c9e38577893}">
+      <Declaration><![CDATA[METHOD PRIVATE _callEvents : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+(* Check if msg activ and init some parameter ***********************)
+	IF Event.no[1].Text2 <> Name AND Name <> '' OR Event.no[1].Text2 = '' AND rAxis.NcToPlc.AxisId <> 0
+	THEN
+		Event.no[1].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_HINT;
+
+		(* Init Name *)
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+			Event.no[i].Text2								:= SEL(LEN(name)>1,CONCAT('Axis id:',DWORD_TO_STRING(rAxis.NcToPlc.AxisId)),name);
+		END_FOR
+	END_IF
+
+(* workl Event Ctrl *************************************************)
+	Event(
+		ConfirmTrig := ConfirmTrig,
+		Disable		:= rAxis.NcToPlc.AxisId = 0 OR NOT EnableEvent,
+		SourceId	:= SourceId + rAxis.NcToPlc.AxisId,
+		Status		=> EventStatus,
+		NoOfActiveEvents => NoOfActiveEvents);
+
+(* Error Hdl FB ******************************************************************)
+	IF rAxis.Status.OpMode.SimulationAxis OR Event.confirmTrig
+	THEN
+		;
+	ELSIF SoEDriveReset.bError
+	THEN
+		Error												:=	TRUE;
+		ErrorId												:= 0;
+		SercosErrorId										:= SoEDriveReset.iSercosErrId;
+		ErrorText											:= CONCAT('SoeDrvReset SercosErrId: ',DWORD_TO_HEXSTR(SoEDriveReset.iSercosErrId,4,FALSE));
+		ErrorText											:=	CONCAT(CONCAT(ErrorText,', ADSErrId: '),UINT_TO_STRING(SoEDriveReset.iAdsErrId));
+	ELSIF SoEAX5000SetMotorCtrlWord.bError
+	THEN
+		Error												:=	TRUE;
+		ErrorId												:= 0;
+		SercosErrorId										:= SoEAX5000SetMotorCtrlWord.iSercosErrId;
+		ErrorText											:= CONCAT('SoESetMotorCtrlWord SercosErrId: ',DWORD_TO_HEXSTR(SoEAX5000SetMotorCtrlWord.iSercosErrId,4,FALSE));
+		ErrorText											:=	CONCAT(CONCAT(ErrorText,', ADSErrId: '),UINT_TO_STRING(SoEAX5000SetMotorCtrlWord.iAdsErrId));
+	ELSIF SoERead.bError
+	THEN
+		Error												:=	TRUE;
+		ErrorId												:= 0;
+		SercosErrorId										:= SoERead.iSercosErrId;
+		ErrorText											:= CONCAT('SoERead SercosErrId: ',DWORD_TO_HEXSTR(SoERead.iSercosErrId ,4,FALSE));
+		ErrorText											:=	CONCAT(CONCAT(ErrorText,', ADSErrId: '),UINT_TO_STRING(SoERead.iAdsErrId));
+	END_IF
+
+(* Event Logger Meldungen *****************************************************)
+	Event.no[1].Flag 										:= Status.bNotReadyToPowerUp;
+	Event.no[2].Flag 										:= Status.bDrvShutdownBitC1D AND stateReadStatus = 0; Event.no[2].pText3 := ADR(DiagMsg.strData);
+	Event.no[3].Flag 										:= FALSE;
+	Event.no[4].Flag 										:= ErrorLimitPos;
+	Event.no[5].Flag 										:= ErrorLimitNeg;
+	Event.no[6].Flag 										:= SafetyError AND DiagNumber <> 16#0000_FDD9;
+	Event.no[7].Flag 										:= FALSE;
+	Event.no[8].Flag 										:= FALSE;
+	Event.no[9].Flag 										:= FALSE;
+	Event.no[10].Flag 										:= Error; Event.no[10].Text1 := TO_STRING(ErrorId);
+	
+(************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="confirm" Id="{b4b515a5-959e-4c93-922c-9465b2a6ff3b}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : BOOL //Return value = TRUE if busy
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Event.confirm();
+Error												:= FALSE;
+ErrorId												:= 0;
+SercosErrorId										:= 0;
+ErrorText											:= '';
+		
+confirm 											:= SUPER^.reset();
+]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveSoE_Ax5000wEvents">
+      <LineId Id="3" Count="39" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000wEvents._callEvents">
+      <LineId Id="3" Count="58" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000wEvents.confirm">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

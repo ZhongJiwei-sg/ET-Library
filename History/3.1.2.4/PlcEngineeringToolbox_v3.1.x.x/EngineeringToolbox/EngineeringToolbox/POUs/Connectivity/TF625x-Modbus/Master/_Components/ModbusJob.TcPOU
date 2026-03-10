@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="ModbusJob" Id="{e1f85871-53c6-43b4-bcca-cc8cba56ee95}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+// description of Slave Job (data structure)
+FUNCTION_BLOCK ModbusJob	
+VAR_INPUT
+	FunctionCode		:	BYTE;
+	StartAddress		:	WORD;
+	Quantity			:	WORD;
+	Valid				:	BOOL;
+	Timestamp			:	DATE_AND_TIME;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="init" Id="{8b5e6970-f463-47cc-ac38-e062be9549a4}">
+      <Declaration><![CDATA[METHOD PUBLIC init : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	functionCode											:= 0;
+	startAddress											:= 0;
+	valid													:= FALSE;
+	MEMSET(ADR(quantity), 16#0, SIZEOF(quantity));	
+	MEMSET(ADR(timeStamp), 16#0, SIZEOF(timeStamp));
+	Init													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ModbusJob">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ModbusJob.init">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

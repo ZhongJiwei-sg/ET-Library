@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <DUT Name="eLCID" Id="{3db8801d-2b02-493e-a94a-fab416801281}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+TYPE eLCID :
+(
+// Code: 	https://de.wikipedia.org/wiki/ISO-3166-1-Kodierliste
+// LCID:	https://msdn.microsoft.com/de-de/goglobal/bb964664.aspx
+// LCID:	https://winprotocoldoc.blob.core.windows.net/productionwindowsarchives/MS-LCID/%5bMS-LCID%5d.pdf
+
+//	ISO3166 ALPHA-2
+	NONE					:= 0,
+	CZ						:= 1029, // Czech - 1029 
+	DK						:= 1030, // Danish - 1030
+	DE						:= 1031, // German - 1033
+	GR						:= 1032, // Greek - 1032
+	US						:= 1033, // English(US) - 1033
+	ES						:= 1034, // Spanish(Spain) - 1034
+	FI						:= 1035, // Finnish - 1035
+	FR						:= 1036, // French(France) - 1036	
+	IT						:= 1040, // Italian - 1040
+	NL						:= 1043, // Dutch(Netherlands) - 1043
+	NO						:= 1044, // Norwegian - 1044
+	PL						:= 1045, // Polish - 1045
+	RU						:= 1049, // Russian - 1049
+	SE						:= 1053, // Swedish(Sweden) - 1053
+	CA						:= 1099, // Canadian - 1099
+	TR						:= 1055, // Turkish - 1055
+	CN						:= 2052, // Chinese(CN-Simplified) - 2052
+	GB						:= 2057, // English(UK) - 2057	
+	PT						:= 2070 // Portuguese(Portugal) - 2057	
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

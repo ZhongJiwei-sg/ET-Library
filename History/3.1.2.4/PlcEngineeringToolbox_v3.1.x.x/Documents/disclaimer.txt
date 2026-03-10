@@ -1,0 +1,26 @@
+.. Disclaimer:: This disclaimer contains statements about the use of this library.
+
+-It is incumbent on the customer to check and decide whether the library and provided function is suitable for use his particular application
+
+-This library is provided "as is" and neither a part of TwinCAT3 nor directly supported by Beckhoff Automation
+
+-There is no warranty given that the source code, which is made available with this library is complete or accurate
+
+-The use is free of charge and on your own risk with the agreement that you will be solely responsible for any damage to your system or machine
+
+-In no event shall the author or Beckhoff be liable for any claim, damages or other liability assumed for errors and/or omissions caused by it's use
+
+For support please contact the Beckhoff Industry Management for Electronics Manufacturing, D.Schlingmann@Beckhoff.com
+
+© Beckhoff Automation GmbH & Co. KG,
+
+The reproduction, distribution and utilisation of this library or parts of it as well as the communication of its content to others without express authorisation is prohibited held liable for the payment of damages.
+
+All rights reserved in the event of the grant of a patent, utility model or design.
+
+
+
+
+
+
+

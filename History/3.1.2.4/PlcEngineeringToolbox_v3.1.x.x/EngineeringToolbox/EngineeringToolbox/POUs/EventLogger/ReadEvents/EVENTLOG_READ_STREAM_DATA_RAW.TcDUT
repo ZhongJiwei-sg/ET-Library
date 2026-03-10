@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <DUT Name="EVENTLOG_READ_STREAM_DATA_RAW" Id="{691e12c6-55c4-4607-97f7-80a7d1a576d0}">
+    <Declaration><![CDATA[TYPE EVENTLOG_READ_STREAM_DATA_RAW :
+STRUCT
+	cb						: DWORD;	
+	InvokeId				: DWORD;	
+	Id						: DWORD;
+	SrcId					: DWORD;
+	AdsAddr					: ARRAY [0..5] OF BYTE;
+	AddrHint				: ARRAY [0..1] OF BYTE;
+	Class					: DWORD;
+	Flags					: DWORD;
+	Prio					: DWORD;
+	State					: DWORD;
+	UserData				: DWORD;
+	zFmtProgId				: STRING(31);
+
+	TimeSignaled			: T_FILETIME; //In UTC
+	TimeReseted				: T_FILETIME; //In UTC
+	TimeConfirmed			: T_FILETIME; //In UTC
+
+	evtData					: EVENTLOG_READ_STREAM_DATA_RAW_EX;
+	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="FbBaseExt" Id="{018d0601-a670-4a04-adca-e1c28636a2ca}" SpecialFunc="None">
+    <Declaration><![CDATA[//Template for PlcOpen FB implementations with local path variable filled by attribute 'instance-path'
+{attribute 'reflection'}
+FUNCTION_BLOCK FbBaseExt EXTENDS FbBase
+VAR_INPUT
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+    {attribute 'instance-path'}
+    {attribute 'no_init'}
+    Path  													: STRING;
+END_VAR
+VAR 
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+]]></ST>
+    </Implementation>
+    <LineIds Name="FbBaseExt">
+      <LineId Id="90" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

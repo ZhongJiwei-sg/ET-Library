@@ -1,0 +1,575 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MDP_Info" Id="{6b4ddf30-a4b5-415c-b0bd-618b9d2fe94f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Wrapper for available MDP_xxxx FBs of the lib, based on Beckhoff MDP - invalid values are reported via EventLogger 
+//based on Tc2_MDP.lib - please see Beckhoff documentation for further information about Tc2_MDP.lib (IPC diagnostics)
+FUNCTION_BLOCK MDP_Info EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	FNC_READ_ALL											:	INT := 0;
+	FNC_READ_MOD_LIST										:	INT := 1;
+	FNC_READ_MB												:	INT := 2;
+	FNC_READ_CPU											:	INT := 3;
+	FNC_READ_FAN											:	INT := 4;
+	FNC_READ_SD												:	INT := 5;
+	FNC_READ_RAID											:	INT := 6;
+	FNC_READ_UPS											:	INT := 7;
+END_VAR                 									
+VAR_INPUT               									
+	AmsNetId												: 	T_AmsNetId := '';	//AmsNetId as text
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT; //Ads timeout
+	Fnc														:	INT (FNC_READ_ALL..FNC_READ_UPS) := FNC_READ_ALL; //select function to be read
+(* Components *)            								
+	ModList													:	MDP_ReadModulList;	//see content in FB
+	MB														:	MDP_Mainboard;		//see content in FB
+	CPU														:	MDP_CPU;			//see content in FB
+	FAN														:	MDP_Fan;			//see content in FB
+	SD														:	MDP_SiliconDrives;	//see content in FB
+	RAID													:	MDP_RaidSimple;		//see content in FB
+	UPS														:	MDP_UPS;			//see content in FB
+END_VAR                     								
+VAR_OUTPUT                  								
+	TotalCycleTime											:	TIME;	//Cylce time to execute function block with mode read all        
+	ErrorGrp												:	E_MDP_ErrGroup;
+	ErrorFnc												:	STRING(15);
+END_VAR
+VAR
+	MemFnc													:	INT;
+	MemExecute												:	BOOL;
+	MemErrorFnc												:	STRING(15);
+	MemErrorid												:	UDINT;
+	MemErrorGrp												:	E_MDP_ErrGroup;
+	MemTimeStartCycle										:	TIME;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Execute all available MDP_xxxxx fb 			*)
+	(************************************************)
+
+(* Sequence ********************************************)
+	IF Execute
+		AND state = 0
+	THEN
+		ReadAll(Execute	:= Execute);
+	ELSIF state <> 0
+	THEN
+		ReadAll(Execute	:= Execute);
+	END_IF
+
+(*****************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="readAll" Id="{0c7eed83-d6db-4519-83fa-6ce7c3a99624}">
+      <Declaration><![CDATA[METHOD PUBLIC readAll : BOOL //Return value = TRUE if busy;
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	THIS^.Execute											:= Execute;
+
+	IF Execute
+		AND State = 0
+	THEN
+		MemFnc												:= Fnc;
+		CASE Fnc OF                                     	
+		FNC_READ_MOD_LIST:		state						:= 10;
+		FNC_READ_MB:			state						:= 20;
+		FNC_READ_CPU:			state						:= 30;
+		FNC_READ_FAN:			state						:= 40;
+		FNC_READ_SD:			state						:= 50;
+		FNC_READ_RAID:	 		state						:= 60;
+		FNC_READ_UPS:	 		state						:= 70;
+		ELSE (* Read All *)
+			MemFnc											:= FNC_READ_ALL;
+			state											:= 10;
+		END_CASE
+		MemTimeStartCycle									:= TIME();
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		Errorid												:= 0;
+		ErrorFnc											:= '';
+		ErrorGrp											:= eMDP_Err_NoError;
+		MemExecute											:= FALSE;
+		MemErrorid											:= 0;
+		MemErrorFnc											:= '';
+		MemErrorGrp											:= eMDP_Err_NoError;
+	ELSIF NOT Execute
+		AND State = 99
+	THEN
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		Errorid												:= 0;
+		ErrorFnc											:= '';
+		ErrorGrp											:= eMDP_Err_NoError;
+		MemExecute											:= FALSE;
+		MemErrorid											:= 0;
+		MemErrorFnc											:= '';
+		MemErrorGrp											:= eMDP_Err_NoError;
+		ReadModList(FALSE);     						
+		ReadMB(FALSE);
+		ReadCPU(FALSE);
+		ReadFAN(FALSE);
+		ReadSD(FALSE);
+		ReadRaid(FALSE);
+	END_IF
+
+	CASE state OF
+	10:
+
+		MemExecute											:= TRUE;
+		ReadModList(MemExecute);
+		IF NOT ModList.Busy
+		THEN
+			IF MemFnc = FNC_READ_ALL
+			THEN
+				IF Error AND MemErrorid = 0 
+				THEN
+					MemErrorId								:= Errorid; 
+					MemErrorFnc 							:= CONCAT('ReadModList Fnc:',TO_STRING(FNC_READ_MOD_LIST)); 
+					MemErrorGrp 							:= ErrorGrp;
+				END_IF              						
+				Busy										:= TRUE;
+				Done										:= FALSE;
+				Error										:= FALSE;
+				Errorid										:= 0;
+				ErrorGrp									:= eMDP_Err_NoError;
+				state										:= 20;
+			ELSE                    						
+				state										:= 99;
+			END_IF
+		END_IF
+
+	20:
+		MemExecute											:= TRUE;
+		ReadMB(MemExecute);
+		IF NOT MB.Busy
+		THEN
+			IF MemFnc = FNC_READ_ALL
+			THEN
+				IF Error AND MemErrorid = 0 
+				THEN
+					MemErrorId								:= Errorid; 
+					MemErrorFnc 							:= CONCAT('ReadMB Fnc: ',TO_STRING(FNC_READ_MB));  
+					MemErrorGrp 							:= ErrorGrp;
+				END_IF              						
+				Busy										:= TRUE;
+				Done										:= FALSE;
+				Error										:= FALSE;
+				Errorid										:= 0;
+				ErrorGrp									:= eMDP_Err_NoError;
+				state										:= 30;
+			ELSE                    						
+				state										:= 99;
+			END_IF                  	
+		END_IF
+
+	30:
+		MemExecute											:= TRUE;
+		ReadCPU(MemExecute);
+		IF NOT CPU.Busy
+		THEN
+			IF MemFnc = FNC_READ_ALL
+			THEN
+				IF Error AND MemErrorid = 0 THEN
+					MemErrorId								:= Errorid; 
+					MemErrorFnc 							:= CONCAT('ReadCPU Fnc: ',TO_STRING(FNC_READ_CPU));  
+					MemErrorGrp 							:= ErrorGrp;
+				END_IF              						
+				Busy										:= TRUE;
+				Done										:= FALSE;
+				Error										:= FALSE;
+				Errorid										:= 0;
+				ErrorGrp									:= eMDP_Err_NoError;
+				state										:= 40;
+			ELSE                    						
+				state										:= 99;
+			END_IF
+		END_IF
+
+	40:
+		MemExecute											:= TRUE;
+		ReadFan(MemExecute);
+		IF NOT Fan.Busy
+		THEN
+			IF MemFnc = FNC_READ_ALL
+			THEN
+				IF Error AND MemErrorid = 0 
+				THEN
+					MemErrorId								:= Errorid; 
+					MemErrorFnc 							:= CONCAT('ReadFan Fnc: ',TO_STRING(FNC_READ_FAN));  
+					MemErrorGrp 							:= ErrorGrp;
+				END_IF              						
+				Busy										:= TRUE;
+				Done										:= FALSE;
+				Error										:= FALSE;
+				Errorid										:= 0;
+				ErrorGrp									:= eMDP_Err_NoError;
+				state										:= 50;
+			ELSE                    						
+				state										:= 99;
+			END_IF
+		END_IF
+
+	50:
+		MemExecute											:= TRUE;		
+		ReadSD(MemExecute);
+		
+		IF NOT SD.Busy
+		THEN
+			IF MemFnc = FNC_READ_ALL
+			THEN
+				IF Error AND MemErrorid = 0 
+				THEN				
+					MemErrorId								:= Errorid; 
+					MemErrorFnc 							:= CONCAT('ReadSD Fnc: ',TO_STRING(FNC_READ_SD)); 
+					MemErrorGrp 							:= ErrorGrp;
+				END_IF              						
+				Busy										:= TRUE;
+				Done										:= FALSE;
+				Error										:= FALSE;
+				Errorid										:= 0;
+				ErrorGrp									:= eMDP_Err_NoError;
+				state										:= 60;
+			ELSE                    						
+				state										:= 99;
+			END_IF                  	
+		END_IF
+
+	60:
+		MemExecute											:= TRUE;
+		ReadRaid(MemExecute);
+		IF NOT Raid.Busy
+		THEN
+			IF MemFnc = FNC_READ_ALL
+			THEN
+				IF Error AND MemErrorid = 0 
+				THEN
+					MemErrorId								:= Errorid; 
+					MemErrorFnc 							:= CONCAT('ReadRaid Fnc: ',TO_STRING(FNC_READ_RAID));
+					MemErrorGrp 							:= ErrorGrp;
+				END_IF              						
+				Busy										:= TRUE;
+				Done										:= FALSE;
+				Error										:= FALSE;
+				Errorid										:= 0;
+				ErrorGrp									:= eMDP_Err_NoError;
+				state										:= 70;
+			ELSE                    						
+				state										:= 99;
+			END_IF
+		END_IF
+
+	70:
+		MemExecute											:= TRUE;
+		ReadUPS(MemExecute);
+		IF NOT UPS.Busy
+		THEN
+			IF TRUE
+			THEN
+				IF Error AND MemErrorid = 0 
+				THEN
+					MemErrorId								:= Errorid; 
+					MemErrorFnc 							:= CONCAT('ReadUPS Fnc: ',TO_STRING(FNC_READ_UPS));
+					MemErrorGrp 							:= ErrorGrp;
+				END_IF
+				Busy										:= FALSE;
+				Done										:= MemErrorId = 0;
+				Error										:= MemErrorId <> 0;
+				Errorid										:= MemErrorid;
+				ErrorFnc									:= MemErrorFnc;
+				ErrorGrp									:= MemErrorGrp;
+				state										:= 99;
+			ELSE                    						
+				state										:= 99;
+			END_IF
+		END_IF
+
+	99:;
+	
+	END_CASE
+
+	IF state = 99
+	THEN
+		TotalCycleTime	 									:= TIME() - MemTimeStartCycle;
+		IF NOT Execute
+		THEN
+			state											:= 0;
+			ReadModList(FALSE);         					
+			ReadMB(FALSE);              					
+			ReadCPU(FALSE);             					
+			ReadFAN(FALSE);             					
+			ReadSD(FALSE);              					
+			ReadRaid(FALSE);            					
+			ReadUPS(FALSE);             	
+		END_IF                          	
+	END_IF                              	
+	                                    	
+	ReadAll													:= Busy;
+
+(***********************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readCPU" Id="{61afcc45-7679-4252-b890-d032ece5aeb1}">
+      <Declaration><![CDATA[METHOD PUBLIC readCPU : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.Execute												:= Execute;
+
+CPU(
+	Execute				:= MemExecute OR Execute,
+	AmsNetId			:= AmsNetId,
+	Timeout				:= Timeout,
+	MIN_CPU				=> ,
+	MAX_CPU				=> ,
+	Busy				=> Busy,
+	Done				=> Done,
+	Error				=> Error,
+	ErrorId				=> Errorid,
+	ErrorGrp 			=> ErrorGrp,
+	Frequency			=> ,
+	Usage				=> ,
+	Temperature			=> ,
+	AverageFrequency	=> ,
+	AverageUsage		=> ,
+	AverageTemperature	=> ,
+	Count				=> );
+
+MemExecute 													:= FALSE;
+	        												
+ReadCPU														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readFan" Id="{335091f5-5661-444a-aa27-840b3f806863}">
+      <Declaration><![CDATA[METHOD PUBLIC readFan : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.Execute												:= Execute;
+
+FAN(
+	Execute		:= MemExecute OR Execute,
+	AmsNetId	:= AmsNetid,
+	Timeout		:= Timeout,
+	MIN_FAN		=> ,
+	MAX_FAN		=> ,
+	Busy		=> Busy,
+	Done		=> Done,
+	Error		=> Error,
+	ErrorId		=> ErrorId,
+	ErrorGrp 	=> ErrorGrp,
+	Speed		=> ,
+	Count		=> );
+
+MemExecute 													:= FALSE;
+           												
+ReadFan														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readMB" Id="{d9e3cff9-4fd3-4580-b5e8-e4692a0e31e9}">
+      <Declaration><![CDATA[METHOD PUBLIC readMB : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.Execute												:= Execute;
+
+MB(
+	Execute			:= MemExecute OR Execute,
+	AmsNetId		:= AmsNetId,
+	Timeout			:= Timeout,
+	MIN_VOLTAGE		=> ,
+	MAX_VOLTAGE		=> ,
+	Busy			=> Busy,
+	Done			=> Done,
+	Error			=> Error,
+	ErrorId			=> ErrorId,
+	ErrorGrp		=> Errorgrp,
+	MB_Type			=> ,
+	SerielNo		=> ,
+	ProdDate		=> ,
+	BootCount		=> ,
+	OpTime			=> ,
+	MinBoardTemp	=> ,
+	MaxBoardTemp	=> ,
+	MinInputVolt	=> ,
+	MaxInputVolt	=> ,
+	MB_Temp			=> ,
+	VoltLocation	=> ,
+	VoltageValue	=> ,
+	VoltageNominal	=> ,
+	VoltCount		=> );
+
+MemExecute 													:= FALSE;
+            												
+ReadMB														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readModList" Id="{3bbeb84c-b635-4aa9-8737-a8bf4a8561ea}">
+      <Declaration><![CDATA[METHOD PUBLIC readModList : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.Execute												:= Execute;
+
+ModList(
+	Execute		:= MemExecute OR Execute,
+	AmsNetId	:= AmsNetId,
+	Timeout		:= Timeout,
+	Busy		=> Busy,
+	Done		=> done,
+	Error		=> Error,
+	ErrorId		=> ErrorId,
+	ErrorGrp 	=> ErrorGrp );
+
+MemExecute 													:= FALSE;
+            												
+ReadModList													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readRaid" Id="{45086131-5c9e-4d4d-a776-8c57cbe075f3}">
+      <Declaration><![CDATA[METHOD PUBLIC readRaid : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.Execute												:= Execute;
+
+RAID(
+	Execute			:= Execute OR MemExecute,
+	AmsNetId		:= AmsNetId,
+	Timeout			:= timeout,
+	MIN_DRIVE		=> ,
+	MAX_DRIVE		=> ,
+	Busy			=> Busy,
+	Done			=> done,
+	Error			=> Error,
+	ErrorId			=> ErrorId,
+	ErrorGrp 		=> ErrorGrp,
+	CntrState		=> ,
+	CntrOfflReason	=> ,
+	SetType			=> ,
+	SetState		=> ,
+	SetInfo			=> ,
+	CountDrives		=> ,
+	DriveSTATE		=> ,
+	CountRAIDSets	=> );
+
+MemExecute 													:= FALSE;
+                											
+ReadRaid													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readSD" Id="{48ae8f0a-5c34-4f9a-8010-92cfc5f90585}">
+      <Declaration><![CDATA[METHOD PUBLIC readSD : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute		:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.Execute												:= Execute;
+
+SD(
+	Execute			:= MemExecute OR Execute,
+	AmsNetId		:= AmsNetid,
+	Timeout			:= timeout,
+	MIN_DRIVES		=> ,
+	MAX_DRIVES		=> ,
+	Busy			=> Busy,
+	Done			=> Done,
+	Error			=> Error,
+	ErrorId			=> Errorid,
+	ErrorGrp 		=> ErrorGrp,
+	TotEraseCounts	=> ,
+	Usage			=> ,
+	NoOfSpares		=> ,
+	SparedUsed		=> ,
+	Count			=> );
+
+MemExecute	 												:= FALSE;
+                											
+ReadSD														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readUPS" Id="{0fb955c2-716b-46f6-a0cf-3cb2ecb10484}">
+      <Declaration><![CDATA[METHOD PUBLIC readUPS : Bool //Return value = TRUE if busy
+VAR_INPUT
+	Execute		:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.Execute												:= Execute;
+
+UPS(
+	Execute					:= MemExecute OR Execute,
+	AmsNetId				:= AmsNetid,
+	Timeout					:= timeout,
+	Busy					=> Busy,
+	Done					=> Done,
+	Error					=> Error,
+	ErrorId					=> Errorid,
+	ErrorGrp				=> ErrorGrp,
+	Model					=> ,
+	VendorName				=> ,
+	PowerStatus				=> ,
+	ComStatus				=> ,
+	BatteryStatus			=> ,
+	BatteryCapacity			=> ,
+	BatteryRuntime			=> ,
+	PersPowerFailCounter	=> ,
+	PowerFailCounter		=> ,
+	FanError				=> ,
+	NoBattery				=> );
+
+MemExecute 													:= FALSE;
+ReadUPS														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="MDP_Info">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_Info.readAll">
+      <LineId Id="3" Count="242" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_Info.readCPU">
+      <LineId Id="3" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_Info.readFan">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_Info.readMB">
+      <LineId Id="3" Count="29" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_Info.readModList">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_Info.readRaid">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_Info.readSD">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MDP_Info.readUPS">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

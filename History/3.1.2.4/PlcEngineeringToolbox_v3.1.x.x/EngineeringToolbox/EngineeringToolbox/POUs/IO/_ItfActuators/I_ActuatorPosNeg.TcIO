@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorPosNeg" Id="{c1cd79fb-ef10-4df4-a967-a7af4ba9ed11}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorPosNeg EXTENDS I_ActuatorBase
+
+]]></Declaration>
+    <Property Name="negativeOk" Id="{acaaf001-24c3-49e1-a0b0-ae4d3cb97674}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public negativeOk : BOOL]]></Declaration>
+      <Get Name="Get" Id="{64c8668d-5829-4441-8bdf-4cc05643fa43}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="negativeOn" Id="{52c08776-8aa9-41d5-92fc-8e4de4251cdf}">
+      <Declaration><![CDATA[METHOD PUBLIC negativeOn : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="positiveOk" Id="{c368d4ad-cb52-4aac-9776-e44d44da6954}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public positiveOk : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3a19b69a-56a6-4b5b-ab7b-7a647caed44d}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="positiveOn" Id="{552a88d5-2c90-430d-ac56-c7f8d70f3f54}">
+      <Declaration><![CDATA[METHOD PUBLIC positiveOn : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

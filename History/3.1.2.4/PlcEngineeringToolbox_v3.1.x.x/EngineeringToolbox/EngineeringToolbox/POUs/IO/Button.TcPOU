@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="Button" Id="{8d336af3-4a9d-4b3c-8acf-c17d18307046}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK Button 
+VAR_INPUT
+	Enable													:	BOOL := TRUE;	//FB will be processed as long as enable is TRUE 
+	Force													:	BOOL := FALSE; 	//simulates Input signal
+	Invert													:	BOOL := FALSE; 	//inverts the Hardware Input
+	LED												AT  %Q*	:	BOOL;			//LED/Light hardware output
+END_VAR         									
+VAR_OUTPUT
+	Q														:	BOOL;	//direct signal
+	Q_RT													:	BOOL;	//R_Trig signal of delay Q
+	Q_FT													:	BOOL;	//F_Trig signal of delay Q
+	Q_TGL													:	BOOL;	//Toggle -> use flag Q_RT
+	In												AT  %I*	:	BOOL; 	//Hardware Input
+END_VAR
+VAR
+	Mem														:	BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Taster mit Togglefunktion V1.0						*)
+(********************************************************)
+
+(********************************************************)
+Mem															:= Q;
+Q 															:= ((In OR Force) XOR Invert) AND Enable;
+Q_RT 														:= NOT Mem AND Q;
+Q_FT														:= Mem AND NOT Q;
+Q_TGL 														:= (Q_RT XOR Q_TGL);
+(********************************************************)]]></ST>
+    </Implementation>
+    <Method Name="setDisable" Id="{5217cc95-77d1-45cb-b2be-7fa2aff8d790}">
+      <Declaration><![CDATA[METHOD PUBLIC setDisable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enable 														:= FALSE;
+setDisable													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setEnable" Id="{9e14b349-6ddf-4e80-acb3-abef93acff17}">
+      <Declaration><![CDATA[METHOD PUBLIC setEnable : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enable 														:= TRUE;
+setEnable													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setLedOFF" Id="{2a515571-2f10-4c92-925a-5b6fc83f4aa5}">
+      <Declaration><![CDATA[METHOD PUBLIC setLedOFF : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[LED 														:= FALSE;
+setLEDOff													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setLedON" Id="{8a7aa120-730c-423f-a2c4-816a87c9db53}">
+      <Declaration><![CDATA[METHOD PUBLIC setLedON : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[LED 														:= TRUE;
+setLedON													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TGL" Id="{65570dd6-f3cd-474e-8e29-c687ca40f8d0}">
+      <Declaration><![CDATA[METHOD PUBLIC TGL : booL //Return value = Q_TGL status
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TGL := Q_TGL 														:= NOT Q_TGL;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TglOff" Id="{684fa877-1b81-4130-af98-e07e88e299cc}">
+      <Declaration><![CDATA[METHOD PUBLIC TglOff : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q_TGL 														:= FALSE;
+TglOFF														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TglOn" Id="{e5a557a0-273f-431f-b41f-b951ba0c09aa}">
+      <Declaration><![CDATA[METHOD PUBLIC TglOn : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q_TGL 														:= TRUE;
+TglON														:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Button">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Button.setDisable">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="Button.setEnable">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="Button.setLedOFF">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="Button.setLedON">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="Button.TGL">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Button.TglOff">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="Button.TglOn">
+      <LineId Id="2" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

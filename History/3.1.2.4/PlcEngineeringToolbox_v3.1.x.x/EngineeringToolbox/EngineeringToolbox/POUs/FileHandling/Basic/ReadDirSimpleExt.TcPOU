@@ -1,0 +1,121 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="ReadDirSimpleExt" Id="{352818ea-c438-4a66-9cea-fa7c078bab7a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//List down all files and it's information founded in a directory - specified by file type if needed 
+FUNCTION_BLOCK ReadDirSimpleExt EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	MIN_ENTRYS												:	INT := 1;	
+	MAX_ENTRYS												:	INT := PARAM.READ_DIR_SIMPLE_MAX_ENTRYS;	//see library parameter to customize parameter	
+	MAX_STRING_LEN											:	INT := PARAM.READ_DIR_SIMPLE_MAX_STRING_LEN;//see library parameter to customize parameter
+END_VAR            										  										
+VAR_INPUT           										
+	AMSNetId												:	T_AmsNetId; //AMS Net Id
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT; //ADS Timeout Default 3s 
+	Path													:	T_MaxString; // \\PC-Name\Folder\ C:\Folder\
+	File													:	STRING := '*.*'; // *.xml / *.txt
+END_VAR
+VAR_OUTPUT
+	NoOfFiles												:	INT; //Number of files found in folder and sub folder
+	EoE														:	BOOL; //end of enumeration - No more files in folder
+	Entrys													:	ARRAY[MIN_ENTRYS..MAX_ENTRYS] OF ST_FindFileEntry; //List of file structures
+END_VAR
+VAR
+(* internal used variables ************************************************************)
+	
+(* trigger ****************************************************************************)	
+
+(* function-block instances ***********************************************************)
+	EnumFindFileEntry										:	FB_EnumFindFileEntry;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Sequence ****************************************)
+	rtExecute(CLK := Execute);
+	CASE state OF 
+	0:	
+		Busy												:= FALSE;
+		IF NOT Execute
+		THEN
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+		ELSIF rtExecute.Q
+		THEN
+			EnumFindFileEntry(bExecute := FALSE, sNetId := AMSNetId, tTimeout := Timeout, sPathName := CONCAT(Path,File));
+			Busy											:= TRUE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			NoOfFiles										:= 0;
+			MEMSET(ADR(Entrys),0,SIZEOF(Entrys));
+			state											:= State + 1;
+		END_IF 
+	
+	1: //read first entry
+		EnumFindFileEntry(bExecute := TRUE ,eCmd := eEnumCmd_First );
+		state												:= State + 1;
+
+	2: //read entrys
+		EnumFindFileEntry(bExecute := TRUE);
+		IF NOT EnumFindFileEntry.bBusy
+		THEN
+			IF NOT EnumFindFileEntry.bError
+			THEN
+				IF EnumFindFileEntry.bEOE		
+				THEN
+					Busy									:= FALSE;
+					Done									:= TRUE;	
+					state									:= 0;
+					
+				ELSIF NOT EnumFindFileEntry.stFindFile.fileAttributes.bDirectory
+				THEN
+					NoOfFiles								:= LIMIT(MIN_ENTRYS, NoOfFiles + 1 ,MAX_ENTRYS);
+					Entrys[NoOfFiles]						:= EnumFindFileEntry.stFindFile;
+					
+					IF EnumFindFileEntry.bEOE
+					THEN
+						EoE									:= TRUE;
+						Busy								:= FALSE;
+						Done								:= TRUE;
+						state								:= 0;
+					ELSIF NoOfFiles >= MAX_ENTRYS
+					THEN
+						state								:= 3;
+					ELSE
+						; //Continue with next cycle					
+					END_IF		
+					
+				END_IF
+				EnumFindFileEntry(bExecute := FALSE ,eCmd := eEnumCmd_Next);
+			ELSE
+				Busy										:= FALSE;
+				Done										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EnumFindFileEntry.nErrID;
+				state										:= 0;
+			END_IF		
+		END_IF
+		
+	3: //End search
+		EnumFindFileEntry(bExecute := TRUE ,eCmd := eEnumCmd_Abort);
+		IF NOT EnumFindFileEntry.bBusy
+		THEN
+			Busy											:= FALSE;
+			Done											:= NOT EnumFindFileEntry.bError;
+			Error											:= NOT Done;
+			ErrorId											:= EnumFindFileEntry.nErrID;
+			state											:= 0;		
+		END_IF
+	
+	END_CASE
+
+(*************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="ReadDirSimpleExt">
+      <LineId Id="3" Count="80" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

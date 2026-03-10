@@ -1,0 +1,164 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0321" Id="{6ddd1f91-7582-4494-8582-aec0f6c502b2}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}
+TYPE AX5000_P_0321 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Disc_size:UDINT;
+	Usend_size:UDINT;
+	Alignment:UDINT;
+	Free_size:UDINT;
+(*File 0*)
+	Type0:UINT;
+//	{attribute 'hide'}
+	rsvd0:UINT;
+	Version0:UINT;
+	Build0:UINT;
+	Time_H0:UDINT;
+	Time_L0:UDINT;
+	Id10:UINT;
+	Id20:UINT;
+	Size0:UDINT;
+	Size_on_disk0:UDINT;
+	alignment0:UDINT;
+	Start_adresse0:UDINT;
+
+(*File 1*)
+	Type1:UINT;
+//	{attribute 'hide'}
+	Rsvd1:UINT;
+	Version1:UINT;
+	Build1:UINT;
+	Time_H1:UDINT;
+	Time_L1:UDINT;
+	Id11:UINT;
+	Id21:UINT;
+	Size1:UDINT;
+	Size_on_disk1:UDINT;
+	alignment1:UDINT;
+	Start_adresse1:UDINT;
+
+(*File 2*)
+	Type2:UINT;
+//	{attribute 'hide'}
+	Rsvd2:UINT;
+	Version2:UINT;
+	Build2:UINT;
+	Time_H2:UDINT;
+	Time_L2:UDINT;
+	Id12:UINT;
+	Id22:UINT;
+	Size2:UDINT;
+	Size_on_disk2:UDINT;
+	alignment2:UDINT;
+	Start_adresse2:UDINT;
+
+(*File 3*)
+	Type3:UINT;
+//	{attribute 'hide'}
+	Rsvd3:UINT;
+	Version3:UINT;
+	Build3:UINT;
+	Time_H3:UDINT;
+	Time_L3:UDINT;
+	Id13:UINT;
+	Id23:UINT;
+	Size3:UDINT;
+	Size_on_disk3:UDINT;
+	alignment3:UDINT;
+	Start_adresse3:UDINT;
+
+(*File 4*)
+	Type4:UINT;
+//	{attribute 'hide'}
+	Rsvd4:UINT;
+	Version4:UINT;
+	Build4:UINT;
+	Time_H4:UDINT;
+	Time_L4:UDINT;
+	Id14:UINT;
+	Id24:UINT;
+	Size4:UDINT;
+	Size_on_disk4:UDINT;
+	alignment4:UDINT;
+	Start_adresse4:UDINT;
+
+(*File 5*)
+	Type5:UINT;
+//	{attribute 'hide'}
+	Rsvd5:UINT;
+	Version5:UINT;
+	Build5:UINT;
+	Time_H5:UDINT;
+	Time_L5:UDINT;
+	Id15:UINT;
+	Id25:UINT;
+	Size5:UDINT;
+	Size_on_disk5:UDINT;
+	alignment5:UDINT;
+	Start_adresse5:UDINT;
+
+(*File 6*)
+	Type6:UINT;
+//	{attribute 'hide'}
+	Rsvd6:UINT;
+	Version6:UINT;
+	Build6:UINT;
+	Time_H6:UDINT;
+	Time_L6:UDINT;
+	Id16:UINT;
+	Id26:UINT;
+	Size6:UDINT;
+	Size_on_disk6:UDINT;
+	alignment6:UDINT;
+	Start_adresse6:UDINT;
+
+(*File 7*)
+	Type7:UINT;
+//	{attribute 'hide'}
+	Rsvd7:UINT;
+	Version7:UINT;
+	Build7:UINT;
+	Time_H7:UDINT;
+	Time_L7:UDINT;
+	Id17:UINT;
+	Id27:UINT;
+	Size7:UDINT;
+	Size_on_disk7:UDINT;
+	Alignment7:UDINT;
+	Start_adresse7:UDINT;
+
+(*File 8*)
+	Type8:UINT;
+//	{attribute 'hide'}
+	Rsvd8:UINT;
+	Version8:UINT;
+	Build8:UINT;
+	Time_H8:UDINT;
+	Time_L8:UDINT;
+	Id18:UINT;
+	Id28:UINT;
+	Size8:UDINT;
+	Size_on_disk8:UDINT;
+	Alignment8:UDINT;
+	Start_adresse8:UDINT;
+
+(*File 9*)
+	Type9:UINT;
+	Rsvd9:UINT;
+	Version9:UINT;
+	Build9:UINT;
+	Time_H9:UDINT;
+	Time_L9:UDINT;
+	Id19:UINT;
+	Id29:UINT;
+	Size9:UDINT;
+	Size_on_disk9:UDINT;
+	alignment9:UDINT;
+	Start_adresse9:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

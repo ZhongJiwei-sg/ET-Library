@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="SWAP_BYTES_OF_WORDS" Id="{8f27872d-548c-4863-8716-46b8b818c0d2}" SpecialFunc="None">
+    <Declaration><![CDATA[//Swapping bytes in an array of words  
+FUNCTION SWAP_BYTES_OF_WORDS : BOOL
+VAR_INPUT
+	pIn														:	POINTER TO WORD;
+	NoOfWords												:	INT;
+END_VAR
+VAR
+	pTemp													:	POINTER TO WORD;
+	i														:	INT; 
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pIn <> 0 THEN
+	FOR i := 1 TO NoOfWords BY 2 DO 
+		pTemp													:= pIn + TO_WORD(i-1);
+		pTemp^ 													:= HOST_TO_BE16(pTemp^);	
+	END_FOR
+	SWAP_BYTES_OF_WORDS											:= TRUE;
+ELSE
+	SWAP_BYTES_OF_WORDS											:= FALSE;
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="SWAP_BYTES_OF_WORDS">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

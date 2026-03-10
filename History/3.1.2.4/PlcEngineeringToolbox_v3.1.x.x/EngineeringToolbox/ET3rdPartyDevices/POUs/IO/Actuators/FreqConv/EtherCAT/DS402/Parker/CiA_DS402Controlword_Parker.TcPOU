@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="CiA_DS402Controlword_Parker" Id="{91ad9ad4-a2bf-4119-8463-5a899519faa9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Controlword_Parker EXTENDS CiA_DS402Controlword
+VAR_INPUT
+	EnableRampOutput				: BOOL; //Operation mode specific Bit 4 - =0 to set ramp output to zero
+	EnableRamp						: BOOL;	//Operation mode specific Bit 5 - =0 to hold ramp
+	EnableRampInput					: BOOL;	//Operation mode specific Bit 6 - =0 to set ramp input to zero
+
+	Jog1On							: BOOL; //	Manufacturere specific Bit 8 	
+
+	AutoInitialise					: BOOL; //	Manufacturere specific Bit 12 - 1 = Allow SWITCH ON DISABLED to READY TO SWITCH ON transition regardless of bit 0 (Switch On)
+	EnableRevOp						: BOOL; //	Manufacturere specific Bit 13 - 1 = Run Reverse
+	RemoteCtrl						: BOOL; //	Manufacturere specific Bit 14 - 0 = Local Sequencing
+	RemoteRef						: BOOL; //	Manufacturere specific Bit 15 - 0 = Local Reference
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="createControlword" Id="{7c6baf02-fa1a-4907-b5e8-2675b703d574}">
+      <Declaration><![CDATA[METHOD PUBLIC createControlword : BOOL
+VAR_INPUT
+	StatusState												: eCiA_DS402_STATUS_STATE;
+END_VAR
+VAR_IN_OUT
+	Controlword												:	UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	
+	createControlword									:= SUPER^.createControlword(StatusState,Controlword);
+	Controlword.4										:= EnableRampOutput;
+	Controlword.5										:= EnableRamp;	
+	Controlword.6										:= EnableRampInput;	
+	Controlword.12										:= AutoInitialise;	
+	Controlword.13										:= EnableRevOp;	
+	Controlword.14										:= RemoteCtrl;	
+	Controlword.15										:= RemoteRef;		
+	
+(*****************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Controlword_Parker">
+      <LineId Id="54" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Controlword_Parker.createControlword">
+      <LineId Id="153" Count="4" />
+      <LineId Id="170" Count="3" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="60" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

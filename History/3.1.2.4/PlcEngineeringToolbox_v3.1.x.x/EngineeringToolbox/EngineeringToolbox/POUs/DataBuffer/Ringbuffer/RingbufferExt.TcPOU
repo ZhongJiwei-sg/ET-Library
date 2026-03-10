@@ -1,0 +1,249 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="RingbufferExt" Id="{4062b6c0-103b-433a-8b20-5788afc05bef}" SpecialFunc="None">
+    <Declaration><![CDATA[//Ringbuffer extended with dynamical allocation of memory 
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK RingbufferExt EXTENDS RingbufferBase
+VAR_OUTPUT CONSTANT
+END_VAR   
+VAR_INPUT
+	MaxNoOfEntrys											: 	UDINT := 10;	//0 = dynamically allocation / <> 0 = pre allcoation of memory based on size of first entry (n * data size) 
+END_VAR
+VAR_OUTPUT
+	pMemory													: 	POINTER TO BYTE := 0;	//start address of buffer data
+	SizeOfMemory											: 	UDINT := 0;	//size of buffer
+END_VAR
+VAR
+	MemSizeAllocatedMemory									:	UDINT := 0; //Allocated memory 
+	MemSizeOfData											:	UDINT;
+	MemMaxNoOfEntrys										:	UDINT;
+	ExtInterlock											:	BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="allocate" Id="{aa38ad87-09f2-4bf0-87bd-551f1c4d25fa}">
+      <Declaration><![CDATA[METHOD PROTECTED FINAL allocate : BOOL
+VAR_IN_OUT
+	SizeOfData												:	UDINT;
+END_VAR
+VAR
+	pDummy													:	POINTER TO BYTE;	
+End_Var	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pMemory = 0
+THEN
+	IF SizeOfData = 0 OR MaxNoOfEntrys = 0
+	THEN
+		Allocate											:= FALSE;	
+	ELSE
+		MemSizeOfData										:= SizeOfData;
+		MemMaxNoOfEntrys									:= MaxNoOfEntrys;
+		SizeOfMemory										:= MemSizeOfData * MemMaxNoOfEntrys;
+		MemSizeAllocatedMemory								:= SizeOfMemory;
+		pMemory												:= __NEW(BYTE,SizeOfMemory );
+		
+		IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+		THEN
+			AdsLogHint('EngineeringToolbox | FB FifoExt | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(SizeOfMemory));
+		END_IF
+	END_IF
+
+ELSIF SizeOfData = MemSizeOfData AND MaxNoOfEntrys = MemMaxNoOfEntrys
+THEN
+	Allocate												:= TRUE;
+	
+ELSIF SizeOfData > MemSizeOfData OR MaxNoOfEntrys > MemMaxNoOfEntrys
+THEN //Since increased, allocate new memory
+	MemSizeAllocatedMemory									:= SizeOfData * MaxNoOfEntrys;
+	pDummy													:= __NEW(BYTE, MemSizeAllocatedMemory); 
+	
+	 //Size of data still the same, copy old data to reuse
+	IF MemSizeOfData = SizeOfData AND Count > 0
+	THEN
+		MEMCPY(pDummy,pMemory, SizeOfMemory);
+	END_IF
+	
+	//Copy new settings to local variales
+	MemSizeOfData											:= SizeOfData;
+	MemMaxNoOfEntrys										:= MaxNoOfEntrys;	
+	SizeOfMemory 											:= MemSizeAllocatedMemory;
+
+	__DELETE(pMemory);  //Delete reference to old memory
+	pMemory													:= pDummy; //Take over new pointer to new memory
+	
+	IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+	THEN
+		AdsLogWarn('EngineeringToolbox | FB FifoExt | Value of "MaxNoOfEntrys" or data size increased and one instance allocated additional %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(SizeOfMemory));
+	END_IF
+	
+	Allocate												:= TRUE;
+	
+ELSE //Size decreased
+	IF MemSizeOfData <> SizeOfData AND Count > 0
+	THEN //Size of data changed, erease memory 
+		MEMSET(pMemory,0, MemSizeAllocatedMemory);
+	ELSE //Size of data the same, keep current data
+		;
+	END_IF
+	
+	//Copy new settings to local variales
+	MemSizeOfData											:= SizeOfData;
+	MemMaxNoOfEntrys										:= MaxNoOfEntrys;
+	SizeOfMemory											:= MemSizeOfData * MemMaxNoOfEntrys;
+	Allocate												:= TRUE;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeue" Id="{2a729ab1-aaa2-400d-aa26-b833b55e038e}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO BYTE;	
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Dequeue := SUPER^._Dequeue(pData,SizeOfEntry,This^.pMemory,This^.SizeOfMemory);
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeueStream" Id="{fa28b2e9-a782-4f48-9a0c-d881503e4325}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO BYTE;	
+	SizeOfStream											:	UDINT ; //Not greater than SizeOfMemory
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[DequeueStream := SUPER^._DequeueStream(pData,SizeOfStream , This^.pMemory,This^.SizeOfMemory);
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueue" Id="{090bb31d-ec09-4b24-b4fe-882313c329f9}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO BYTE;
+	SizeOfData												:	UDINT;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(ExtInterlock) 
+THEN	
+	if Allocate(SizeOfData)
+	then
+		Enqueue 											:= SUPER^._Enqueue(pData,SizeOfData,THIS^.pMemory,THIS^.SizeOfMemory);
+		ExtInterlock										:= FALSE;
+	else
+		Enqueue												:= FALSE;
+	END_IF	
+ELSE
+	Enqueue													:= FALSE;
+END_IF		
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueueStream" Id="{d7760074-ef96-423e-9b1e-e09d86800ca5}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO BYTE;
+	SizeOfData												:	UDINT; //Size of one entry
+	SizeOfStream											:	UDINT ; //Not greater than SizeOfMemory
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(ExtInterlock) 
+THEN	
+	if Allocate(SizeOfData)
+	then
+		EnqueueStream 										:= SUPER^._EnqueueStream(pData,SizeOfData,SizeOfStream,THIS^.pMemory,THIS^.SizeOfMemory);
+		ExtInterlock										:= FALSE;
+	else
+		EnqueueStream										:= FALSE;
+	END_IF	
+ELSE
+	EnqueueStream											:= FALSE;
+END_IF		
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_exit" Id="{9accb57b-bf94-4aad-ab91-d2c9022db41d}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode AND pMemory <> 0
+THEN //Release memory in case the PLC stopps
+	__DELETE(pMemory);
+	SizeOfMemory								:= 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{182e8e96-3f9c-4459-9654-b268d7d6519b}">
+      <Declaration><![CDATA[//Reset complete ring buffer
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pMemory = 0
+THEN //no memroy allocated
+	reset													:= TRUE;
+ELSE //Just delte the memory
+	reset 													:= SUPER^._reset(THIS^.pMemory,THIS^.SizeOfMemory);	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="RingbufferExt">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferExt.allocate">
+      <LineId Id="252" Count="11" />
+      <LineId Id="308" Count="1" />
+      <LineId Id="311" Count="0" />
+      <LineId Id="310" Count="0" />
+      <LineId Id="265" Count="24" />
+      <LineId Id="312" Count="1" />
+      <LineId Id="290" Count="0" />
+      <LineId Id="314" Count="1" />
+      <LineId Id="291" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferExt.dequeue">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferExt.dequeueStream">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferExt.enqueue">
+      <LineId Id="40" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferExt.enqueueStream">
+      <LineId Id="39" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferExt.FB_exit">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferExt.reset">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

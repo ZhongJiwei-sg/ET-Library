@@ -1,0 +1,295 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="AxDriveCoE_EL72xxParam" Id="{58b2d1e6-4d2d-49d9-8f9d-29b00a26ccf8}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//FB template to read and write parameter
+//The FB can be enherided and derivatived methods of SeqRead/SeqWrite used for application specific parameter.
+//The extended methods need to call the super class at the beginning and return true if execution will be finished. The allowed states for new parameter are 1..99
+FUNCTION_BLOCK AxDriveCoE_EL72xxParam EXTENDS AxRWParaBase
+VAR_OUTPUT CONSTANT
+END_VAR                                 					
+VAR_INPUT                               					
+	AdsAddr													: 	AMSADDR; //Terminal AMS Net Addr.     
+	Channel													:	USINT := 0; //Drive channel 0 or 1                                    	                                        	
+	SetKvPosition											:	LREAL; //(rad/s)rad - e.g. 10.0		0x8010:17
+	SetKpVelocity											:	LREAL; //mA/(rad/s) - e.g. 0.058	0x8010:15
+	SetTnVelocity											:	LREAL; //0.1ms 		- e.g. 0.015	0x8010:14
+END_VAR 
+VAR_IN_OUT
+END_VAR                               					
+VAR_OUTPUT
+	DeviceType												:	STRING(15); //0x1008:0 -e.g. EL7211-9014
+	MotorSN													:	STRING(15); //0x9009:13 - if available
+	KvPosition												:	LREAL;
+	KpVelocity												:	LREAL;
+	TnVelocity												:	LREAL;	
+END_VAR                         	
+VAR
+(* Cache ************************************************************)
+
+(* Trigger **********************************************************)
+
+(* Timer ******************************************************************)
+
+(* FBs ***************************************************************)
+	CoEWrite												: FB_EcCoESdoWriteEx := (tTimeout := DEFAULT_ADS_TIMEOUT); //CoE read
+	CoERead													: FB_EcCoeSdoReadEx := (tTimeout := DEFAULT_ADS_TIMEOUT);
+
+(* Dummy memory **********************************************************)
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read/Write drive parameter														*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	SUPER^();
+
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Property Name="deviceAddrIsValid" Id="{55e05b02-0ae5-4a84-beee-5d3fffdd6d74}">
+      <Declaration><![CDATA[PROPERTY PROTECTED deviceAddrIsValid : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8d815611-d1aa-4b5c-8ab3-9900b5644f74}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[deviceAddrIsValid := AdsAddr.port > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="getValue" Id="{f327ea94-a38e-4e06-a1e5-0dfc931a7eaa}">
+      <Declaration><![CDATA[METHOD PROTECTED getValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	Index						:	WORD;
+	SubIndex					:	BYTE;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value
+	pSetValue					:	PVOID; //Address of variable for ser value variable, can be zero if no corresponding SetVariable exists
+	CompleteAccess				:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CoERead(bExecute := TRUE , nIndex := Index ,nSubIndex := SubIndex ,pDstBuf := pActValue ,cbBufLen := Len, bCompleteAccess  := CompleteAccess);
+IF NOT CoERead.bBUSY 	
+THEN
+	IF NOT CoERead.bError
+	THEN
+		IF pSetValue <> 0 THEN MEMCPY(pSetValue, pActValue, Len); END_IF
+		state 												:= state + 1; 
+	ELSE
+		Busy												:= FALSE;
+		Error												:= TRUE;
+		ErrorId												:= CoERead.nErrId;
+		ErrorText											:= CONCAT('Error read parameter in state:' , TO_STRING(state * -1));
+		ErrorText											:= CONCAT(ErrorText , ' Id:');
+		ErrorText											:= CONCAT(ErrorText , TO_STRING(ErrorId));
+		State												:= 9999;
+	END_IF
+	CoERead(bExecute := FALSE);
+	getValue												:= TRUE;
+END_IF 
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqRead" Id="{346c3979-d01e-45e0-ad44-9d49d7281da0}">
+      <Declaration><![CDATA[METHOD PROTECTED seqRead : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	state							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+(* Sequence read parameter **********************************)
+	CASE state OF
+	1..99: //Read application specific parameter  
+		SeqRead												:= TRUE;
+		
+	1001: (* Init step ******************************************************)
+		CoERead(bExecute := FALSE, sNetId:= F_CreateAmsNetId(nIds := AdsAddr.netId), nSlaveAddr:= AdsAddr.port);
+		IF NOT CoERead.bBusy
+		THEN
+			state											:= state + 1;	
+		END_IF
+		
+	1002: (* Device name *************************************************************************************)
+		IF LEN(DeviceType) > 0 AND NOT CoERead.bBusy
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(Index:= 16#1008,	Subindex := 16#0,	LEN := SIZEOF(DeviceType),	pActValue := ADR(DeviceType),	pSetValue := 0, completeAccess := FALSE);
+		END_IF
+
+	1003: (* Motor SN *************************************************************************************)		
+		IF LEN(MotorSN) > 0 AND NOT CoERead.bBusy
+		THEN
+			state											:= state + 1;
+		ELSE
+			getValue(Index:= 16#9009,	Subindex := 16#03,	LEN := SIZEOF(MotorSN),		pActValue := ADR(MotorSN),	pSetValue := 0, completeAccess := FALSE);
+		END_IF
+			
+	1004: (* kv position *******************************************)
+		IF getValue(Index:= 16#8010,	Subindex := 16#17,	LEN := SIZEOF(_UDINT),		pActValue := ADR(_UDINT),	pSetValue := 0, completeAccess := FALSE)
+		THEN
+			KvPosition := SetKvPosition						:= SEL(Error, TO_LREAL(_UDINT) * 1.0, 0.0); 
+		END_IF
+	
+	1005: (* Kp velocity *******************************************)
+		IF getValue(Index:= 16#8010,	Subindex := 16#15,	LEN := SIZEOF(_UDINT),		pActValue := ADR(_UDINT),	pSetValue := 0, completeAccess := FALSE)
+		THEN
+			KpVelocity := SetKpVelocity						:= SEL(Error, TO_LREAL(_UDINT) * 0.001, 0.0);
+		END_IF
+		
+	1006: (* Tn velocity ********************************************)
+		IF getValue(Index:= 16#8010,	Subindex := 16#14,	LEN := SIZEOF(_UDINT),		pActValue := ADR(_UDINT),	pSetValue := 0, completeAccess := FALSE)
+		THEN
+			TnVelocity := SetTnVelocity						:= SEL(Error, TO_LREAL(_UDINT) * 0.0001, 0.0);
+		END_IF
+	ELSE
+		state												:= 1;
+	END_CASE
+
+(***********************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqWrite" Id="{0e0aa414-1e31-46f5-b48d-c0fdc0c7e77d}">
+      <Declaration><![CDATA[METHOD PROTECTED seqWrite : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	state							:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Sequence write parameter *********************************************)
+	CASE state OF
+	1..99: //Write application specific parameter  
+		SeqWrite											:= TRUE;
+		
+	1001: (* Init step ******************************************************)
+		CoEWrite(bExecute := FALSE, sNetId:= F_CreateAmsNetId(nIds := AdsAddr.netId), nSlaveAddr:= AdsAddr.port);
+		IF NOT CoEWrite.bBusy
+		THEN
+			state											:= state + 1;	
+		END_IF
+	
+	1002: (* Kv position *************************************************************************************)
+		_UDINT												:= TO_UDINT(SetKvPosition * 1.0);
+		IF setValue(Index:= 16#8010,	Subindex := 16#17,	LEN := SIZEOF(_UDINT),		pActValue := 0,		pSetValue := ADR(_UDINT) , completeAccess := FALSE)
+		THEN
+			KvPosition										:= SetKvPosition;
+		END_IF
+		
+	1003: (* Kp velocity ****************************************)
+		_UDINT											:= TO_UDINT(SetKpVelocity * 1000.0);
+		IF setValue(Index:= 16#8010,	Subindex := 16#15,	LEN := SIZEOF(_UDINT),		pActValue := 0,		pSetValue := ADR(_UDINT), completeAccess := FALSE)
+		THEN
+			KpVelocity										:= SetKpVelocity;
+		END_IF
+
+	1004: (* Tn velocity **********************************)
+		_UDINT											:= TO_UDINT(SetTnVelocity * 10000.0);
+		IF setValue(Index:= 16#8010,	Subindex := 16#14,	LEN := SIZEOF(_UDINT),		pActValue := 0,		pSetValue := ADR(_UDINT), completeAccess := FALSE)
+		THEN
+			TnVelocity										:= SetTnVelocity;
+		END_IF	
+	ELSE
+		state												:= 1;
+	END_CASE
+
+(************************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setValue" Id="{599a05fb-22f4-43de-aa2d-13f11932eadc}">
+      <Declaration><![CDATA[METHOD PROTECTED setValue : BOOL //Return value = TRUE if execution finished and state incremented 
+VAR_INPUT
+	Index						:	Word;
+	SubIndex					:	BYTE;
+	Len							:	UDINT;
+	pActValue					:	PVOID; //Address of variable for actual value, can be zero if no corresponding acual value variable exists
+	pSetValue					:	PVOID; //Address of variable for set value variable
+	CompleteAccess				:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+
+IF pActValue <> 0 AND pSetValue <> 0 AND_THEN MEMCMP(pSetValue, pActValue, Len) = 0
+THEN //Skip write parameter if set and actual value are equel
+	state													:= state + 1;	
+	setValue												:= TRUE;
+ELSE
+	CoEWrite(bExecute := TRUE, nIndex := Index ,nSubIndex := SubIndex , pSrcBuf := pSetValue ,cbBufLen := Len , bCompleteAccess := CompleteAccess );
+	IF NOT CoEWrite.bBusy
+	THEN
+		IF NOT CoEWrite.bError
+		THEN
+			IF pActValue <> 0 THEN MEMCPY(pActValue, pSetValue, Len); END_IF	
+			state											:= state + 1;
+		ELSE
+			Busy											:= FALSE;
+			Error											:= TRUE;
+			ErrorId											:= CoEWrite.nErrId;
+			ErrorText										:= CONCAT('Error write parameter in state:' , TO_STRING(state * -1));
+			ErrorText										:= CONCAT(ErrorText , ' Id:');
+			ErrorText										:= CONCAT(ErrorText , TO_STRING(ErrorId));
+			State											:= 9999;
+		END_IF
+		CoEWrite(bExecute := FALSE);
+		setValue											:= TRUE;
+	END_IF		
+END_IF
+	
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveCoE_EL72xxParam">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_EL72xxParam.deviceAddrIsValid.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_EL72xxParam.getValue">
+      <LineId Id="3" Count="5" />
+      <LineId Id="10" Count="9" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_EL72xxParam.seqRead">
+      <LineId Id="3" Count="49" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_EL72xxParam.seqWrite">
+      <LineId Id="3" Count="35" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_EL72xxParam.setValue">
+      <LineId Id="3" Count="12" />
+      <LineId Id="17" Count="9" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="27" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

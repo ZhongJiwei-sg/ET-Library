@@ -1,0 +1,108 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="UDPServerCtrl" Id="{15df3bfb-6c6b-4620-895e-d6ff1280d561}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Helper for UDP Client or Server for socket communications. (Wrapper for Fbs like SocketAccpet,SocketClose,SocketConnect....)
+//based on TF6310, required lib: Tc2_TcpIp - see Beckhoff Infosys for more information
+FUNCTION_BLOCK UDPServerCtrl 
+VAR_INPUT
+	Enable													:	BOOL := FALSE;	// FB will be processed as long as enable is TRUE 
+	SrvNetId												: 	T_AmsNetId := ''; 	// AmsNet id for TcpIp Server instance - '' for local 
+	SrvLocalHost											:	T_IPv4Addr := ''; 	// IP-Adress of local ip-adapter used for server communication
+	SrvLocalPort											:	UDINT;			//	IP-Port of local ip-adapter used for server communication
+
+	EnableDebugMode											:	BOOL := FALSE; 	// Write debug information into twincat logger
+	CloseAllSocket											:	BOOL := TRUE; 	// Close all socket if server will be diabled - FALSE = close only connected port
+END_VAR
+VAR_OUTPUT
+	hSocket													: 	T_HSOCKET ;	// UDP socket handle
+	Online													:	BOOL; 	// Connection is current running 
+	State													:	E_SocketConnectionState; //Socket connection state enum
+	Busy													:	BOOL;	// Busy is TRUE at the rising edge of Enable and stays TRUE as long as the FB is performing any action. 
+	Error													:	BOOL;	// Rising edge of Error informs that an error occurred during the execution of the Function Block #
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT; 	// Error identification - see ADS return codes and TF6310 documentation at Beckhoff infosys for further information
+	WinsockErrorId											:	E_WinsockError; // Winsocket error enum - see TF6310 documentation for further information
+END_VAR
+VAR
+(* function-block instances ***************************************************************)
+	SocketCtrl												:	UDPSocketCtrl;
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Execute ****************************************************)
+	SocketCtrl(
+		Execute			:= ,
+		Fnc				:= ,
+		SrvNetId		:= '', (* Server IP *)
+		LocalHost		:= SrvLocalHost, (* Own IP *)
+		LocalPort		:= SrvLocalPort,
+		Timeout			:= t#30s,
+		Online			=> Online,
+		hSocket			=> hSocket,
+		Done			=> ,
+		Busy			=> Busy,
+		Error			=> Error,
+		ErrorId			=> ErrorId,
+		WinsockErrorId 	=> WinsockErrorId);
+
+	IF Busy
+	THEN
+		SocketCtrl.Execute 									:= Enable;
+	ELSIF SocketCtrl.Done
+	THEN
+		IF EnableDebugMode
+		THEN
+			ADSLOGDINT(	ADSLOG_MSGTYPE_ERROR OR ADSLOG_MSGTYPE_LOG, SocketCtrl.hSocketText, 0);
+		END_IF
+		SocketCtrl(Execute := FALSE);
+		Busy												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		WinsockErrorId										:= WSOK;
+	ELSIF SocketCtrl.Error
+	THEN
+		IF NOT Enable
+		THEN
+			SocketCtrl(Execute := FALSE);
+			Busy											:= FALSE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			WinsockErrorId									:= WSOK;
+		END_IF
+	ELSE
+		IF Enable
+			AND NOT Online
+		THEN
+			SocketCtrl(Execute := FALSE);
+			SocketCtrl.Execute 								:= TRUE;
+			SocketCtrl.Fnc 									:= SocketCtrl.FNC_CREATE;
+			Busy											:= TRUE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			WinsockErrorId									:= WSOK;
+
+		ELSIF Online
+			AND NOT Enable
+		THEN
+			SocketCtrl(Execute := FALSE);
+			SocketCtrl.Execute 								:= TRUE;
+			SocketCtrl.Fnc 									:= SEL(CloseAllSocket, SocketCtrl.FNC_CLOSE,  SocketCtrl.FNC_CLOSE_ALL);
+			Busy											:= TRUE;
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			WinsockErrorId									:= WSOK;
+		ELSE
+			;
+		END_IF
+	END_IF
+
+(******************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="UDPServerCtrl">
+      <LineId Id="3" Count="67" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AxNcPtpGear" Id="{cebc1d82-1314-484b-8f94-7e8a32cf83d6}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxNcPtpGear EXTENDS AxNcPTP
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT
+(* Axis *)
+	Gear													:	AxGear;                                                
+END_VAR                                             	
+VAR_OUTPUT                                          	
+END_VAR
+VAR
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Axis extended (Incl. Gearing)										*)
+	(************************************************************************)
+	
+(********************************************************************************)
+(* work basic	 																*)
+(********************************************************************************)
+	SUPER^();
+
+(********************************************************************************)
+(* work gear ctrl 																*)
+(********************************************************************************)
+	gear(rAxis := THIS^);
+	errorCheck(AxBase := Gear);
+	
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="noAction" Id="{8a7916aa-0c37-4556-82d3-6d4e6d475a8d}">
+      <Declaration><![CDATA[METHOD PUBLIC noAction : BOOL //Return value = TRUE if busy of home and motion 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Gear.Execute	:= FALSE;
+
+NoAction 		:= 	SUPER^.NoAction() AND NOT Gear.Busy ;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{5332d0f5-07c0-4e21-8100-f3514eb38e64}">
+      <Declaration><![CDATA[METHOD reset : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Gear.Execute		:= FALSE;
+reset 				:= SUPER^.reset();
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="AxNcPtpGear">
+      <LineId Id="3" Count="1" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="215" Count="1" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="218" Count="0" />
+      <LineId Id="217" Count="0" />
+      <LineId Id="19" Count="3" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcPtpGear.noAction">
+      <LineId Id="6" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcPtpGear.reset">
+      <LineId Id="4" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

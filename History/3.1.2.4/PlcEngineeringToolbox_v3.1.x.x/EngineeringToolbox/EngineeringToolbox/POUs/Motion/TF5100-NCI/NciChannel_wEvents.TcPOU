@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="NciChannel_wEvents" Id="{b92d8dfe-cde0-4af7-8657-957baafaa875}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK NciChannel_wEvents EXTENDS NciChannel
+VAR_INPUT
+
+                        								      
+	Event													:	NciEventHandling;
+                        	
+END_VAR                 	
+VAR_OUTPUT              	
+
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* NCI Control											*)
+	(********************************************************)
+
+(********************************************************************************)
+(* error event ctrl																*)
+(********************************************************************************)
+	Event(
+		Enable			:= ,
+		ConfirmTrig		:= NOT Errhdl.flag AND Event.Status.31 OR Admin.ResetAdmin,
+		Name			:= ErrHdl.fnc,
+		SourceId		:= (* Default *) ,
+		rNci			:= THIS^,
+		ErrorId			:= TO_UDINT(ErrHdl.Id),
+		Status			=> );
+		
+	(* Reset FB errors by reset flag *)
+	(* currently not in use, call _Resetting via state machine to reset Fb errors by setting Execute to FALSE 
+	IF Admin.Reset
+	THEN
+		grp.Execute											:= grp.Execute AND NOT grp.Error;
+		itp.Execute											:= itp.Execute AND NOT itp.Error;
+		Motion.Execute										:= Motion.Execute AND NOT Motion.Error;
+		RPara.Execute										:= RPara.Execute AND NOT RPara.Error;
+	END_IF
+	*)
+	
+(********************************************************************************)
+(* call super 																	*)
+(********************************************************************************)
+	SUPER^();
+(******************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{373d0377-bee3-4867-b2ac-80224d70016d}">
+      <Declaration><![CDATA[METHOD reset : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+reset 			:= ErrHdl.flag OR SUPER^.reset();
+Event.confirm();
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciChannel_wEvents">
+      <LineId Id="3" Count="1" />
+      <LineId Id="176" Count="3" />
+      <LineId Id="181" Count="7" />
+      <LineId Id="267" Count="0" />
+      <LineId Id="269" Count="0" />
+      <LineId Id="277" Count="0" />
+      <LineId Id="274" Count="1" />
+      <LineId Id="273" Count="0" />
+      <LineId Id="270" Count="1" />
+      <LineId Id="268" Count="0" />
+      <LineId Id="272" Count="0" />
+      <LineId Id="224" Count="0" />
+      <LineId Id="278" Count="0" />
+      <LineId Id="6" Count="2" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciChannel_wEvents.reset">
+      <LineId Id="24" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

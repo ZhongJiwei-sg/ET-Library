@@ -1,0 +1,521 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="NciAdmin" Id="{8ade254c-45de-42b0-9f4c-cc6260c7b465}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//NCI group administration - Build/Reconfig group via Enable input, activate EStop and StepOn after releasing EStop input
+//based on Tc2_NCI library
+FUNCTION_BLOCK NciAdmin
+VAR_INPUT
+	ResetAdmin												:	BOOL := FALSE; (* Reset Nci group *)
+	Enable													:	BOOL := FALSE; (* TRUE = Build Group / FALSE = Reconfig Group *)
+	EStop													:	BOOL := FALSE; (* TRUE = EStop / FALSE = StepOn *)
+	SingleBlockMode											:	E_ItpSingleBlockMode := ItpSingleBlockOff; (* Operation mode for single set:
+																											 	ItpSingleBlockOff: single set off
+																											 	ItpSingleBlockNck: single set in the NC kernel 
+																												ItpSingleBlockIntp: single set in the interpreter *)
+	InSingleBlockTrigNext									:	BOOL	:= FALSE;
+	GrpCnfg													:	NCI_EXT3DGROUP;
+	Override												:	LREAL := 0.0; //0.0-100.0%
+	SpindleOvr												:	LREAL := 0.0; //0.0-100.0%
+	rNCIRef													:	REFERENCE TO NCI_REF := 0;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	InGroup													:	BOOL; 
+	Busy													:	BOOL;
+	Done													:	BOOL;
+	Error													:	BOOL;
+{attribute 'displaymode':='hex'}
+	ErrorID													:	UDINT;
+	ErrorText												:	STRING(40);
+END_VAR
+VAR
+(* Zwischenspeicher **************************************************************************)
+	MemDone													:	BOOL;
+	MemFnc													:	INT := 0;
+
+(* Instanzierung der MC Bausteine *******************************************************)
+	ItpSingleBlock											:	ItpSingleBlock := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	CfgBuildExt3DGroup										:	CfgBuildExt3DGroup := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	CfgReconfigGroup										:	CfgReconfigGroup := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	ItpResetEx2												:	ItpResetEx2 := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	ItpEStopEx												:	ItpEStopEx := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	ItpStepOnAfterEStopEx									:	ItpStepOnAfterEStopEx := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+
+(* Dummy  **********************************************************)
+	Dummy 	: BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* NCI group administration															*)
+	(************************************************************************************)
+
+(* verify reference ***********************************************************************)
+IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	InGroup													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	RETURN;
+END_IF
+
+(* reading axis-status from NCtoPLC-channel *************************************************)
+	rNCIRef.ReadStatus();
+
+(* writing override into the NC-interface ***************************************************)
+	rNCIRef.PlcToNci.ChnAxesOvr 							:= LREAL_TO_DWORD(LIMIT(0.0,Override,100.0) * 10000.0 );
+	rNCIRef.PlcToNci.ChnSpindleOvr							:= LREAL_TO_DWORD(LIMIT(0.0,SpindleOvr,100.0) * 10000.0 );
+
+(* Build Grp / rebuild grp ******************************************************************)
+	InGroup													:=  NOT CfgBuildExt3DGroup.bBusy 
+																AND(rNCIRef.NciToPlc.AcsAxisIDs[0] = GrpCnfg.nXAxisId 		
+																AND rNCIRef.NciToPlc.AcsAxisIDs[1] = GrpCnfg.nYAxisId 
+																and rNCIRef.NciToPlc.AcsAxisIDs[2] = GrpCnfg.nZAxisId 
+																and rNCIRef.NciToPlc.AcsAxisIDs[3] = GrpCnfg.nQ1AxisId
+																and rNCIRef.NciToPlc.AcsAxisIDs[4] = GrpCnfg.nQ2AxisId
+																and rNCIRef.NciToPlc.AcsAxisIDs[5] = GrpCnfg.nQ3AxisId
+																and rNCIRef.NciToPlc.AcsAxisIDs[6] = GrpCnfg.nQ4AxisId
+																AND rNCIRef.NciToPlc.AcsAxisIDs[7] = GrpCnfg.nQ5AxisId																
+																OR  
+																rNCIRef.NciToPlc.McsAxisIDs[0] = GrpCnfg.nXAxisId 
+																AND rNCIRef.NciToPlc.McsAxisIDs[1] = GrpCnfg.nYAxisId 
+																and rNCIRef.NciToPlc.McsAxisIDs[2] = GrpCnfg.nZAxisId 
+																and rNCIRef.NciToPlc.McsAxisIDs[3] = GrpCnfg.nQ1AxisId
+																and rNCIRef.NciToPlc.McsAxisIDs[4] = GrpCnfg.nQ2AxisId
+																and rNCIRef.NciToPlc.McsAxisIDs[5] = GrpCnfg.nQ3AxisId
+																and rNCIRef.NciToPlc.McsAxisIDs[6] = GrpCnfg.nQ4AxisId
+																AND rNCIRef.NciToPlc.McsAxisIDs[7] = GrpCnfg.nQ5AxisId);
+							
+	Dummy													:= CfgBuildExt3DGroup.bBusy; //Catch busy status before next call of FB
+									
+	CfgBuildExt3DGroup(
+		bExecute	:= Enable AND NOT CfgReconfigGroup.bBusy,
+		nGroupId	:= rNCIRef.NciToPlc.GrpId,
+		nXAxisId	:= GrpCnfg.nXAxisId,
+		nYAxisId	:= GrpCnfg.nYAxisId,
+		nZAxisId	:= GrpCnfg.nZAxisId,
+		nQ1AxisId	:= GrpCnfg.nQ1AxisId,
+		nQ2AxisId	:= GrpCnfg.nQ2AxisId,
+		nQ3AxisId	:= GrpCnfg.nQ3AxisId,
+		nQ4AxisId	:= GrpCnfg.nQ4AxisId,
+		nQ5AxisId	:= GrpCnfg.nQ5AxisId,
+		tTimeOut	:= ,
+		bBusy		=> ,
+		bErr		=> ,
+		nErrId		=> );
+
+	IF 	Dummy 
+		AND NOT CfgBuildExt3DGroup.bBusy 
+		AND NOT CfgBuildExt3DGroup.bErr
+	THEN
+	//	InGroup												:= TRUE;
+		MemDone												:= TRUE;
+	END_IF
+
+
+	(* Reconfig Grp *)
+	Dummy													:= CfgReconfigGroup.bBusy;
+
+	CfgReconfigGroup(
+		bExecute	:= NOT Enable AND NOT CfgBuildExt3DGroup.bBusy AND(InGroup OR CfgReconfigGroup.bErr AND NOT Memfnc.7 ),
+		nGroupId	:= rNCIRef.NciToPlc.GrpId,
+		tTimeOut	:= ,
+		bBusy		=> ,
+		bErr		=> ,
+		nErrId		=> );
+
+	IF 	Dummy 
+		AND NOT CfgReconfigGroup.bBusy 
+		AND NOT CfgReconfigGroup.bErr
+	THEN
+	//	InGroup												:= FALSE;
+		MemDone												:= TRUE;
+	END_IF
+
+
+(* Estop ****************************************************************************************)
+	Dummy													:= ItpEStopEx.bBusy;
+
+	ItpEStopEx(
+		bExecute	:= EStop AND NOT ItpStepOnAfterEStopEx.bBusy,
+		fDec		:= (* Dec *),
+		fJerk		:= (* Jerk *),
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> ,
+		bErr		=> ,
+		nErrId		=> );
+		
+	IF ItpEStopEx.bExecute
+	THEN //Triggerd by input
+		MemFnc.0											:= TRUE;
+	END_IF
+
+	IF 	Dummy 
+		AND NOT ItpEStopEx.bBusy 
+	THEN
+		MemDone												:= NOT ItpEStopEx.bErr;
+	END_IF
+
+	(* Step on after estop *)
+	Dummy													:= ItpStepOnAfterEStopEx.bBusy;
+	
+	ItpStepOnAfterEStopEx(
+		bExecute	:= NOT ItpEStopEx.bExecute AND NOT ItpEStopEx.bBusy AND rNCIRef.NciToPlc.ChnState.8 AND memFnc.0, //EStopReq ,
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> ,
+		bErr		=> ,
+		nErrId		=> );
+
+	IF 	Dummy 
+		AND NOT ItpStepOnAfterEStopEx.bBusy 
+	THEN
+		MemDone												:= NOT ItpStepOnAfterEStopEx.bErr;
+		MemFnc.0											:= FALSE;
+	END_IF
+	
+(* Method fnc ****************************************************************)
+	IF NOT Memfnc.4 
+	THEN
+		IF ResetAdmin
+		THEN			
+			MemFnc.4										:= reset(Execute:= TRUE);
+		END_IF
+	ELSIF NOT reset(Execute:= ResetAdmin)
+	THEN
+		MemDone												:= TRUE;
+		MemFnc.4											:= FALSE;
+	END_IF
+	
+	IF NOT Memfnc.5
+	THEN
+		IF SingleBlockMode <> ItpSingleBlock.nMode 
+		THEN
+			MemFnc.5										:= SingleBlockModeChange(Execute:= TRUE,SingleBlockMode := SingleBlockMode);
+		END_IF
+	ELSIF NOT SingleBlockModeChange(Execute:= FALSE, SingleBlockMode := SingleBlockMode)
+	THEN
+		MemDone												:= TRUE;
+		MemFnc.5											:= FALSE;
+	END_IF
+
+	IF NOT Memfnc.6
+	THEN
+		IF InSingleBlockTrigNext
+		THEN
+			MemFnc.6										:= SingleBlockTrigNext(Execute:= InSingleBlockTrigNext);
+		END_IF
+	ELSIF NOT SingleBlockTrigNext(Execute:= InSingleBlockTrigNext)
+	THEN
+		MemDone												:= TRUE;
+		MemFnc.6											:= FALSE;
+	END_IF
+	
+	//Reset Intern
+	MemFnc.7												:= FALSE;
+	
+(******************************************************************************)
+(* Ctrl Status 																*)
+(******************************************************************************)
+	Busy													:= CfgBuildExt3DGroup.bBusy
+																OR CfgReconfigGroup.bBusy
+																OR ItpResetEx2.bBusy
+																OR ItpSingleBlock.bBusy
+																OR ItpEStopEx.bBusy
+																OR ItpStepOnAfterEStopEx.bBusy;
+                            						    	
+	Done													:= NOT Busy AND MemDone;
+                            						    	
+	IF done                 	                        	
+	THEN                    	                        	
+		MemDone												:= FALSE;
+	END_IF                  	                        	
+                                                        	
+	(* Error Output *)                                  	
+	IF Busy                                             	
+	THEN                                                	
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorText											:= '';
+	ELSIF CfgBuildExt3DGroup.bErr                       	
+		AND CfgBuildExt3DGroup.bExecute                 	
+	THEN                                                	
+		Error												:= TRUE;
+		ErrorId												:= CfgBuildExt3DGroup.nErrID;
+		ErrorText											:= CONCAT('CfgBuildExt3DGroup ErrorId: ', UDINT_TO_STRING(Errorid));
+                                                        	
+	ELSIF CfgReconfigGroup.bErr                         	
+		AND CfgReconfigGroup.bExecute                   	
+	THEN                                                	
+		Error												:= TRUE;
+		ErrorId												:= CfgReconfigGroup.nErrID;
+		ErrorText											:= CONCAT('CfgReconfigGroup ErrorId: ', UDINT_TO_STRING(Errorid));
+                                                        	
+	ELSIF ItpEStopEx.bErr                               	
+		AND ItpEStopEx.bExecute                         	
+	THEN                                                	
+		Error												:= TRUE;
+		ErrorId												:= ItpEStopEx.nErrID;
+		ErrorText											:= CONCAT('ItpEStopEx ErrorId: ', UDINT_TO_STRING(Errorid));
+                                                        	
+	ELSIF ItpStepOnAfterEStopEx.bErr                    	
+		AND ItpStepOnAfterEStopEx.bExecute              	
+	THEN                                                	
+		Error												:= TRUE;
+		ErrorId												:= ItpStepOnAfterEStopEx.nErrID;
+		ErrorText											:= CONCAT('ItpStepOnAfterEStopEx ErrorId: ', UDINT_TO_STRING(Errorid));
+                                                        	
+	ELSIF ItpResetEx2.bErr                              	
+		AND ItpResetEx2.bExecute                        	
+	THEN                                                	
+		Error												:= TRUE;
+		ErrorId												:= ItpResetEx2.nErrID;
+		ErrorText											:= CONCAT('ItpResetEx2 ErrorId: ', UDINT_TO_STRING(Errorid));
+                                    	
+	ELSIF ItpSingleBlock.bErr                           	
+		AND(ItpSingleBlock.bExecuteModeChange OR ItpSingleBlock.bTriggerNext)            	
+	THEN                                                	
+		Error												:= TRUE;
+		ErrorId												:= ItpSingleBlock.nErrID;
+		ErrorText											:= CONCAT('ItpSingleBlock ErrorId: ', UDINT_TO_STRING(Errorid));
+                                                        	
+	ELSIF rNCIRef.NciToPlc.ErrorCode <> 0               	
+	THEN                                                	
+		Error												:= TRUE;
+		ErrorId												:= rNCIRef.NciToPlc.ErrorCode;
+		ErrorText											:= CONCAT('NCI Grp ErrorId: ', UDINT_TO_STRING(Errorid));
+	ELSE                    						    	
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorText											:= '';
+	END_IF                  	
+
+(********************************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{cac27d25-d35b-416a-9778-2da1283db90c}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	RETURN;	                							
+END_IF
+
+	IF Execute
+	THEN
+		MemFnc.7											:= TRUE;//Reset intern
+		Error												:=FALSE;
+		ErrorId												:= 0;
+		ItpResetEx2.bExecute 								:= rNCIRef.NciToPlc.ErrorCode <> 0;
+	ELSIF NOT ItpSingleBlock.bBusy      					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpResetEx2.bExecute 								:= FALSE;
+	END_IF
+
+	ItpResetEx2(
+		bExecute	:= ,
+		tTimeOut	:= ,
+		sNciToPlc:= rNCIRef.NciToPlc,
+		bBusy		=> Busy,
+		bErr		=> ,
+		nErrId	=> );
+
+	Done													:= NOT ItpResetEx2.bBusy
+																AND NOT ItpResetEx2.bErr
+																AND ItpResetEx2.bExecute;
+
+	IF NOT Busy
+	THEN
+		IF ItpResetEx2.bExecute
+		THEN
+			Error											:=	ItpResetEx2.bErr;
+			ErrorId											:= ItpResetEx2.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpResetEx2 id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF                          					
+		IF NOT Execute                  					
+		THEN                            	
+			MemFnc.4										:= FALSE ;
+			ItpResetEx2(bExecute := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+	
+	reset													:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="singleBlockModeChange" Id="{dd786d41-63e4-4b48-902c-39b2f6a9b00a}">
+      <Declaration><![CDATA[METHOD singleBlockModeChange : BOOL //Return = Busy
+VAR_INPUT
+	Execute													:	BOOL;
+	SingleBlockMode											:	E_ItpSingleBlockMode;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	ErrorId													:= E_adsErr.DEVICE_INVALIDPARM;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	RETURN;
+END_IF
+	
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpSingleBlock.bExecuteModeChange 					:= TRUE;
+	ELSIF NOT ItpSingleBlock.bBusy	    					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpSingleBlock.bExecuteModeChange 					:= FALSE;
+
+	END_IF
+	
+	THIS^.SingleBlockMode									:= SingleBlockMode;
+									
+	ItpSingleBlock(
+		bExecuteModeChange	:= ,
+		nMode				:= SingleBlockMode,
+		bTriggerNext		:=  ,
+		tTimeOut			:= ,
+		sNciToPlc			:= rNCIRef.NciToPlc,
+		bBusy				=> Busy,
+		bErr				=> ,
+		nErrId				=> );
+
+	Done													:= NOT ItpSingleBlock.bBusy
+																AND NOT ItpSingleBlock.bErr
+																AND ItpSingleBlock.bExecuteModeChange;
+
+	IF NOT Busy
+	THEN
+		IF ItpSingleBlock.bExecuteModeChange
+		THEN
+			Error											:=	ItpSingleBlock.bErr;
+			ErrorId											:= ItpSingleBlock.nErrId;
+			ErrorText										:= CONCAT('Error ItpSingleBlock id: ',  UDINT_TO_STRING(Errorid));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc.5										:= FALSE;
+			ItpSingleBlock(bExecuteModeChange := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+	
+	SingleBlockModeChange									:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="singleBlockTrigNext" Id="{fe303b4e-2302-45ca-89ba-aa9740d7d484}">
+      <Declaration><![CDATA[METHOD PUBLIC singleBlockTrigNext : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	RETURN;
+END_IF
+	
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpSingleBlock.bTriggerNext 						:= TRUE ;
+	ELSIF NOT ItpSingleBlock.bBusy	    					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpSingleBlock.bTriggerNext 						:= FALSE;
+
+	END_IF
+
+	ItpSingleBlock(
+		bExecuteModeChange	:= ,
+		nMode				:= SingleBlockMode,
+		bTriggerNext		:=  ,
+		tTimeOut			:= ,
+		sNciToPlc			:= rNCIRef.NciToPlc,
+		bBusy				=> Busy,
+		bErr				=> ,
+		nErrId				=> );
+
+	Done												:= NOT ItpSingleBlock.bBusy
+															AND NOT ItpSingleBlock.bErr
+															AND ItpSingleBlock.bTriggerNext;
+
+	IF NOT Busy
+	THEN
+		IF ItpSingleBlock.bTriggerNext
+		THEN
+			Error										:=	ItpSingleBlock.bErr;
+			ErrorId										:= ItpSingleBlock.nErrId;
+			ErrorText									:= CONCAT('Error ItpSingleBlock id: ',  UDINT_TO_STRING(Errorid));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc.6									:= FALSE;
+			ItpSingleBlock(bTriggerNext := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+	
+	SingleBlockTrigNext									:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciAdmin">
+      <LineId Id="626" Count="167" />
+      <LineId Id="917" Count="0" />
+      <LineId Id="919" Count="1" />
+      <LineId Id="794" Count="75" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciAdmin.reset">
+      <LineId Id="3" Count="11" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="15" Count="39" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciAdmin.singleBlockModeChange">
+      <LineId Id="3" Count="56" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciAdmin.singleBlockTrigNext">
+      <LineId Id="3" Count="54" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

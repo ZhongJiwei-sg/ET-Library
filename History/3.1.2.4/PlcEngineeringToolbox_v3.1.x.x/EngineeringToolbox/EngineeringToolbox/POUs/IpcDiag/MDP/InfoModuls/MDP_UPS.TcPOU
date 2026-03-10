@@ -1,0 +1,252 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MDP_UPS" Id="{4eb4bc96-f05b-44ee-b3d1-284c7d4f6c62}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK MDP_UPS EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+(* Battery Power Status *)
+	PS_UNKNOWN												:	INT := 0;
+	PS_ONLINE												:	INT := 1;
+	PS_ONBATTERIES											:	INT := 2;
+	                    									
+(* Com Status *)        									
+	CS_UNKNOWN												:	INT := 0;
+	CS_OK													:	INT := 1;
+	CS_ERROR												:	INT := 2;
+
+(* Battery Power Status *)
+	BS_UNKNOWN												:	INT := 0;
+	BS_OK													:	INT := 1;
+	BS_CHANGE_BATTERY										:	INT := 2;
+	
+END_VAR
+VAR_INPUT
+	AmsNetId												: 	T_AmsNetId := '';	//AmsNetId
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;	//Ads timeout
+END_VAR
+VAR_OUTPUT
+(* UPS Data *)              								
+	Model													:	STRING(30);	//model name
+	VendorName												:	STRING(30);	//vendor name
+	PowerStatus												:	INT := PS_UNKNOWN;
+	ComStatus												:	INT := CS_UNKNOWN;
+	BatteryStatus											:	INT := BS_UNKNOWN;
+	BatteryCapacity											:	USINT; 		//in %
+	BatteryRuntime											:	UDINT; 		//in sec
+	PersPowerFailCounter									:	BOOL;		//TRUE when persistent power fail counter is activated
+	PowerFailCounter										:	UDINT;		//number of power fails
+	FanError												:	BOOL;		//Fan has error
+	NoBattery												:	BOOL;		//No battery connected
+	ErrorGrp												:	E_MDP_ErrGroup := eMDP_Err_NoError;
+
+END_VAR                     								
+VAR                         								
+	idx														:	INT := 1;
+	MDP_ScanModules											:	FB_MDP_ScanModules := ( nModuleType 	:= eMDP_ModT_UPS , iModIdx		:= 0);
+	MDP_Read												: 	FB_MDP_Read;
+	SplitErrorId											:	FB_MDP_SplitErrorID;
+	DstBuf													:	ARRAY[0..31] OF BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read UPS Information 							V1.0	*)
+	(***************************************************)
+
+(* Start Read *******************************************************)
+	IF Execute
+		AND state = 0
+	THEN
+		Model												:= '';
+		VendorName											:= '';
+		PowerStatus											:= PS_UNKNOWN;
+		ComStatus											:=	CS_UNKNOWN;
+		BatteryStatus										:=	BS_UNKNOWN;
+		BatteryCapacity										:= 0;
+		BatteryRuntime										:= 0;
+		PowerFailCounter									:= 0;
+		PersPowerFailCounter								:= FALSE;
+		FanError											:= FALSE;
+		NoBattery											:= FALSE;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+		MDP_Read(bExecute := FALSE);
+		MDP_ScanModules(
+			bExecute		:= NOT MDP_ScanModules.bExecute,
+			nModuleType		:= eMDP_ModT_UPS,
+			iModIdx			:= 0,
+			tTimeout		:= timeout,
+			sAmsNetId		:= AmsNetId,
+			bBusy			=> ,
+			bError			=> ,
+			nErrID			=> ,
+			nDynModuleId	=> ,
+			iModuleTypeCount=> ,
+			iModuleCount	=> );
+			
+		MDP_ScanModules(bExecute := TRUE);
+		
+		state												:= 1;
+	ELSIF NOT Execute
+		AND State = 99
+	THEN
+		state												:= 0;
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+	END_IF
+
+
+	CASE state OF
+	0:
+		;
+	1:
+		MDP_ScanModules();
+		IF NOT MDP_ScanModules.bBusy
+		THEN
+			IF MDP_ScanModules.bError
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_ScanModules.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_ScanModules(bExecute := FALSE);
+			ELSE
+				MDP_Read(bExecute := FALSE);
+				MDP_Read.stMDP_DynAddr.nArea				:= 16#8;
+				MDP_Read.stMDP_DynAddr.nModuleId			:= MDP_ScanModules.nDynModuleId;
+				MDP_Read.stMDP_DynAddr.nTableId				:= 1;
+				MDP_Read.stMDP_DynAddr.nSubIdx				:= 0;
+				state										:= 2;
+			END_IF
+
+		END_IF
+
+	2:
+		MDP_Read( pDstBuf	:= ADR(DstBuf), cbDstBufLen := SIZEOF(DstBuf));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				MDP_Read(bExecute := FALSE);
+				CASE MDP_Read.stMDP_DynAddr.nSubIdx	OF
+				0:
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 1;
+
+				1:
+					MEMCPY(ADR(Model), ADR(DstBuf), SIZEOF(Model) - 1);
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 2;
+
+				2:
+					MEMCPY(ADR(VendorName), ADR(DstBuf), SIZEOF(VendorName) - 1);
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 7;
+
+				7:
+					MEMCPY(ADR(PowerStatus), ADR(DstBuf), 1);
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 8;
+
+				8:
+					MEMCPY(ADR(ComStatus), ADR(DstBuf), 1);
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 9;
+
+				9:
+					MEMCPY(ADR(BatteryStatus), ADR(DstBuf), 1);
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 10;
+
+				10:
+					MEMCPY(ADR(BatteryCapacity), ADR(DstBuf), SIZEOF(BatteryCapacity));
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 11;
+
+				11:
+					MEMCPY(ADR(BatteryRuntime), ADR(DstBuf), SIZEOF(BatteryRuntime));
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 12;
+
+				12:
+					MEMCPY(ADR(PersPowerFailCounter), ADR(DstBuf), SIZEOF(PersPowerFailCounter));
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 13;
+
+				13:
+					MEMCPY(ADR(PowerFailCounter), ADR(DstBuf), SIZEOF(PowerFailCounter));
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 14;
+
+				14:
+					MEMCPY(ADR(FanError), ADR(DstBuf), SIZEOF(FanError));
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 15;
+
+				15:
+					MEMCPY(ADR(NoBattery), ADR(DstBuf), SIZEOF(NoBattery));
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 99;
+                                                        	
+				ELSE                                    	
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 99;
+				END_CASE
+
+				MDP_Read(
+					stMDP_DynAddr	:= ,(* address to request subindex Count of AdressList *)
+					pDstBuf			:= ADR(DstBuf),
+					cbDstBufLen		:= SIZEOF(DstBuf),
+					bExecute		:= NOT MDP_Read.bBusy AND state = 2,
+					tTimeout		:= Timeout,
+					sAmsNetId		:= AmsNetId,
+					bBusy			=> ,
+					bError			=> ,
+					nErrId			=> );
+			END_IF
+		END_IF
+
+	99: ;
+
+	ELSE
+		;
+	END_CASE
+
+	(* reset state for next start *)
+	IF NOT Execute
+		AND state = 99
+	THEN
+		state												:= 0;
+	END_IF
+
+(****************************************************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MDP_UPS">
+      <LineId Id="3" Count="193" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

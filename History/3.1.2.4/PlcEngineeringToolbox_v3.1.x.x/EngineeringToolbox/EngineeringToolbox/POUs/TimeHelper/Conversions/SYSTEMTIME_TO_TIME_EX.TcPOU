@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SYSTEMTIME_TO_TIME_EX" Id="{de084b15-f3b9-47c6-a60a-58d58dff8b89}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION SYSTEMTIME_TO_TIME_EX : TIME //Converts Systemtime (Timestruct) to TIME incl. day of week (T#3d15h23m12s34ms), which means the value reflects the time of the week starting from Sunday (DayOfWeek=0) 
+VAR_INPUT
+	IN													: TIMESTRUCT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SYSTEMTIME_TO_TIME_EX											:= TO_TIME(IN.wMilliseconds 
+																+ IN.wSecond * 1000
+																+ IN.wMinute * 60000
+																+ IN.wHour * 3600000
+																+ IN.wDayOfWeek * 86400000);
+																
+																]]></ST>
+    </Implementation>
+    <LineIds Name="SYSTEMTIME_TO_TIME_EX">
+      <LineId Id="27" Count="5" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0323" Id="{25aea455-9717-4d48-9113-612b78485448}">
+    <Declaration><![CDATA[TYPE AX5000_P_0323 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+
+(*control*)
+	Total:UDINT;
+	Available:UDINT;
+	Total1:UDINT;
+	Available1:UDINT;
+	Total2:UDINT;
+	Available2:UDINT;
+	Total3:UDINT;
+	Available3:UDINT;
+
+(*front*)
+	Total4:UDINT;
+	Available4:UDINT;
+	Total5:UDINT;
+	Available5:UDINT;
+	Total6:UDINT;
+	Available6:UDINT;
+	Total7:UDINT;
+	Available7:UDINT;
+
+
+(*option*)
+	Toal8:UDINT;
+	Available8:UDINT;
+	Total9:UDINT;
+	Available9:UDINT;
+	Total10:UDINT;
+	Available10:UDINT;
+	Total11:UDINT;
+	Available11:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

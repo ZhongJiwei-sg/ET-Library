@@ -1,0 +1,149 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="LogbookSubEventLog" Id="{be27a1ee-495b-4ec6-ace0-533dab790ad5}" SpecialFunc="None">
+    <Declaration><![CDATA[//{attribute 'no_check' := ''}
+//The LogbookSubEventLog sends log entries from the LogbookPuplisher to the EventLogger
+//Include instances of EventHandling and needs "LogbookServer" as parameter  
+FUNCTION_BLOCK LogbookSubEventLog IMPLEMENTS I_LogbookSubscriber
+VAR CONSTANT 
+	MIN_EVENT												: UINT := 1;
+	MAX_EVENT												: UINT := PARAM.LOGBOOK_SUB_MAX_EVENT_HANDLING; //see library parameter to customize parameter	
+END_VAR                     								
+VAR_INPUT                   								
+	Enable													: BOOL; //Enable
+	ConfirmEvents											: BOOL; //Quitting for corresponding event classes / set to TRUE for an auto quitting of messages which are gone
+	SourceID												: UDINT := 0; //TcEventLogger source id
+	PT_ShowEventLog											: TIME := TIME#5S; //Display time for logbook entrys that dont need to be reseted 
+END_VAR                     								
+VAR_IN_OUT                  								
+END_VAR                     								
+VAR_OUTPUT          
+	Busy													: BOOL; //Write msg to file or display via tcEventLogger is active       								
+	Error													: BOOL;
+{attribute 'displaymode':='hex'}
+	ErrorId													: UDINT; //Ads error 16#708 busy if all events are occuopied	
+END_VAR                     								
+VAR            
+//local ************************************************************************************
+	State													: INT := 0;
+	NextEvent												: UINT := MIN_EVENT;
+	MsgString												: ARRAY[MIN_EVENT..MAX_EVENT] OF STRING(PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT);
+
+	CntAllEventsOccpied										:	INT;
+	
+//trigger *********************************************************************************
+
+
+//timer ***********************************************************************************
+	tofShowMsg												: ARRAY[MIN_EVENT..MAX_EVENT] OF TOF;
+
+//instances ***********************************************************************************             								
+	EventNo													: ARRAY[MIN_EVENT..MAX_EVENT] OF EventHandling;	
+
+//Dummys ****************************************************************************************
+	i,j														: UINT;
+	k														: UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Logbook subscriber - logbook entries send to Eventlogger			*)
+	(********************************************************************)
+
+(* show messages via Eventlogger ***************************************)
+	NextEvent												:= 0;
+	FOR i := MIN_EVENT TO MAX_EVENT 
+	DO
+		tofShowMsg[i](IN := FALSE, Q => EventNo[i].Flag);
+		IF EventNo[i].State <> TCEVENTSTATE_INVALID OR EventNo[i].Flag 
+		THEN
+			EventNo[i](ConfirmTrig	:= ConfirmEvents OR NOT tofShowMsg[i].q AND EventNo[i].State <> TCEVENTSTATE_INVALID, SourceId := SourceId);
+		ELSE
+			NextEvent										:= i;
+		END_IF
+	END_FOR
+
+(* Status ****************************************************************)
+	Busy													:= NextEvent = 0; //No more event free to trigger
+
+(* Ack ErrorIds **********************************************************)
+	IF ConfirmEvents 
+	THEN
+		CntAllEventsOccpied									:= 0;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+	END_IF
+                      							
+(*************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="addNewMessage" Id="{b1ef2906-11b0-4381-a9ab-4675a9ad650a}">
+      <Declaration><![CDATA[METHOD PUBLIC FINAL addNewMessage : BOOL //Return value = TRUE if execution successful finished
+VAR_IN_OUT
+	data													:	LogbookData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF NextEvent >= MIN_EVENT and NextEvent <= MAX_EVENT
+	THEN
+		MsgString[NextEvent]								:= Data.Msg;
+		EventNo[NextEvent].eClass.0							:= Data.Options.8; 
+		EventNo[NextEvent].eClass.1							:= Data.Options.9; 
+		EventNo[NextEvent].eClass.2							:= Data.Options.10; 
+		EventNo[NextEvent].eClass.3							:= Data.Options.11; 
+		
+		tofShowMsg[NextEvent](IN := Enable, PT := PT_ShowEventLog);
+		NextEvent											:= 0;
+		addNewMessage										:= TRUE;
+	ELSE
+		addNewMessage										:= FALSE;
+		CntAllEventsOccpied									:= CntAllEventsOccpied + 1;
+		ErrorId												:= 16#0708; //Busy
+	END_IF
+					]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_init" Id="{0bbd6e5d-b9ad-4698-be82-725eb16fbaf9}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	FOR i := MIN_EVENT TO MAX_EVENT 
+	DO
+		EventNo[i].MsgId									:= TO_UINT(i);
+		EventNo[i].pText3									:= ADR(MsgString[i]);
+	END_FOR
+	
+	Fb_init 												:= TRue;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isBusy" Id="{303dfa2f-a3af-4720-8284-b6bf7de77557}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC FINAL isBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c746c593-1752-4326-90fe-fd0e32b38ba8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IsBusy											:= NextEvent = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="LogbookSubEventLog">
+      <LineId Id="184" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubEventLog.addNewMessage">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubEventLog.FB_init">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubEventLog.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

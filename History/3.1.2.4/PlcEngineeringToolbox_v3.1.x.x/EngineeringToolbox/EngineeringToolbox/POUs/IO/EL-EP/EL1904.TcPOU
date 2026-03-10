@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4018.5">
+  <POU Name="EL1904" Id="{ff82c4ca-627a-4c01-92fc-cb59139025fd}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EL1904 (* EL Safety Input Terminal IO *)
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	C1												AT  %I* : BOOL;	//TRUE when channel 1 has high signal
+	C2												AT  %I* : BOOL;	//TRUE when channel 2 has high signal
+	C3												AT  %I* : BOOL;	//TRUE when channel 3 has high signal
+	C4												AT  %I* : BOOL;	//TRUE when channel 4 has high signal
+	Valid													: BOOL;	//TRUE when data is valid
+END_VAR		            							
+VAR                     							
+	FSoESlaveCMD									AT  %I* : USINT;
+END_VAR                 	
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EL 1904 Terminal Inputs					             	 V1.2	*)
+(********************************************************************)
+
+(* Input Signals Valid ******************************************************)
+	Valid 													:= FSoESlaveCMD = 16#36
+																	OR FSoESlaveCMD = 16#08;
+          													
+(**********************************************************************)]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

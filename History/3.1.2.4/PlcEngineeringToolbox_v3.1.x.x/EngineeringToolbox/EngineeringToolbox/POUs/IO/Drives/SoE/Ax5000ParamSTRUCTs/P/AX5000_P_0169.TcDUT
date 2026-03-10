@@ -1,0 +1,113 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0169" Id="{65c183a0-0a0f-4151-b1cc-d3063a53dde3}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0169 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+(*Onboard*)
+	DelayRegister:UINT;
+	QualityMonitorValue:UINT;
+	SlaveRSSI:UINT;
+	EdgeRegister:UINT;
+	SummaryRegister:UINT;
+	EncoderTemperature:INT;
+	LEDCurrent:UINT;
+	SupplyVoltage:UINT;
+	EncoderStatus0:USINT;
+	EncoderStatus1:USINT;
+	EncoderStatus2:USINT;
+	EncoderStatus3:USINT;
+	EncoderStatus4:USINT;
+	EncoderStatus5:USINT;
+	EncoderStatus6:USINT;
+	EncoderStatus7:USINT;
+	EncoderStatus0_detailed:USINT;
+	EncoderStatus1_detailed:USINT;
+	EncoderStatus2_detailed:USINT;
+	EncoderStatus3_detailed:USINT;
+	EncoderStatus4_detailed:USINT;
+	EncoderStatus5_detailed:USINT;
+	EncoderStatus6_detailed:USINT;
+	EncoderStatus7_detailed:USINT;
+	OperatingTime:UDINT;
+	TotalShaftTurns:UDINT;
+//{attribute 'hide'}
+	Rsvd:ARRAY[0..2] OF UINT;
+	MaxOccuredPositionDelivation:UINT;
+	TotalVPOSErrors:UINT;
+	TotalACCErrors:UINT;
+	TotalPOSErrors:UINT;
+	TotalLINKErrors:UINT;
+	TotalEncodingErrors:UINT;
+//{attribute 'hide'}
+	Rsvd2:UINT;
+//{attribute 'hide'}
+	Rsvd3:UINT;
+	CyclicReadCounter:UINT;
+	CyclicReadErrorCounter:UINT;
+
+
+(*AX57xx*)			(*Die beiden NICHT verwendeten Feedbacksystemeauf der AX57xx müssen ausgeklammert werden*)
+
+		(*HiperfaceDSL
+			DelayRegister:UINT;
+			QualityMonitorValue:UINT;
+			SlaveRSSI:UINT;
+			EdgeRegister:UINT;
+			SummaryRegister:UINT;
+			EncoderTemperature:INT;
+			LEDCurrent:UINT;
+			SupplyVoltage:UINT;
+			EncoderStatus0:USINT;
+			EncoderStatus1:USINT;
+			EncoderStatus2:USINT;
+			EncoderStatus3:USINT;
+			EncoderStatus4:USINT;
+			EncoderStatus5:USINT;
+			EncoderStatus6:USINT;
+			EncoderStatus7:USINT;
+			EncoderStatus0_detailed:USINT;
+			EncoderStatus1_detailed:USINT;
+			EncoderStatus2_detailed:USINT;
+			EncoderStatus3_detailed:USINT;
+			EncoderStatus4_detailed:USINT;
+			EncoderStatus5_detailed:USINT;
+			EncoderStatus6_detailed:USINT;
+			EncoderStatus7_detailed:USINT;
+			OperatingTime:UDINT;
+			TotalShaftTurns:UDINT;
+	//	{attribute 'hide'}
+			rsvd:ARRAY[0..2] OF UINT;
+			MaxOccuredPositionDelivation:UINT;
+			TotalVPOSErrors:UINT;
+			TotalACCErrors:UINT;
+			TotalPOSErrors:UINT;
+			TotalLINKErrors:UINT;
+			TotalEncodingErrors:UINT;
+		//	{attribute 'hide'}
+			rsvd2:UINT;
+		//	{attribute 'hide'}
+			rsvd3:UINT;
+			CyclicReadCounter:UINT;
+			CyclicReadErrorCounter:UINT;
+*)
+(*
+
+		(*AX572xEnDat2.2*)
+
+			AX572xEnDat2.2:UINT;
+
+*)
+
+(*
+		(*AX572xBiSS*)
+
+			AX572xBiSS:UINT;
+*)
+
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

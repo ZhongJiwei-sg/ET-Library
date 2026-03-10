@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="getEventClassPriority" Id="{9204a937-de8d-448b-a5fd-6d9d8b7e8405}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Returns configured level to corresponding event class (see library Param) 
+FUNCTION getEventClassPriority : UINT
+VAR_INPUT
+	TcEventClass											:	E_TcEventClass;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	CASE tcEventClass OF
+	Tc2_System.TCEVENTCLASS_NONE:			GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_NONE_PRIORITY;	
+	Tc2_System.TCEVENTCLASS_MAINTENANCE:	GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_MAINTENANCE_PRIORITY;		
+	Tc2_System.TCEVENTCLASS_MESSAGE:		GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_MESSAGE_PRIORITY;			
+	Tc2_System.TCEVENTCLASS_HINT:			GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_HINT_PRIORITY;	
+	Tc2_System.TCEVENTCLASS_STATEINFO:		GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_STATEINFO_PRIORITY;	
+	Tc2_System.TCEVENTCLASS_INSTRUCTION:	GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_INSTRUCTION_PRIORITY;	
+	Tc2_System.TCEVENTCLASS_WARNING:		GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_WARNING_PRIORITY;	
+	Tc2_System.TCEVENTCLASS_ALARM:			GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_PRIORITY;	
+	Tc2_System.TCEVENTCLASS_PARAMERROR:		GetEventClassPriority	:= PARAM.EVENT_HANDLING_CONFIG.CLASS_PARAMERROR_PRIORITY;		
+	ELSE
+		GetEventClassPriority										:= PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_PRIORITY;
+	END_CASE
+	
+		                 ]]></ST>
+    </Implementation>
+    <LineIds Name="getEventClassPriority">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

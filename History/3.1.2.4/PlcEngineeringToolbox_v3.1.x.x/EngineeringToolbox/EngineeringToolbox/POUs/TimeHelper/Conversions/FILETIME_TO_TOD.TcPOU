@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="FILETIME_TO_TOD" Id="{2dfd0802-d1df-4ed2-8352-86631f3e5384}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION FILETIME_TO_TOD : TIME_OF_DAY //Converts 64bit T_FILETIME to TIME_OF_DAY (TOD#15:36:30.123)
+VAR_INPUT
+	IN														: T_FILETIME;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FILETIME_TO_TOD												:= SYSTEMTIME_TO_TOD(FILETIME_TO_SYSTEMTIME(IN));]]></ST>
+    </Implementation>
+    <LineIds Name="FILETIME_TO_TOD">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

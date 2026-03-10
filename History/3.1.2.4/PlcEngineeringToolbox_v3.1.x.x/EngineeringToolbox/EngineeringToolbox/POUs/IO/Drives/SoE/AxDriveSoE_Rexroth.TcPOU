@@ -1,0 +1,583 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxDriveSoE_Rexroth" Id="{c1cea3c8-7db7-4efd-b3aa-88d5e609353f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Bosch Rexroth EtherCAT SoE Drive Control
+//based on Tc2_Drive
+FUNCTION_BLOCK AxDriveSoE_Rexroth EXTENDS AxDriveBase
+VAR_INPUT
+	EnableEvent												:	BOOL := TRUE;
+	ResetTrig												:	BOOL := FALSE; (* Quit event and reset drive (SoE Reset) *)
+	SourceId												:	UDINT := 102000; //SoE Drive default multisource Id + Ax id
+	Name													:	STRING(30) := '';
+	ErrorLimitPos											:	BOOL := FALSE;
+	ErrorLimitNeg											:	BOOL := FALSE;
+	BreakUnlock												:	BOOL := FALSE; //Not implemented yet
+	BreakLock												:	BOOL := FALSE; //Not implemented yet					
+	SetReferenz												: 	BOOL := FALSE;
+	Referenzpos												: 	LREAL := 0.0;
+END_VAR                                 					
+VAR_IN_OUT                              					
+END_VAR                                 					
+VAR_OUTPUT                                                					
+	InReferenz												:	BOOL; (* Drive in reference *)
+	RT_StatusChanged										:	BOOL;                                    						
+	Status													:	ST_IndraDriveCsDriveStatus;
+	C1D														:	ST_IndraDriveCs_C1D;
+	DiagMsg 												: 	ST_SoE_String;
+	DiagNumber 												: 	UDINT;
+	Operational												: INPUT := (Force := TRUE);	(* Link to ALWAYS_TRUE or operational signal from drive *)
+	EcState											AT %I* 	: 	UINT; (* Ethercat InfoData State *)
+	SercosErrorId											:	UINT;                    					
+	SafetyError										AT %I*	:	BOOL;	(* Ax5805 Drive Safety Error - Bit .7 in Input Safe Data Byte 0 oder 2 *)	
+	EventStatus												:	DWORD;
+	NoOfActiveEvents										:	INT;
+	Busy													:	BOOL;
+	Error													:	BOOL;
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT;
+	ErrorText												:	STRING(40);
+END_VAR                  						
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR (* EA Internal *)
+	EcInfoDataState									AT %I* 	: 	UINT; (* Ethercat InfoData State *)
+END_VAR
+VAR
+
+(* Cache *********************************************************************)
+	MemDriveStatusword										: 	WORD;
+	MEM_StatusTrig											:	BYTE;
+	StatusTrig												:	BYTE;
+	stateReadStatus											:	INT;
+	stateCtrl												:	INT := 0;
+
+(* Timer ********************************************************************************)
+
+(* Trigger ******************************************************************************)
+
+(* Instance ****************************************************************************)
+	SoEDriveReset											: 	FB_SoEReset := (Timeout		:= DEFAULT_ADS_TIMEOUT);
+	SoEWrite												: 	FB_SoEWrite := (Timeout		:= DEFAULT_ADS_TIMEOUT);
+	SoERead													: 	FB_SoERead := (Timeout		:= DEFAULT_ADS_TIMEOUT);
+	SoEExecuteCmd											:	FB_SoEExecuteCommand := (Timeout		:= DEFAULT_ADS_TIMEOUT);
+	EcSetSlaveSTATE											:	FB_EcSetSlaveSTATE := (tTimeout		:= DEFAULT_ADS_TIMEOUT);
+	Event													:	EventHandlingGrp10;
+
+(* Dummy Speicher **********************************************************)
+	i														: 	INT := 0 ;
+	_word													:	WORD;
+	_DWORD													:	DWORD;
+
+(****************************************************************************)
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(************************************************************************************)
+	(*																					*)
+	(*		B E C K H O F F   N E W   A U T O M A T I O N   T E C H N O L O G Y    		*)
+	(*																					*)
+	(*		Eiserstr.5	D-33415 Verl	Germany	phone:	+49-5246-0	www.Beckhoff.Com	*)
+    (*																					*)
+    (*		Bausteinbeschreibung	:	Ethercat SoE MC2 Drive Ctrl						*)
+	(*		TwinCAT-Version			:	3.x or higher	 								*)
+	(*		Version					:	V3.0/05/11										*)
+ 	(*		Autor					:	Daniel Schlingmann								*)
+	(*		Lib						:	TcMC2Drive.lib / TcDrive.Lib					*)
+	(*																					*)
+	(* Call cyclic																		*)
+	(************************************************************************************)
+
+(* abort function-call if the reference is invalid *****************************)
+IF NOT __ISVALIDREF(rAxis)  
+THEN
+	Busy													:= NOT Error;
+	Fault													:= TRUE;
+	Ready													:= FALSE;
+	Error													:= TRUE;
+	ErrorId													:= 16#4B30;
+	ErrorText												:= 'Referenz rAxis invalid (0)';
+	SercosErrorId											:= 0;
+	RETURN;
+END_IF
+
+(* DriveStatusword *****************************)
+	Status 													:= F_ConvWordToSTIndraDriveCsDriveStatus(StatusWord);
+	IF rAxis.Status.OpMode.SimulationAxis or AdsAddr.port = 0
+	THEN
+		Status.bNotReadyToPowerUp							:= FALSE;	
+		Status.bDrvShutdownBitC1D							:= FALSE;
+		Status.bReadyForEnable								:= TRUE;
+		Status.bEnabled										:= TRUE;	
+	END_IF
+	
+(* Drive Operation Input ***********************)
+	Operational(
+		Force		:= rAxis.Status.OpMode.SimulationAxis ,
+		Invert		:= ,
+		PT_ON		:= ,
+		PT_OFF		:= ,
+		Q_DIRECT	=> ,
+		Q			=> ,
+		Q_RT		=> ,
+		Q_FT		=> );
+
+(* DriveStatusBits ***********************************************)
+	Fault													:= Status.bDrvShutdownBitC1D
+																OR rAxis.NcToPlc.StateDWord.28 (* DriveDeviceError *)
+																OR rAxis.NcToPlc.StateDWord.30; (* IODataInvalid *)
+                                						
+	Ready 													:= NOT Fault
+																	AND(Status.bReadyForEnable OR Status.bEnabled)
+																	AND Operational.Q;
+  
+	SwitchedOn												:= Status.bEnabled AND NOT Fault;	
+	                              	
+(* Reset Drive ****************************************************)
+	SoEDriveReset(
+		NetId		:= ,
+		Execute		:= ,
+		Timeout		:= ,
+		Axis		:= rAxis,
+		Busy		=> ,
+		Error		=> ,
+		AdsErrId	=> ,
+		SercosErrId	=> );
+
+	IF SoEDriveReset.Busy 
+	THEN
+		; (* Block ist currend working *)
+	ELSIF ResetTrig
+	THEN
+		reset();
+	ELSIF SoEDriveReset.Execute
+	THEN
+	(*	RefreshStatus();  *)
+		SoEDriveReset.Execute 								:= FALSE;
+	END_IF
+
+(* Set Etehrcat State to OP ********************************************)
+	EcSetSlaveSTATE(
+		sNetId		:= F_CreateAmsNetId(nIds := AdsAddr.netId),
+		nSlaveAddr	:= AdsAddr.port,
+		bExecute	:= ,
+		tTimeout	:= ,
+		reqState	:= Tc2_EtherCAT.EC_DEVICE_STATE_OP,
+		bBusy		=> ,
+		bError		=> ,
+		nErrId		=> ,
+		currState	=> );
+
+	IF EcSetSlaveSTATE.bBusy
+	THEN
+		; (* Block ist currend working *)
+	ELSIF EcSetSlaveSTATE.bExecute
+		AND NOT ResetTrig
+	THEN
+		RefreshStatus();
+		EcSetSlaveSTATE.bExecute 							:= FALSE;
+	END_IF
+
+(* Referenzieren *******************************************************)
+	CASE stateCtrl OF
+	-1,0:
+		IF SetReferenz AND NOT rAxis.Status.OpMode.SimulationAxis AND AdsAddr.port > 0
+		THEN
+			writeReferenz();
+		ELSE
+			stateCtrl										:= 0;
+		END_IF
+
+	1: (* Referezwert schreiben **************************************)
+		IF NOT SoEWrite.Busy
+			AND SoEWrite.Execute
+		THEN
+			IF SoEWrite.Error
+			THEN
+				stateCtrl 									:= 0;
+			ELSE                							
+				stateCtrl									:= 2;
+			END_IF
+		END_IF
+
+		_DWORD 												:= LREAL_TO_UDINT(Referenzpos);
+
+		SoEWrite(
+			NetId		:= ,
+			Idn			:= S_0_IDN + 52,
+			Element		:= EC_SOE_ELEMENT_VALUE ,
+			pSrcBuf		:= ADR(_DWORD),
+			BufLen		:= SIZEOF(_DWORD),
+			Execute		:= stateCtrl = 1,
+			Timeout		:= ,
+			Password	:= ,
+			Axis		:= rAxis,
+			Busy		=> ,
+			Error		=> ,
+			AdsErrId	=> ,
+			SercosErrId	=> );
+
+	2: (* commad for setting setvalue *)
+		IF NOT SoEExecuteCmd.Busy
+			AND SoEExecuteCmd.Execute
+		THEN
+			IF SoEExecuteCmd.Error
+			THEN
+				stateCtrl 									:= 0;
+			ELSE
+				RefreshStatus();
+				IF NOT SetReferenz
+				THEN
+					stateCtrl 								:= 0;
+				ELSE            							
+					stateCtrl 								:= -1;
+				END_IF
+			END_IF
+		END_IF
+
+		SoEExecuteCmd(
+			NetId		:= '',
+			Idn			:= P_0_IDN + 12,
+			Execute		:= stateCtrl = 2,
+			Timeout		:= ,
+			Axis		:= rAxis,
+			Busy		=> ,
+			Error		=> ,
+			AdsErrId	=> ,
+			SercosErrId	=> );
+	ELSE
+		;
+	END_CASE
+
+
+(* evaluate sercos DriveStatusword *********************************************************)
+	RT_StatusChanged 										:= SHR(StatusWord,2) <> MemDriveStatusword;
+	MemDriveStatusword 										:= SHR(StatusWord,2);
+
+(* Start Read Drive status *****************************************************************)
+	CASE stateReadStatus OF
+	0:
+		StatusTrig.0 										:= rAxis.NcToPlc.StateDWord.28; (* DriveDeviceError *)
+		StatusTrig.1 										:= rAxis.NcToPlc.StateDWord.30; (* IODataInvalid *)
+                                							
+		IF NOT rAxis.Status.OpMode.SimulationAxis AND AdsAddr.port > 0
+			AND(RT_StatusChanged OR MEM_StatusTrig <> StatusTrig)
+		THEN
+			RefreshStatus();
+		ELSE
+			;
+		END_IF
+
+	(* Read Class 1 Diag *********************************************************)
+	10:
+		IF NOT SoERead.Busy
+			AND SoERead.Execute
+		THEN
+			IF SoERead.Error
+			THEN
+				stateReadStatus 							:= 0;
+			ELSE                    						
+				C1D 										:= F_ConvWordToSTIndraDriveCsC1D(_word);
+				stateReadStatus 							:= stateReadStatus + 1;
+			END_IF
+		END_IF
+
+		SoERead(
+			NetId		:= ,
+			Idn			:= S_0_IDN + 11,
+			Element		:= EC_SOE_ELEMENT_VALUE,
+			pDstBuf		:= ADR(_word),
+			BufLen		:= SIZEOF(_word),
+			Execute		:= stateReadStatus = 10,
+			Timeout		:= ,
+			Axis		:= rAxis,
+			Busy		=> ,
+			Error		=> ,
+			AdsErrId	=> ,
+			SercosErrId	=> ,
+			Attribute	=> );
+
+	(* S-0-0403 In Referenz ********************************************************)
+	11:
+		IF NOT SoERead.Busy
+			AND SoERead.Execute
+		THEN
+			IF SoERead.Error
+			THEN
+				stateReadStatus 							:= 0;
+			ELSE
+				InReferenz 									:= _WORD.0 AND _WORD.1;
+				stateReadStatus 							:= stateReadStatus + 1;
+			END_IF
+		END_IF
+
+		SoERead(
+			NetId		:= ,
+			Idn			:= S_0_IDN + 403,
+			Element		:= EC_SOE_ELEMENT_VALUE,
+			pDstBuf		:= ADR(_word),
+			BufLen		:= SIZEOF(_word),
+			Execute		:= stateReadStatus = 11,
+			Timeout		:= ,
+			Axis		:= rAxis,
+			Busy		=> ,
+			Error		=> ,
+			AdsErrId	=> ,
+			SercosErrId	=> ,
+			Attribute	=> );
+
+			
+	(* Diag Message *********************************************************)
+	12:
+		IF NOT SoERead.Busy
+			AND SoERead.Execute
+		THEN
+			IF SoERead.Error
+			THEN
+				stateReadStatus 							:= 0;
+			ELSE
+				stateReadStatus 							:= stateReadStatus + 1;
+			END_IF
+		END_IF
+
+		SoERead(
+			NetId		:= ,
+			Idn			:= S_0_IDN + 95,
+			Element		:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+			pDstBuf		:= ADR(DiagMsg),
+			BufLen		:= SIZEOF(DiagMsg),
+			Execute		:= stateReadStatus = 12,
+			Timeout		:= ,
+			Axis		:= rAxis,
+			Busy		=> ,
+			Error		=> ,
+			AdsErrId	=> ,
+			SercosErrId	=> ,
+			Attribute	=> );
+
+	(* Diag Number *********************************************************)
+	13:
+		IF NOT SoERead.Busy
+			AND SoERead.Execute
+		THEN
+			IF SoERead.Error
+			THEN
+				stateReadStatus 							:= 0;
+			ELSE
+				stateReadStatus 							:= stateReadStatus + 1;
+			END_IF
+		END_IF
+
+		SoERead(
+			NetId		:= ,
+			Idn			:= S_0_IDN + 390,
+			Element		:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+			pDstBuf		:= ADR(DiagNumber),
+			BufLen		:= SIZEOF(DiagNumber),
+			Execute		:= stateReadStatus = 13,
+			Timeout		:= ,
+			Axis		:= rAxis,
+			Busy		=> ,
+			Error		=> ,
+			AdsErrId	=> ,
+			SercosErrId	=> ,
+			Attribute	=> );
+			
+	(* reading status finished ************************************************************)
+	ELSE (* Case else *)
+		stateReadStatus 									:= 0;
+	END_CASE
+
+(* Event Logger Meldungen *****************************************************)
+	Event.no[1].Flag 										:= Status.bNotReadyToPowerUp;
+	Event.no[2].Flag 										:= Status.bDrvShutdownBitC1D AND stateReadStatus = 0; Event.no[2].pText3 := ADR(DiagMsg.strData);
+	Event.no[3].Flag 										:= FALSE;
+	Event.no[4].Flag 										:= ErrorLimitPos;
+	Event.no[5].Flag 										:= ErrorLimitNeg;
+	Event.no[6].Flag 										:= FALSE; //SafetyError AND DiagNumber <> 16#0000_FDD9;
+	Event.no[7].Flag 										:= FALSE;
+	Event.no[8].Flag 										:= FALSE;
+	Event.no[9].Flag 										:= FALSE;
+	Event.no[10].Flag 										:= Error;
+
+	(* Check if msg activ and init some parameter ***********************)
+	IF Event.no[1].Text2 <> Name AND Name <> '' OR Event.no[1].Text2 = '' AND rAxis.NcToPlc.AxisId <> 0
+	THEN
+		Event.no[1].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_HINT;
+
+		(* Init Name *)
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+			Event.no[i].Text2								:= SEL(LEN(name)>1,CONCAT('Axis id:',DWORD_TO_STRING(rAxis.NcToPlc.AxisId)),name);
+		END_FOR
+	END_IF
+
+(* workl Event Ctrl *************************************************)
+	Event(
+		ConfirmTrig := ResetTrig,
+		Disable		:= rAxis.NcToPlc.AxisId = 0 OR NOT EnableEvent,
+		SourceId	:= SourceId + rAxis.NcToPlc.AxisId,
+		Status		=> EventStatus,
+		NoOfActiveEvents => NoOfActiveEvents);
+				
+(* Error Hdl FB ******************************************************************)
+	IF SoEDriveReset.Error
+	THEN
+		Error												:=	TRUE;
+		ErrorId												:= 0;
+		SercosErrorId										:= SoEDriveReset.SercosErrId;
+		ErrorText											:= CONCAT('SoeDrvReset SercosErrId: ',DWORD_TO_HEXSTR(SoEDriveReset.SercosErrId,4,FALSE));
+		ErrorText											:=	CONCAT(CONCAT(ErrorText,', ADSErrId: '),UINT_TO_STRING(SoEDriveReset.AdsErrId));
+	ELSIF SoEExecuteCmd.Error
+	THEN
+		Error												:=	TRUE;
+		ErrorId												:= 0;
+		SercosErrorId										:= SoEExecuteCmd.SercosErrId;
+		ErrorText											:= CONCAT('SoEExecuteCmd SercosErrId: ',DWORD_TO_HEXSTR(SoEExecuteCmd.SercosErrId,4,FALSE));
+		ErrorText											:=	CONCAT(CONCAT(ErrorText,', ADSErrId: '),UINT_TO_STRING(SoEExecuteCmd.AdsErrId));
+	ELSIF SoERead.Error
+	THEN
+		Error												:=	TRUE;
+		ErrorId												:= 0;
+		SercosErrorId										:= SoERead.SercosErrId;
+		ErrorText											:= CONCAT('SoERead SercosErrId: ',DWORD_TO_HEXSTR(SoERead.SercosErrId,4,FALSE));
+		ErrorText											:=	CONCAT(CONCAT(ErrorText,', ADSErrId: '),UINT_TO_STRING(SoERead.AdsErrId));
+	ELSIF SoEWrite.Error
+	THEN
+		Error												:=	TRUE;
+		ErrorId												:= 0;
+		SercosErrorId										:= SoEWrite.SercosErrId;
+		ErrorText											:= CONCAT('SoEWrite SercosErrId: ',DWORD_TO_HEXSTR(SoEWrite.SercosErrId,4,FALSE));
+		ErrorText											:=	CONCAT(CONCAT(ErrorText,', ADSErrId: '),UINT_TO_STRING(SoEWrite.AdsErrId));
+	END_IF
+
+(* FB is Busy *******************************************************************)
+	Busy 													:= stateCtrl > 0
+																OR SoEDriveReset.Busy
+																OR stateReadStatus > 0;
+
+(******************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="refreshStatus" Id="{f0ba307a-5936-459d-bf80-4c8c3c763506}">
+      <Declaration><![CDATA[METHOD PUBLIC refreshStatus : BOOL //Return value = TRUE if busy
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rAxis)  
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= 16#4B30;
+	ErrorText												:= 'Referenz rAxis invalid (0)';
+	SercosErrorId											:= 0;
+ELSIF stateReadStatus = 0 
+THEN
+	Busy													:= TRUE;
+	Error													:= FALSE;
+	ErrorTExt												:= '';
+	ErrorId													:= 0;
+	SercosErrorId											:= 0;
+	stateReadStatus 										:= 10;
+	StatusTrig.0 											:= rAxis.NcToPlc.StateDWord.28; (* DriveDeviceError *)
+	StatusTrig.1 											:= rAxis.NcToPlc.StateDWord.30; (* IODataInvalid *)
+	MEM_StatusTrig 											:= StatusTrig;
+	MEMSET(ADR(DiagMsg),0,SIZEOF(DiagMsg));
+	SoERead(
+		Execute := FALSE,
+		Axis 	:= rAxis);
+ELSE
+	Busy													:= TRUE;
+END_IF                              						
+                                    						
+RefreshStatus												:= Busy AND stateReadStatus > 0;
+                                    	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{f58e7db5-98bd-453f-beb0-503fa064ef63}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if busy
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT SoEDriveReset.Execute
+THEN
+	Error													:=	FALSE;
+	ErrorId													:= 0;
+	SercosErrorId											:= 0;
+	Errortext												:= '';
+END_IF
+EcSetSlaveSTATE.bExecute									:= NOT (( UINT_TO_WORD(EcState) AND Tc2_EtherCAT.EC_DEVICE_STATE_MASK ) = Tc2_EtherCAT.EC_DEVICE_STATE_OP)
+																AND EcState > 0 AND NOT rAxis.Status.OpMode.SimulationAxis;
+										
+Busy														:= SoEDriveReset.Busy OR NOT SoEDriveReset.Execute;               							
+SoEDriveReset.Execute										:= NOT SoEDriveReset.Busy AND NOT rAxis.Status.OpMode.SimulationAxis AND AdsAddr.port > 0;
+reset													:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="writeReferenz" Id="{9b6da60a-c221-47c8-9d5d-873c54777dd4}">
+      <Declaration><![CDATA[METHOD PUBLIC writeReferenz : BOOL //Return value = TRUE if busy
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rAxis)  
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	ErrorText												:= 'Referenz rAxis invalid (0)';
+	SercosErrorId											:= 0;
+ELSIF stateCtrl = 0 
+THEN
+	ErrorText												:= '';
+	Error													:=	FALSE;
+	ErrorId													:= 0;
+	SercosErrorId											:= 0;
+	Busy													:= TRUE;
+	stateCtrl 												:= 1;
+	SoEWrite(Execute := FALSE, Axis := rAxis);
+	SoEExecuteCmd(Execute := FALSE, Axis := rAxis);
+
+END_IF                              						
+                                    	
+writeReferenz													:= Busy AND stateCtrl > 0;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveSoE_Rexroth">
+      <LineId Id="3" Count="381" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Rexroth.refreshStatus">
+      <LineId Id="3" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Rexroth.reset">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Rexroth.writeReferenz">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

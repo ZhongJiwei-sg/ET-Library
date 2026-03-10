@@ -1,0 +1,210 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AxDriveCoE_INOVANCE_wEvents" Id="{d2b19ea9-f113-46f8-9b56-daabff7d2aa5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxDriveCoE_INOVANCE_wEvents  EXTENDS AxDriveBase (* Inovance SV660N EtherCAT drive 
+Do enable remote brake control the folloing settings are needed
+
+Required process data: 
+- 0x1B01, which includes 0x60FE:01 Physical outputs
+
+Required startup list entries: 
+- 0x60FE:02 (Bit Mask) = 400000 dec.
+- 0x200D:12 (Forced DI/DO setting) = 4 dec (EtherCAT)
+- 0x2004:05 (DO Function Selection) = 9 dec (to set DO function back to drive on restart) 
+
+*)
+VAR CONSTANT
+	PHY_OUTPUT_BRAKE										:	INT := 18;
+END_VAR
+VAR_INPUT
+	EnableEvent												:	BOOL := TRUE;
+	ConfirmTrig												:	BOOL := FALSE; (* Reset event *)
+	SourceId												:	UDINT := 102200; //CoE Drive default multisource Id + Ax id
+	Name													:	STRING(30) := '';
+	ErrorLimitPos											:	BOOL := FALSE;
+	ErrorLimitNeg											:	BOOL := FALSE;
+	BrakeUnlock												:	BOOL := FALSE;
+	PhysicalOutputs									AT%Q*	:   UDINT;
+END_VAR
+VAR_OUTPUT
+	BrakeUnlocked											:	BOOL;
+	Status													:	CiA_DS402Statusword_INOVANCE;	
+
+	EventStatus												:	DWORD;
+	NoOfActiveEvents										:	INT;
+	Busy													:	BOOL;
+	Error													:	BOOL;
+	ErrorId													:	UDINT;
+	STOOff													:	BOOL;
+	
+	ModesOfOperationDisplay							AT %I*	:	SINT;
+	DigitalInputs									AT %I*	:	UDINT;
+	ErrorCode										AT %I*	:	UINT;
+END_VAR
+VAR
+END_VAR
+VAR
+(* Function blocks ****************************************************************************)	
+	CoEWrite												: FB_EcCoeSdoWriteEx := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	Event													: EventHandlingGrp10;
+	i														:	INT;
+	BrakeState												:	INT;	
+	CoESetValue												:	INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* CoE Drive																		*)
+	(************************************************************************************)
+
+		(* CoE Drive																		*)
+	(************************************************************************************)
+
+(* abort function-call if the reference is invalid *****************************)
+	IF NOT __ISVALIDREF(rAxis) 
+	THEN
+		Busy												:= NOT Error;
+		Fault												:= TRUE;
+		SwitchedOn											:= FALSE;
+		Ready												:= FALSE;
+		Error												:= TRUE;
+		ErrorId												:= 16#4B30;
+		RETURN;         										
+	END_IF
+
+(* Call super class ****************************************************)
+	SUPER^(); 
+	
+(* Read Statusword ********************************************************)	
+	IF rAxis.Status.OpMode.SimulationAxis
+	THEN
+		IF rAxis.PlcToNc.ControlDWord.0
+		THEN
+			Status.readStatusword(TO_UINT(eCiA_DS402_STATUS_STATE.OPERATION_ENABLED));
+		ELSE
+			Status.readStatusword(TO_UINT(eCiA_DS402_STATUS_STATE.SWITCHED_ON));	
+		END_IF
+	ELSE
+		Status.readStatusword(Statusword);
+	END_IF	
+		
+(* DriveStatusBits ***********************************************)
+	Fault													:= Status.Fault
+																OR rAxis.NcToPlc.StateDWord.28 (* DriveDeviceError *)
+																OR rAxis.NcToPlc.StateDWord.30; (* IODataInvalid *)
+            												
+	Ready 													:= NOT Fault
+																AND(Status.ReadyToSwitchOn OR Status.SwitchedOn);
+
+	SwitchedOn												:= Status.SwitchedOn AND NOT Fault;
+
+	STOOff													:= DigitalInputs.3;
+	
+	
+(* manual override brake ********************************************************)		
+(*	CASE BrakeState OF
+	0:								
+		IF BrakeUnlock AND NOT rAxis.PlcToNc.ControlDWord.0 XOR BrakeUnlocked 
+		THEN
+			CoESetValue										:= SEL(BrakeUnlock AND NOT rAxis.PlcToNc.ControlDWord.0, 9, 31);
+			CoEWrite(
+				bExecute	:=TRUE  , 
+				sNetId		:= F_CreateAmsNetId(nIds :=AdsAddr.netId),
+				nSlaveAddr	:= AdsAddr.port,
+				nIndex		:= 16#2004,
+				nSubIndex	:= 16#5,
+				pSrcBuf		:=ADR(CoESetValue) , 
+				cbBufLen	:=SIZEOF(CoESetValue));	
+			Busy											:= TRUE;
+			BrakeState										:= BrakeState + 1;
+		END_IF
+	
+	1:
+		CoEWrite( bExecute	:=TRUE  , pSrcBuf	:=ADR(CoESetValue),cbBufLen:=SIZEOF(CoESetValue));	
+
+		IF NOT CoEWrite.bBusy
+		THEN
+			IF CoEWrite.bError	
+			THEN
+				BrakeState									:= 99;
+			ELSE
+				BrakeUnlocked								:= CoESetValue = 31; //Control via EtherCAT
+				CoEWrite(bExecute :=FALSE);
+				BrakeState									:= 0;
+			END_IF
+		END_IF
+		
+	99: //Error CoE Write
+		Error												:= TRUE;
+		ErrorId												:= CoEWrite.nErrId;
+		Busy												:= FALSE;		
+		IF ConfirmTrig
+		THEN
+			CoEWrite( bExecute	:=FALSE  , pSrcBuf	:=ADR(CoESetValue),cbBufLen:=SIZEOF(CoESetValue));		
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			BrakeState										:= 0;	
+		END_IF
+	END_CASE
+	
+*)
+	IF rAxis.PlcToNc.ControlDWord.0
+	THEN
+		 BrakeUnlocked										:= FALSE; 
+	ELSIF BrakeUnlocked XOR BrakeUnlocked
+	THEN
+		BrakeUnlocked										:= BrakeUnlocked;
+	END_IF
+	PhysicalOutputs.PHY_OUTPUT_BRAKE						:= BrakeUnlocked;
+	
+(* Set Tc event messages of status word *****************************************************)
+	Event.no[1].Flag 										:= NOT Status.ReadyToSwitchOn AND InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP; 
+	Event.no[2].Flag 										:= Status.Fault OR ErrorCode <> 0; IF Event.no[2].Flag THEN Event.no[2].Text1 := CONCAT(', error code:', DWORD_TO_HEXSTR(TO_DWORD(ErrorCode),4,FALSE));END_IF
+	Event.no[3].Flag 										:= Status.Warning; 	 			
+	Event.no[4].Flag 										:= Status.InternalLimitActive;
+	Event.no[5].Flag 										:= Status.SwitchOnDisabled;
+//	Event.no[6].Flag 										:= NOT Status.RemoteSwitch AND Status.SwitchedOn;
+	Event.no[7].Flag 										:= BrakeUnlock ; 	
+	Event.no[8].Flag 										:= ErrorLimitPos AND InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP;
+	Event.no[9].Flag 										:= ErrorLimitNeg AND InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP;
+//	Event.no[10].Flag 										:= ADC drive error
+	
+(* Check if msg activ and init some parameter ***********************)
+	IF Event.no[1].Text2 <> Name AND Name <> '' OR Event.no[1].Text2 = '' AND rAxis.NcToPlc.AxisId <> 0
+	THEN
+		Event.no[1].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[3].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		Event.no[4].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		Event.no[5].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[6].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[7].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		
+		(* Init axisname *)
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+		(*	Event.no[i].Text1								:= '';*)
+			Event.no[i].Text2								:= SEL(LEN(name)>1,CONCAT('Axis id:',DWORD_TO_STRING(rAxis.NcToPlc.AxisId)),name);			
+		END_FOR
+		
+	END_IF
+
+(* workl Event Ctrl *************************************************)
+	Event(
+		ConfirmTrig 	:= ConfirmTrig,
+		Disable			:= rAxis.NcToPlc.AxisId = 0 OR NOT EnableEvent,
+		SourceId		:= SourceId + rAxis.NcToPlc.AxisId);
+		
+	NoOfActiveEvents										:= Event.NoOfActiveEvents ;
+ 	EventStatus												:= Event.Status ;
+	
+(*********************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="AxDriveCoE_INOVANCE_wEvents">
+      <LineId Id="1343" Count="92" />
+      <LineId Id="1438" Count="0" />
+      <LineId Id="1532" Count="6" />
+      <LineId Id="1530" Count="0" />
+      <LineId Id="1439" Count="12" />
+      <LineId Id="1453" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

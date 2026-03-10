@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="ERROR_HDL" Id="{14f122d5-bf49-4d2c-9a6b-ae59e98954ee}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Error handle object to collect/provide additional error information like state , function name, id or information text 
+FUNCTION_BLOCK ERROR_HDL
+VAR_INPUT
+	Flag													:	BOOL := FALSE; 	//Error is active
+	SourceId												: 	UDINT := 0; 	//Source ID for EventLogger if neede
+	EventClass												:	E_TcEventClass := TC2_SYSTEM.TCEVENTCLASS_ALARM;
+{attribute 'displaymode':='hex'}
+	Id														:	DINT := 0;	//Error id 
+	State													:	DINT := 0;	//State where error occures
+	Text													:	STRING(MAX_STRING_LENGTH) := '';	//Information text 
+	Fnc														:	STRING := '';	//Function name of error source
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{607e3ea7-0a09-428f-9751-3edcf3a92b53}">
+      <Declaration><![CDATA[//Reset all entrys to zero/empty
+METHOD PUBLIC reset : BOOL  //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[flag 														:= FALSE;
+SourceId													:=0;
+Eventclass 														:= TC2_SYSTEM.TCEVENTCLASS_NONE;
+id															:=0;
+state														:=0;
+text														:='';
+fnc															:='';
+Reset														:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="set" Id="{9d6fada1-7258-4e5b-9c75-2c3334477da6}">
+      <Declaration><![CDATA[METHOD PUBLIC set : BOOL
+VAR_INPUT
+	Id														:	DINT := 0;	//Error id 
+	State													:	DINT := 0;	//State where error occures
+	Text													:	STRING(MAX_STRING_LENGTH) := '';	//Information text 
+	Fnc														:	STRING := '';	//Function name of error source
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.Id													:= Id;
+THIS^.State													:= State;
+THIS^.Text													:= Text;
+THIS^.Fnc													:= Fnc;
+Flag														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ERROR_HDL">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ERROR_HDL.reset">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ERROR_HDL.set">
+      <LineId Id="13" Count="2" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

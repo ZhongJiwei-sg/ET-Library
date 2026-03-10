@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0053" Id="{7b804a79-9fdd-42e1-80c6-26c4f0440047}">
+    <Declaration><![CDATA[TYPE AX5000_S_0053 :
+STRUCT
+	Position_feedback_value_2:DINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

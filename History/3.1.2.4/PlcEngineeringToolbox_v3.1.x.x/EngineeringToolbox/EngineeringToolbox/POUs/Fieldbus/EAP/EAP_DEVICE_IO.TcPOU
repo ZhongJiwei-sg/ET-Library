@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="EAP_DEVICE_IO" Id="{83f9d910-7cb0-44e4-95c1-828b6e16d7e8}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EAP_DEVICE_IO 
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT
+	{attribute 'displaymode':='hex'}
+	DevCtrl				AT %Q*:	UINT;
+END_VAR		
+VAR_OUTPUT	
+	{attribute 'displaymode':='hex'}
+	DevState			AT %I*:	UINT;
+	
+	LinkError				:	BOOL; //0x0001 = Link error
+	IOLockedAfterLinkErr	:	BOOL; //0x0002 = I/O locked after link error (I/O reset required)
+	OutOfSendResources		:	BOOL; //0x0010 = Out of send resources (I/O reset required)
+	WatchdogTriggered		:	BOOL; //0x0020 = Watchdog triggered
+	EthMiniportNotFound		:	BOOL; //0x0040 = Ethernet driver (miniport) not found
+	ResetActive				:	BOOL; //0x0080 = I/O reset active
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* IOs 									*)
+	(****************************************)
+
+(* Read status *****************************************)
+	LinkError				:= DevState.0;
+	IOLockedAfterLinkErr	:= DevState.1;
+	
+	OutOfSendResources		:= DevState.4;
+	WatchdogTriggered		:= DevState.5;
+	EthMiniportNotFound		:= DevState.6;
+	ResetActive				:= DevState.7;
+	
+(*******************************************************)
+
+	]]></ST>
+    </Implementation>
+    <Property Name="resetRequired" Id="{ecdb5b1f-95cb-4895-9843-7fba7958dc92}">
+      <Declaration><![CDATA[PROPERTY PUBLIC resetRequired : bool]]></Declaration>
+      <Get Name="Get" Id="{976d5b73-9e68-441f-b57e-549c76598fbe}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[resetRequired := IOLockedAfterLinkErr or OutOfSendResources;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="EAP_DEVICE_IO">
+      <LineId Id="3" Count="1" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="33" Count="2" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="60" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_DEVICE_IO.resetRequired.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,318 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="UDPSocketCtrl" Id="{d4bda3d3-77e0-4b66-830e-8235b66b3219}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Setup Tcp client or server socket communication 
+//based on TF6310, required lib: Tc2_TcpIp - see Beckhoff Infosys for more information
+FUNCTION_BLOCK UDPSocketCtrl Extends FbBase
+VAR_OUTPUT CONSTANT
+ 	FNC_CREATE 												:	INT := 0; // Create local socket for UDP communication
+ 	FNC_CLOSE 												:	INT := 1; // Close specified communication socket
+ 	FNC_CLOSE_ALL 											:	INT := 2; // Close all communication sockets
+END_VAR             										
+VAR_INPUT           										
+	Fnc														:	INT (FNC_CREATE..FNC_CLOSE_ALL) := FNC_CREATE;
+	SrvNetId												: 	T_AmsNetId := ''; (* server ip adress *)
+	LocalHost 												: 	T_IPv4Addr := '127.0.0.1'; //local ip adress of requestet network adapter 
+	LocalPort												: 	UDINT := 0; // Local communication port
+	Timeout													: 	TIME := DEFAULT_ADS_TIMEOUT;
+END_VAR             										
+VAR_OUTPUT          										
+	Online													:	BOOL; (* Connection is running *)
+	hSocket													: 	T_HSOCKET; 	// UDP Socket handle
+	hSocketText												:	STRING(100); 	// Socket information
+	WinsockErrorId											:	E_WinsockError; // Winsocket error enum - see TF6310 documentation for further information
+END_VAR
+VAR
+(* Zwischenspeicher ************************************************************)
+	MemFnc													:	INT := -1;
+                    										
+(* Deklaration Trigger **********************************************************)
+
+(* Zeiten ******************************************************************)
+
+(* Bausteine ***************************************************************)
+	SocketCloseAll											:	FB_SocketCloseAll;
+	SocketClose												:	FB_SocketClose;
+	SocketUdpCreate 										:	FB_SocketUdpCreate;
+
+(* Dummy Speicher **********************************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_CREATE:
+		Create(
+			Execute		:= Execute,
+			LocalHost	:= LocalHost,
+			LocalPort	:= LocalPort);
+
+	FNC_CLOSE:
+		Close(Execute := Execute);
+
+	FNC_CLOSE_ALL:
+		CloseAll(Execute := Execute);
+
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+	END_CASE
+
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="close" Id="{27ec8d42-7eaf-430f-85f3-f93ff76eb2dc}">
+      <Declaration><![CDATA[METHOD PUBLIC close : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketClose.bExecute 								:= TRUE;
+	ELSIF NOT SocketClose.bBusy
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketClose.bExecute 								:= FALSE;
+	END_IF
+
+	MemFnc													:= FNC_CLOSE_ALL;
+	THIS^.Execute											:= Execute;
+
+	SocketClose(
+		sSrvNetId	:= SrvNetId,
+		hSocket		:= hSocket,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=>,
+		nErrId		=> );
+
+	IF NOT SocketClose.bBusy
+		AND NOT SocketClose.bError
+		AND SocketClose.bExecute
+	THEN
+		Done												:= TRUE;
+		hSocketText											:=	CONCAT('UDP Socket Close:', HSOCKET_TO_STRING(hSocket));
+		hSocketText											:= '';
+		Online												:= FALSE;
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF
+
+	IF NOT Busy
+	THEN
+		IF SocketClose.bExecute
+		THEN
+			Error											:=	SocketClose.bError;
+			IF SocketClose.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketClose.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketClose.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketClose(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	Close													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="closeAll" Id="{cc006ea6-0634-4cce-816b-8a5ca361bb3d}">
+      <Declaration><![CDATA[METHOD PUBLIC closeAll : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketCloseAll.bExecute 							:= TRUE;
+	ELSIF NOT SocketCloseAll.bBusy      					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketCloseAll.bExecute 							:= FALSE;
+	END_IF                          						
+                                    						
+	MemFnc													:= FNC_CLOSE_ALL;
+	THIS^.Execute											:= Execute;
+
+	SocketCloseAll(
+		sSrvNetId	:= SrvNetId,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	IF NOT SocketCloseAll.bBusy
+		AND NOT SocketCloseAll.bError
+		AND SocketCloseAll.bExecute
+	THEN
+		Done												:= TRUE;
+		hSocketText											:= 'UDP Socket Close All';
+		Online												:= FALSE;
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF
+
+	IF NOT Busy
+	THEN
+		IF SocketCloseAll.bExecute
+		THEN
+			Error											:=	SocketCloseAll.bError;
+			IF SocketCloseAll.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketCloseAll.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketCloseAll.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketCloseAll(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	CloseAll												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="create" Id="{70992729-ca70-4a01-bbc3-55fb05c22ac8}">
+      <Declaration><![CDATA[METHOD PUBLIC create : BOOL //Return value = TRUE if busy
+//required parameter
+//LocalHost
+//LocalPort
+VAR_INPUT
+	Execute													:	BOOL;
+	LocalHost 												: 	T_IPv4Addr; (* Own ip adress form requestet Networkadapter *)
+	LocalPort												: 	UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketUdpCreate.bExecute 							:= TRUE;
+	ELSIF NOT SocketUdpCreate.bBusy     					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		SocketUdpCreate.bExecute 							:= FALSE;
+	END_IF                              					
+                                        	
+	MemFnc													:= FNC_CREATE;
+	THIS^.Execute											:= Execute;
+	
+	SocketUdpCreate(
+		sSrvNetId	:= SrvNetId,
+		sLocalHost	:= LocalHost,
+		nLocalPort	:= LocalPort,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> ,
+		hSocket		=> );
+
+	IF NOT SocketUdpCreate.bBusy
+		AND NOT SocketUdpCreate.bError
+		AND SocketUdpCreate.bExecute
+	THEN
+		Done												:= TRUE;
+		hSocket												:= SocketUdpCreate.hSocket;
+		Online												:= SocketUdpCreate.hSocket.handle <> 0;
+		hSocketText											:=	CONCAT('UDP Socket Create:', HSOCKET_TO_STRING(hSocket));
+	ELSE                                					
+		Done												:= FALSE;
+	END_IF                              	
+                                        	
+	IF NOT Busy                         	
+	THEN
+		IF SocketUdpCreate.bExecute
+		THEN
+			Error											:=	SocketUdpCreate.bError;
+			IF SocketUdpCreate.nErrId >= 16#80070000
+			THEN
+				ErrorId										:= E_AdsErr.CLIENT_W32ERROR;
+				WinsockErrorId								:= ADSERROR_TO_WSERROR(SocketUdpCreate.nErrId);
+			ELSE                    						
+				ErrorId										:= SocketUdpCreate.nErrId;
+				WinsockErrorId								:= WSOK;
+			END_IF                  	
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			SocketUdpCreate(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	Create													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="UDPSocketCtrl">
+      <LineId Id="128" Count="43" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="UDPSocketCtrl.close">
+      <LineId Id="3" Count="42" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="47" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="UDPSocketCtrl.closeAll">
+      <LineId Id="3" Count="40" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="45" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="UDPSocketCtrl.create">
+      <LineId Id="3" Count="44" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="49" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

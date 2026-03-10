@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0198" Id="{9ac6a268-0bfb-48eb-988b-46bf9c88b96a}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0198 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Feedback_instance:UINT;
+	Cmd:UINT;
+	Timeout:UINT;
+	Byte_length:UINT;
+	Addr:UDINT;
+	Byte2_length:UINT;
+	Error_code_as_response:UINT;
+	Data: ARRAY [0..3] OF UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,626 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="LogbookSubWriteFile" Id="{9027ef3b-18f1-41f1-ad02-27484f6ac6ef}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+//The LogbooSubWriteFile writes log entries handover by the LogbookPuplisher into txt files
+//The files could be stored or overwritten on a daily (Today/Yesterday), weekly (1-7 days) or monthly base (1-31 days) - see DeleteMode Parameter  
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK LogbookSubWriteFile IMPLEMENTS I_LogbookSubscriber
+VAR CONSTANT
+	MAX_BUFFER_LEVEL										:	INT := 85; //If buffer fill level reaches 85% Fb will appear as "busy2 to the LogBookPuplisher 
+END_VAR
+VAR_OUTPUT CONSTANT 
+	STRING_LINE_END_SIGN									: STRING(6) := PARAM.LOGBOOK_SUB_WRT_FILE_LINE_END_SIGN; //e.g. $n
+	DELAY_CLOSE_FILE										: TIME := PARAM.LOGBOOK_SUB_WRT_FILE_DELAY_FILE_CLOSE;  //see library parameter to customize parameter	
+		
+	DELETE_MODE_DAILY										: INT := 0; //FB will write a file with <Filename>_TODAY and rename existing file to <Filename>_YESTERDAY on a new day
+	DELETE_MODE_WEEKLY										: INT := 1; //FB will create a file for each day of week <Filenme>_DAY_1..7
+	DELETE_MODE_MONTHLY										: INT := 2; //FB will create a file for each day of month <Filenme>_DAY_n (n=1..31) 
+	DELETE_MODE_DISABLED									: INT := 3; //FB will write an endless file, see options .7 to start with an empty file on a new day  
+
+	{attribute 'displaymode':='binary'}
+	OPTION_ADD_TIMESTAMP_TO_MSG								: BYTE := 2#0000_0001; //Add message time to file entry - see next option for date option
+	{attribute 'displaymode':='binary'}
+	OPTION_ADD_DATE_TO_TIMESTAMP							: BYTE := 2#0000_0010; //Only active if option "OPTION_ADD_TIMESTAMP_TO_MSG" is set 
+	{attribute 'displaymode':='binary'}
+	OPTION_ADD_CLASS_TO_MSG									: BYTE := 2#0000_0100; //Event class text will be added to entries
+	{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_BUFFER_ERROR								: BYTE := 2#0100_0000; //The FB changes to error state if the buffer was not emptied in time 
+	{attribute 'displaymode':='binary'}
+	OPTION_START_WITH_NEW_FILE								: BYTE := 2#1000_0000; //Create empty file with enable flag instead open and continie existing file
+END_VAR                     								
+VAR_INPUT                   								
+	Enable													: BOOL; //Enable write log entries to file
+	ResetTrig												: BOOL; //Reset internal error 
+{attribute 'displaymode':='binary'}
+	Options													: BYTE := 2#00000000; // Bit 0 = Add msg timestamp to entry string 	
+	DeleteMode												: INT(DELETE_MODE_DAILY..DELETE_MODE_DISABLED) := DELETE_MODE_DAILY;
+	Path													: STRING := 'C:\temp'; //Path and filename
+	Filetype												: STRING(6) := '.log'; //file tpye
+	LoggedDay												: WORD;	//Init for logged day of month to avoid new and empty log file after reboot.
+	SizeOfBuffer											: UDINT := 2560; //Size of memory allocated from router pool to accumulate messages until they get written to the file (0=Write message immediately)
+END_VAR                     								
+VAR_IN_OUT                  								
+	SystemTime												: TIMESTRUCT; //System time
+END_VAR                     								
+VAR_OUTPUT       
+	CntNoOfStoredMsgs										: INT; //No of messages added to buffer 
+
+	hFile													: UINT;  
+	Busy													: BOOL; //Write msg to file active   
+	Error													: BOOL;        			
+{attribute 'displaymode':='hex'}					
+	ErrorId													: UDINT; //Ads error Id of file handling function blocks
+END_VAR                     								
+VAR            
+//local ************************************************************************************
+	State													: INT := 0;
+	LastLoggedDay											: WORD;
+	Rebooted												: BOOL;
+	LastMessageData											: LogbookData;
+	StartTimeWriteData										: TIME;	
+	TimeWriteFile											: TIME; 
+	MemMessage												: U_MAX_STRING;
+	MemLenStrEndLine										: INT;	
+	MemStartOfEndLine										: DINT;	
+	MemPath													: STRING;
+	
+//trigger *********************************************************************************
+
+//timer ***********************************************************************************
+	tonCloseFile											:	ton;
+
+//instances ***********************************************************************************     
+	DblBuffer												: DoubleBuffer;        								
+	FILEOPEN												: FB_FileOpen := (sNetId:='',tTimeout:=DEFAULT_ADS_TIMEOUT, ePath:=PATH_GENERIC);
+	FILECLOSE												: FB_FileClose := (sNetId:='',tTimeout:=DEFAULT_ADS_TIMEOUT);
+	FILEWRITE												: FB_FileWrite := (sNetId:='',tTimeout:=DEFAULT_ADS_TIMEOUT);
+	FILEDELETE												: FB_FileDelete := (sNetId:='',tTimeout:=DEFAULT_ADS_TIMEOUT);
+	FILERENAME												: FB_FileRename := (sNetId:='',tTimeout:=DEFAULT_ADS_TIMEOUT, ePath:=PATH_GENERIC);
+
+//Dummys ****************************************************************************************
+	i,j,n													: INT;
+	_UINT													:	UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Logbook subscriber write messages to file			*)
+	(********************************************************)
+
+(* Sequence started by method "NewMessage" or a new day ***************************************************)
+	CASE State OF
+	0:	
+		IF Error
+		THEN
+			IF ResetTrig OR NOT Enable
+			THEN
+				Error										:= FALSE;
+				ErrorId										:= 0;
+				FileOpen(bExecute:=FALSE);
+				FileClose(bExecute:=FALSE);
+				FileDelete(bExecute:=FALSE);
+				FileRename(bExecute:=FALSE);
+				FileWrite(bExecute:=FALSE);
+			END_IF
+		ELSIF Enable
+		THEN
+			IF SystemTime.wDay = 0
+			THEN
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_INVALIDPARM; //Systemtime invalid 				
+			ELSIF hFile = 0 // close last before opening next file
+				AND(LastLoggedDay <> SystemTime.wDay OR MemPath <> Path) 			
+			THEN //create new or overwrite existing file if new day begins
+				DblBuffer.SizeOfMemory						:= SizeOfBuffer;
+						
+				MemLenStrEndLine							:= LEN(STRING_LINE_END_SIGN);
+				MemStartOfEndLine							:= TO_DINT(LIMIT(1,PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT - TO_UDINT(MemLenStrEndLine) + 1, PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT - 1));
+				Rebooted									:= LastLoggedDay = 0;
+ 	
+				(* Init last logged day of month and path on startup *)
+				IF Rebooted 
+				THEN 
+					MemPath  								:= Path;
+					LastLoggedDay 							:= SEL(LoggedDay > 0, 0, LoggedDay); 
+				END_IF	
+				
+				CASE DeleteMode OF
+				DELETE_MODE_WEEKLY: //Day 1 to 7
+					FileOpen.sPathName 						:= CONCAT(Path, CONCAT('_DAY_',WORD_TO_STRING(SystemTime.wDayOfWeek)));
+					CASE SystemTime.wDayOfWeek OF
+					0:FileOpen.sPathName 					:= CONCAT(FileOpen.sPathName,'_SUN' );
+					1:FileOpen.sPathName 					:= CONCAT(FileOpen.sPathName,'_MON' );
+					2:FileOpen.sPathName					:= CONCAT(FileOpen.sPathName,'_TUE' );
+					3:FileOpen.sPathName 					:= CONCAT(FileOpen.sPathName,'_WED' );
+					4:FileOpen.sPathName 					:= CONCAT(FileOpen.sPathName,'_THU' );
+					5:FileOpen.sPathName 					:= CONCAT(FileOpen.sPathName,'_FRI' );
+					6:FileOpen.sPathName 					:= CONCAT(FileOpen.sPathName,'_SAT' );
+					ELSE
+						FileOpen.sPathName 					:= CONCAT(FileOpen.sPathName,'_UNKNOW' );
+					END_CASE
+					
+				DELETE_MODE_MONTHLY: //Every Month - Day 1-n
+					FileOpen.sPathName 						:= CONCAT(Path, CONCAT('_',WORD_TO_STRING(SystemTime.wDay)));
+					
+				DELETE_MODE_DISABLED:		
+					FileOpen.sPathName			 			:= Path;
+					
+				ELSE //DELETE_MODE_DAILY as default
+					FileOpen.sPathName 						:= CONCAT(Path, '_TODAY');	//Today and yesterday
+				
+				END_CASE
+				FileOpen.sPathName							:= CONCAT(FileOpen.sPathName,Filetype);
+									
+				IF DeleteMode <> DELETE_MODE_DISABLED AND LastLoggedDay <> SystemTime.wDay 
+				THEN //New day - start with new file	
+					FileOpen(bExecute:=FALSE,nMode := FOPEN_MODEWRITE OR FOPEN_MODETEXT OR FOPEN_MODEPLUS);							
+					IF DeleteMode = DELETE_MODE_DAILY
+					THEN //Rename old file first		
+						FILERENAME(bExecute:=FALSE, sOldName := FileOpen.sPathName, sNewName := CONCAT(Path, CONCAT('_YESTERDAY',Filetype)));
+						FILEDELETE(bExecute:=FALSE, sPathName := FILERENAME.sNewName );
+						FileClose(bExecute:=hFile <> 0 , hFile := hFile);
+						state								:= 10;
+					ELSE //Create new file directly
+						FileOpen(bExecute:=TRUE,nMode := FOPEN_MODEWRITE OR FOPEN_MODETEXT OR FOPEN_MODEPLUS);
+						state								:= 1;
+					END_IF
+				ELSE //write endless file with given name and open existing one if selected 														
+					FileOpen(bExecute:= TRUE , nMode:=SEL(Options.7 ,FOPEN_MODEAPPEND,FOPEN_MODEWRITE) OR FOPEN_MODETEXT OR FOPEN_MODEPLUS );
+					state									:= 1;
+				END_IF	 	
+	
+				(* Record current day of detected new beginning day *)
+				LastLoggedDay 								:= SystemTime.wDay;	
+				MemPath  									:= Path;
+				
+			ELSE
+				tonCloseFile(IN := NOT DblBuffer.Empty ,PT := DELAY_CLOSE_FILE); 
+				IF DblBuffer.ReadyToRead
+					OR tonCloseFile.Q
+				THEN
+					IF NOT DblBuffer.ReadyToRead THEN DblBuffer.setReadyToRead(TRUE); END_IF 
+					FILEWRITE.pWriteBuff 					:= DblBuffer.pDataToRead;
+					FILEWRITE.cbWriteLen 					:= DblBuffer.SizeOfDataToRead;
+					FILEWRITE.bExecute						:= DblBuffer.SizeOfDataToRead > 0; //Set Write file as marker
+
+					FileClose.bExecute						:= SystemTime.wDay > 0
+																AND(LastLoggedDay <> SystemTime.wDay OR MemPath <> Path)
+																AND hFile <> 0
+																OR tonCloseFile.Q; //Set close file as marker
+																
+					tonCloseFile(IN := FALSE); //Reset timer....
+					CntNoOfStoredMsgs						:= 0;
+					StartTimeWriteData						:= TIME();
+					
+					IF hFile = 0
+					THEN
+						FileOpen(bExecute:= TRUE , nMode:=SEL(Options.7 ,FOPEN_MODEAPPEND,FOPEN_MODEWRITE) OR FOPEN_MODETEXT OR FOPEN_MODEPLUS ); //Reopen file first
+						State								:= 1;
+					ELSE
+						FILEWRITE(hFile := hFile); //Start write file for efficiency 		
+						State								:= 2;
+					END_IF					
+				END_IF			
+			END_IF
+						
+		ELSE //Not enabled
+			IF NOT DblBuffer.Empty
+			THEN //Write rest of buffer
+				IF NOT DblBuffer.ReadyToRead THEN DblBuffer.setReadyToRead(TRUE); END_IF 
+				FILEWRITE(bExecute:=TRUE,hFile:= hFile , pWriteBuff := DblBuffer.pDataToRead, cbWriteLen := DblBuffer.SizeOfDataToRead);	
+				CntNoOfStoredMsgs							:= 0;
+				StartTimeWriteData							:= TIME();
+				FileClose.bExecute							:= TRUE;  //Close file after writing
+				State										:= SEL(hFile <> 0 , 1, 2) ; //Open file if not opened
+			ELSIF hFile <> 0
+			THEN
+				FileClose(bExecute:=TRUE , hFile := hFile);
+				state										:= 3;	
+			END_IF
+        END_IF
+     
+	(* Open file *******************************************************************************)                                          	
+	1:                       	
+		FileOpen();                                     	
+		IF NOT FileOpen.bBusy                           	
+		THEN                                            	
+			IF FileOpen.bError                          	
+			THEN            
+				Error										:= TRUE;                            	
+				ErrorId										:= FileOpen.nErrId;
+				State										:= 0;
+			ELSE                                     	
+				hFile										:= FileOpen.hFile;       	
+				State										:= SEL(FILEWRITE.bExecute, 0, 2) ;
+			END_IF
+			FileOpen(bExecute:=FALSE);			
+		END_IF
+
+	(* Write data to file **********************************************************************)
+	2: 
+		FILEWRITE(hFile:= hFile);	
+		IF NOT FILEWRITE.bBusy
+		THEN
+			
+			IF FILEWRITE.bError
+			THEN
+				Error										:= TRUE;       
+				ErrorId										:= FILEWRITE.nErrId;
+				state										:= 0;
+			ELSE  
+				State										:= SEL(FileClose.bExecute, 0, 3);	
+			END_IF		
+			TimeWriteFile									:= TIME() - StartTimeWriteData;		
+			DblBuffer.setReadyToRead(FALSE);	
+			FILEWRITE(bExecute:=FALSE);   	
+		END_IF
+
+	(* Close File ******************************************************************************)
+	3: 
+		FileClose(hFile:= hFile);
+		IF NOT FileClose.bBusy
+		THEN
+			IF FileClose.bError
+			THEN
+				Error										:= TRUE;       
+				ErrorId										:= FileClose.nErrId;
+				State										:= 0;
+			ELSE                                        	
+				hFile										:= 0;
+				State										:= 0;
+			END_IF
+			FileClose(bExecute:=FALSE);
+		END_IF
+
+	(* Delete old file and rename exisiting file ********************************************************) 
+	10: 
+		FileClose();
+		FileDelete(bExecute:=NOT FileClose.bBusy);
+		IF NOT FileDelete.bBusy AND NOT FileClose.bBusy
+		THEN
+			IF FileDelete.bError
+			THEN //No issue, maybe file is not existing
+			//	Error										:= TRUE;       
+			//	ErrorId										:= FileDelete.nErrId;
+				State										:= 11;
+			ELSIF FileClose.bError
+			THEN
+			//	Error										:= TRUE;       
+			//	ErrorId										:= FileClose.nErrId;
+				State										:= 11;			
+			ELSE                                        	
+				State										:= 11;
+			END_IF
+			FileDelete(bExecute:=FALSE); FileClose(bExecute:=FALSE);
+		END_IF
+		
+	11: //Rename last file to create a new and empty file for today
+		FILERENAME(bExecute:=TRUE);
+		IF NOT FILERENAME.bBusy
+		THEN
+			IF FILERENAME.bError
+			THEN //No issue, maybe file does not exist
+			//	Error										:= TRUE;       
+			//	ErrorId										:= FILERENAME.nErrId;
+				State										:= 1;
+			ELSE                                        	
+				State										:= 1;
+			END_IF
+			FILERENAME(bExecute:=FALSE);	
+			FileOpen(bExecute:= TRUE); //Start create new file for today										
+		END_IF		
+	ELSE
+		;
+	END_CASE
+
+(* Ack ErrorIds **********************************************************)
+	Busy 													:= State <> 0;
+(**************************************************************************)
+
+
+
+]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{f1953768-e690-425d-9703-801c25bc2c3f}" />
+    <Folder Name="properties" Id="{4769d2c5-8517-4a08-be3c-63d3c25f749b}">
+      <Folder Name="options" Id="{38856f1e-1ca9-4a6c-bf01-82d7c286f66a}" />
+    </Folder>
+    <Method Name="addNewMessage" Id="{6fd3f98c-61c1-4d1c-8543-686ebe69868e}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC FINAL addNewMessage : BOOL //Return value = TRUE if execution successful finished
+VAR_IN_OUT
+	data													:	LogbookData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Enable AND NOT Error
+	THEN		
+		CntNoOfStoredMsgs								:= CntNoOfStoredMsgs + 1;
+		LastMessageData									:= Data;
+
+		MEMSET(ADR(MemMessage),0,SIZEOF(MemMessage));
+		IF Options.0 AND Options.1 //Add date and time to text
+		THEN
+			MemMessage.text								:=	SYSTEMTIME_TO_STRING(LastMessageData.Timestamp);						
+			MemMessage.text 							:=	CONCAT(MemMessage.text, ';');
+
+		ELSIF Options.0 //Add only msg timestamp to text		
+		THEN
+			MemMessage.text								:=	SYSTEMTIME_TO_STRING(LastMessageData.Timestamp);
+			MemMessage.text								:=	MID(MemMessage.text, 12 , 12); //Cut out time
+			MemMessage.text 							:=	CONCAT(MemMessage.text, ';');
+		END_IF      
+
+		IF Options.2 //Add class of message to text
+		THEN
+			_UINT.0 									:= LastMessageData.Options.8;
+			_UINT.1 									:= LastMessageData.Options.9;
+			_UINT.2 									:= LastMessageData.Options.10;
+			_UINT.3 									:= LastMessageData.Options.11;		
+			MemMessage.text								:= CONCAT(MemMessage.text, GetEventClassText(_UINT));	
+			MemMessage.text 							:= CONCAT(MemMessage.text, ';');			
+		END_IF
+	
+		MemMessage.text 								:= CONCAT(MemMessage.text, LastMessageData.Msg);
+
+		IF LEN(MemMessage.text) < MemStartOfEndLine
+		THEN //Still enough space for end line signs
+			MemMessage.text 							:= CONCAT(MemMessage.text,STRING_LINE_END_SIGN );
+		ELSE //Overwrite last chars with endline signs
+			MEMCPY(ADR(MemMessage.text[MemStartOfEndLine]),ADR(STRING_LINE_END_SIGN),TO_UDINT(MemLenStrEndLine));
+		END_IF
+		
+		IF DblBuffer.addString(MemMessage.text) <> S_OK
+			AND Options.6
+		THEN
+			Error										:= TRUE;
+			ErrorId										:= HRESULT_TO_ADSERROR(DblBuffer.hr);	
+		END_IF
+		
+		addNewMessage									:= NOT Error;
+	ELSE
+		addNewMessage									:= FALSE;
+	END_IF
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isBusy" Id="{05c9b480-c49a-403d-9c85-8d06cb0e9960}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC isBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5b588c3e-5676-45db-b952-badedc18a875}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy											:= DblBuffer.Full and Enable and not Error and DblBuffer.fillLevel >= MAX_BUFFER_LEVEL;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="optAddDateToMsg" Id="{9cccf7c8-69ce-470b-acbe-f8e0a83a0bcb}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAddDateToMsg : BOOL]]></Declaration>
+      <Get Name="Get" Id="{66eefb64-b631-4c8e-923d-bc7aa992a638}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAddDateToMsg := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{25837731-c2d9-4550-bdee-c356bf430852}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optAddDateToMsg and optAddTimeToMsg;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optAddEventClassToMsg" Id="{1f5989e8-5914-4905-bccb-ecc67bda0156}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAddEventClassToMsg : BOOL]]></Declaration>
+      <Get Name="Get" Id="{71c6b516-8b77-49a8-8494-77740b81662e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAddEventClassToMsg := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{22e6372b-0941-448e-a9a6-f61b1ca922c0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.2 := optAddEventClassToMsg ;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optAddTimeToMsg" Id="{517d0a64-4cec-4cb3-8935-2b751fed2242}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAddTimeToMsg : BOOL]]></Declaration>
+      <Get Name="Get" Id="{20fd5e46-f7ba-4d79-b906-571ae49922ce}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAddTimeToMsg := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{045cbbb9-e640-4512-a647-38c13fc101ba}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF optAddTimeToMsg 
+THEN
+	Options.0 := TRUE;
+ELSE
+	Options.0 := Options.1 := FALSE;
+END_IF
+ ]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableBufferError" Id="{692b508d-edcd-46e9-9965-ce8aca20950b}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableBufferError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ebd63d11-4702-4811-80f4-7f8e8d755bc0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableBufferError := Options.6;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{bf391cd0-17a9-44a7-b315-d0ca6e197321}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.6				:= optEnableBufferError;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optSendMsgIfDisabled" Id="{50e74f0d-2e31-4751-8418-50dab28a1676}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optSendMsgIfDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{00c1c307-13d0-4631-b592-22de399ea5be}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optSendMsgIfDisabled := Options.5;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{37aeb4cb-3d3d-4631-a20f-f30e1f8b8b44}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.5 := optSendMsgIfDisabled;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optStartNewFile" Id="{fae9c803-aa2c-4542-b49e-25f3ebe725ad}" FolderPath="properties\options\">
+      <Declaration><![CDATA[PROPERTY PUBLIC optStartNewFile : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0bdf882e-8dab-4648-8d16-34ad30c510d6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optStartNewFile := Options.7;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{02afbcad-2d5e-4dd7-853f-4591155124d2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.7				:= optStartNewFile;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="LogbookSubWriteFile">
+      <LineId Id="1994" Count="11" />
+      <LineId Id="2352" Count="3" />
+      <LineId Id="2358" Count="0" />
+      <LineId Id="2007" Count="1" />
+      <LineId Id="2694" Count="2" />
+      <LineId Id="2698" Count="0" />
+      <LineId Id="2697" Count="0" />
+      <LineId Id="2018" Count="2" />
+      <LineId Id="2699" Count="1" />
+      <LineId Id="2021" Count="2" />
+      <LineId Id="2701" Count="0" />
+      <LineId Id="2024" Count="34" />
+      <LineId Id="2561" Count="0" />
+      <LineId Id="2069" Count="5" />
+      <LineId Id="2076" Count="0" />
+      <LineId Id="2559" Count="0" />
+      <LineId Id="2078" Count="2" />
+      <LineId Id="2091" Count="6" />
+      <LineId Id="2099" Count="0" />
+      <LineId Id="2693" Count="0" />
+      <LineId Id="2656" Count="0" />
+      <LineId Id="2649" Count="1" />
+      <LineId Id="2652" Count="0" />
+      <LineId Id="2654" Count="0" />
+      <LineId Id="2657" Count="0" />
+      <LineId Id="2659" Count="0" />
+      <LineId Id="2690" Count="0" />
+      <LineId Id="2655" Count="0" />
+      <LineId Id="2666" Count="0" />
+      <LineId Id="2662" Count="0" />
+      <LineId Id="2692" Count="0" />
+      <LineId Id="2665" Count="0" />
+      <LineId Id="2685" Count="4" />
+      <LineId Id="2663" Count="0" />
+      <LineId Id="2678" Count="1" />
+      <LineId Id="2672" Count="0" />
+      <LineId Id="2674" Count="0" />
+      <LineId Id="2681" Count="0" />
+      <LineId Id="2683" Count="0" />
+      <LineId Id="2682" Count="0" />
+      <LineId Id="2651" Count="0" />
+      <LineId Id="2641" Count="1" />
+      <LineId Id="2378" Count="0" />
+      <LineId Id="2119" Count="2" />
+      <LineId Id="2351" Count="0" />
+      <LineId Id="2122" Count="0" />
+      <LineId Id="2467" Count="0" />
+      <LineId Id="2386" Count="0" />
+      <LineId Id="2785" Count="0" />
+      <LineId Id="2127" Count="1" />
+      <LineId Id="2784" Count="0" />
+      <LineId Id="2130" Count="16" />
+      <LineId Id="2148" Count="16" />
+      <LineId Id="2167" Count="1" />
+      <LineId Id="2702" Count="0" />
+      <LineId Id="2341" Count="0" />
+      <LineId Id="2340" Count="0" />
+      <LineId Id="2169" Count="65" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.addNewMessage">
+      <LineId Id="3" Count="37" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="41" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optAddDateToMsg.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optAddDateToMsg.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optAddEventClassToMsg.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optAddEventClassToMsg.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optAddTimeToMsg.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optAddTimeToMsg.Set">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optEnableBufferError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optEnableBufferError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optSendMsgIfDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optSendMsgIfDisabled.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optStartNewFile.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LogbookSubWriteFile.optStartNewFile.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,101 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <GVL Name="PARAM" Id="{3217d121-f20f-43b1-8e87-5384c7f1f603}" ParameterList="True">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL CONSTANT
+//Debug messages											
+	ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION					:	BOOL := TRUE; //FBs who are allocating memory from the router memory pool via __NEW are writing a message into the ADS logger	
+
+//Controller Tools
+	SLIDING_AVERAGE_MAX_ENTRYS								:	INT := 1000;
+
+//String helper
+	MAX_EXT_STRING_LENGTH									:	UDINT := 1024; //Max string lenght for extended string FBs (ExtString,ExtWSTRING)	
+	XWORD_TO_XXXSTR_EXT_SEPARATOR							:	STRING := '_';
+
+//Data buffer settings
+	RINGBUFFER_BYTE_SIMPLE_MAX_BUFFER						:	UDINT := 1024;	//Max index byte ringbuffer array
+	RINGBUFFER_CHAR_SIMPLE_MAX_BUFFER						:	UDINT := 1024;	//Max index byte ringbuffer array for chars 	
+	RINGBUFFER_LREAL_SIMPLE_MAX_BUFFER						:	UDINT := 10;		//Max index lreal ringbuffer array
+	
+	FIFO_LREAL_SIMPEL_MAX_BUFFER							:	INT := 10;		//Max index lreal fifo array
+	
+//File handling 
+	READ_DIR_SIMPLE_MAX_ENTRYS								:	INT(1..1000) := 50;	//Max list size of founded files in directory
+	READ_DIR_SIMPLE_MAX_STRING_LEN							:	INT := 50;		//Maximum string lenght of files founded in directory
+	
+//Eventlogger  
+	EVENT_HANDLING_CONFIG									:	EVENT_HANDLING_CONFIG  := (
+																	GRP_CUSTOMISED_MAX_EVENT			:= 30,		
+																	
+																	EVENTLOG_READ_MSG_LEN_MIN			:= 0,
+																	EVENTLOG_READ_MSG_LEN_MAX			:= 1024,
+																	                                    
+																	EVENTLOG_READ_MAX_EVENTS			:= 30,		
+																	
+																	ENABLE_DYNAMIC_EVENT_MSG_FORMAT		:= FALSE,
+																	                                    
+																	CLASS_NONE_QUIT_REQUIRED			:= FALSE,  	//Class id 0
+																	CLASS_MAINTENANCE_QUIT_REQUIRED		:= TRUE,	//Class id 1	
+																	CLASS_MESSAGE_QUIT_REQUIRED			:= FALSE,	//Class id 2
+																	CLASS_HINT_QUIT_REQUIRED			:= FALSE,	//Class id 3
+																	CLASS_STATEINFO_QUIT_REQUIRED		:= FALSE,	//Class id 4
+																	CLASS_INSTRUCTION_QUIT_REQUIRED		:= FALSE,	//Class id 5
+																	CLASS_WARNING_QUIT_REQUIRED			:= TRUE,	//Class id 6
+																	CLASS_ALARM_QUIT_REQUIRED			:= TRUE,	//Class id 7
+																	CLASS_PARAMERROR_QUIT_REQUIRED		:= TRUE,	//Class id 8
+																	                                    
+																	CLASS_NONE_PRIORITY					:= 3,
+																	CLASS_MAINTENANCE_PRIORITY			:= 2,
+																	CLASS_MESSAGE_PRIORITY				:= 3,
+																	CLASS_HINT_PRIORITY					:= 3,
+																	CLASS_STATEINFO_PRIORITY			:= 3,
+																	CLASS_INSTRUCTION_PRIORITY			:= 3,
+																	CLASS_WARNING_PRIORITY				:= 2,   
+																	CLASS_ALARM_PRIORITY				:= 1,		
+																	CLASS_PARAMERROR_PRIORITY			:= 1);	
+		
+//Logbook settings 
+	LOGBOOK_MAX_DATA										:	INT(1..1000) := 50; //no of messages stored in the PLC - logbook
+	LOGBOOK_MAX_MSG_STRING_LENGHT							:	UDINT := 255; //Max sring lenght of logbook message
+	LOGBOOK_PUPLISHER_MAX_SUB								:	INT := 5;
+	LOGBOOK_SUB_WRT_FILE_LINE_END_SIGN						:	STRING(6) := '$n'; //line end sign
+	LOGBOOK_SUB_WRT_FILE_DELAY_FILE_CLOSE					:	TIME := T#5S; //Delay close logbook file and release handle 
+	LOGBOOK_SUB_MAX_EVENT_HANDLING							:	UINT(1..100) := 10; //no of EventHandling instances to display logbook entrys
+	LOGBOOK_SUB_SEND_MAIL_STR_LINE_END_SIGN					:	STRING(6) := '$r$n'; //line end sign
+	
+			
+//Statemodel control settings
+	STATEMODEL_CTRL_MAX_SLAVE								:	INT(1..100) := 8; //no of possible subs for each state model master instance
+	
+//IO-Fieldbus Master
+	ETHERCAT_MASTER_DEV_IO_MAX_FRAMES						:	INT := 4;
+	ETHERCAT_DIAG_MAX_SLAVES								:	UINT := 100;
+	
+	PROFIBUS_MASTER_DEV_IO_MAX_SLAVES						:	INT := 10;
+	PROFINET_DEVICE_DEV_IO_MAX_BOX 							:	INT := 1;
+	PROFINET_CONTROLLER_DEV_IO_MAX_BOX 						:	INT := 10;
+
+//IO
+	ETHERCAT_SLAVE_DEV_FW_UPDATER_MAX_DEV					:	INT := 10;	
+	
+//Safety 
+	SAFETY_PLC_TERM_DIAG_MAX_FB								:	INT := 30;
+	SAFETY_IO_TERM_DIAG_MAX									:	INT := 10;
+	SAFETY_LOGIC_IO_TERM_DIAG_MAX_MODULE					:	int := 8;
+	
+//Quicksort settings
+	QUICKSORT_MAX_STRING_LENGTH								:	INT := 256;
+	QUICKSORT_MAX_WSTRING_LENGTH							:	INT := 256;
+	
+//Modbus 
+	MODBUS_MAX_SLAVE_JOB									:	INT := 10;
+	MODBUS_MAX_SLAVES_OF_MASTER								:	INT := 10;
+	
+//Device Com array limits
+	DEVICE_COM_MIN_CACHE									:	INT := 0;	//UNION type DeviceCom Cache MIN  
+	DEVICE_COM_MAX_CACHE									:	INT := 1024;//UNION type DeviceCom Cache MAX  
+
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="FILETIME_TO_DATE" Id="{6f0b3ff2-9bf3-462f-9bee-7988d68f8c0d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION FILETIME_TO_DATE : DATE //Converts 64bit T_FILETIME to DATE (D#1970-01-01)
+VAR_INPUT
+	IN														: T_FILETIME;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FILETIME_TO_DATE											:= DT_TO_DATE(FILETIME_TO_DT(IN));]]></ST>
+    </Implementation>
+    <LineIds Name="FILETIME_TO_DATE">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

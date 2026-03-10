@@ -1,0 +1,125 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="TaskInfo" Id="{068a895d-9d5c-4792-bc2c-c6ab03179d1b}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Provides all information of PlcTaskSystemInfo corresponding to the caller task of the instance 
+FUNCTION_BLOCK TaskInfo
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	Index													:	INT := 0;
+	TaskName          										: 	STRING(63);
+	ObjId             										: 	OTCID;
+	CycleTime         										: 	UDINT;
+	CycleTimeT       										: 	TIME;
+	CycleTimeLT       										: 	LTIME;
+	CycleTimeFloat											:	LREAL;	
+	Priority          										: 	UINT;
+	AdsPort           										: 	UINT;
+	CycleCount        										: 	UDINT;
+	Tasktime												:	ULINT;
+	DcTaskTime        										: 	T_DCTIME64;
+	LastExecTime      										: 	UDINT; 
+	LastExecTimeNS      									: 	UDINT; //Converted in ns 
+	LastExecTimeLT      									: 	LTIME; 
+	MaxExecTimeLT											:	LTIME;
+	FirstCycle        										: 	BOOL;
+	CycleTimeExceeded 										: 	BOOL;	
+	CycleTimeExceededCount 									: 	UDINT; //Set to 0 via method resetCylceTimeExceeded()
+	CycleTimeExceededCountTotal 							: 	UDINT; //Overall count cycle time exeeded
+	InCallAfterOutputUpdate									:	BOOL;
+	RTViolation												:	BOOL;
+END_VAR
+
+VAR
+	GETCURTASKINDEX											: 	GETCURTASKINDEX;
+	GETTASKTIME												:	GETTASKTIME;
+	TaskInterlock											:	BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(*	evaluate PlcTaskInfo arrays													*)
+	(********************************************************************************)
+
+(* read task info array of caller task ************************************************************************)
+	IF GETCURTASKINDEX.index = 0 	
+	THEN 
+		GETCURTASKINDEX(index => index); 
+		//Init
+		TaskName          									:= TwinCAT_SystemInfoVarList._TaskInfo[index].TaskName;
+		ObjId             									:= TwinCAT_SystemInfoVarList._TaskInfo[index].ObjId;
+		CycleTime         									:= TwinCAT_SystemInfoVarList._TaskInfo[index].CycleTime;
+		Priority          									:= TwinCAT_SystemInfoVarList._TaskInfo[index].Priority;
+		AdsPort           									:= TwinCAT_SystemInfoVarList._TaskInfo[index].AdsPort;
+		CycleTimeT											:= LREAL_TO_TIME(UDINT_TO_LREAL(CycleTime) * 0.0001 );
+		CycleTimeLT											:= TO_LTIME(CycleTime * 100);
+		CycleTimeFloat										:= (UDINT_TO_LREAL(CycleTime) * 0.0001 / 1000.0);		
+	END_IF
+
+	//Cylic 
+	CycleCount        										:= TwinCAT_SystemInfoVarList._TaskInfo[index].CycleCount;
+	DcTaskTime        										:= TO_ULINT(TwinCAT_SystemInfoVarList._TaskInfo[index].DcTaskTime); 
+	LastExecTime      										:= TwinCAT_SystemInfoVarList._TaskInfo[index].LastExecTime; 
+	LastExecTimeNS											:= TwinCAT_SystemInfoVarList._TaskInfo[index].LastExecTime * 100;
+	LastExecTimeLT      									:= TO_LTIME(LastExecTimeNS); //Converted into ns 
+	MaxExecTimeLT											:= MAX(LastExecTimeLT,MaxExecTimeLT);
+	
+	FirstCycle        										:= TwinCAT_SystemInfoVarList._TaskInfo[index].FirstCycle;
+	CycleTimeExceeded 										:= TwinCAT_SystemInfoVarList._TaskInfo[index].CycleTimeExceeded;
+	IF CycleTimeExceeded 
+	THEN
+		CycleTimeExceededCount								:= CycleTimeExceededCount + 1;	
+		CycleTimeExceededCountTotal							:= CycleTimeExceededCountTotal + 1;
+	END_IF
+	InCallAfterOutputUpdate									:= TwinCAT_SystemInfoVarList._TaskInfo[index].InCallAfterOutputUpdate;
+	RTViolation												:= TwinCAT_SystemInfoVarList._TaskInfo[index].RTViolation;
+	
+	//Read time when task suppose to start
+	GETTASKTIME(timeLoDW => Tasktime);	
+	MEMCPY(ADR(Tasktime) + SIZEOF(GETTASKTIME.timeHiDW),ADR(GETTASKTIME.timeHiDW),SIZEOF(GETTASKTIME.timeHiDW));
+	
+(**************************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="resetCylceTimeExceeded" Id="{c6e10049-ced0-484f-b230-03420f358197}">
+      <Declaration><![CDATA[METHOD PUBLIC resetCylceTimeExceeded : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(TaskInterlock)
+THEN
+	CycleTimeExceededCount									:= 0;
+	TaskInterlock											:= FALSE;
+	resetCylceTimeExceeded											:= TRUE;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="TaskInfo">
+      <LineId Id="3" Count="39" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TaskInfo.resetCylceTimeExceeded">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

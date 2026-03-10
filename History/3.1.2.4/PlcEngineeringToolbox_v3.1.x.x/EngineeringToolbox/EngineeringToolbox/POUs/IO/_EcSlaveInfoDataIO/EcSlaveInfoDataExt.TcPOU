@@ -1,0 +1,93 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EcSlaveInfoDataExt" Id="{1fc8e53e-7859-4ed2-8ce9-ba6809cda4a8}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+{attribute 'reflection'} 
+FUNCTION_BLOCK EcSlaveInfoDataExt Extends EcSlaveInfoData
+VAR_INPUT
+END_VAR                         					
+VAR_OUTPUT                      					
+	AmsNetIdStr												: T_AmsNetId; //AMS NetID string
+	EcMasterDevId									AT %I*	: UINT; 	// Link to EtherCAT Master "DevId" under InfoData 
+	DevName													:	STRING(30) := ''; //Slave device name as give in IO tree				
+	{attribute 'instance-path'} 
+    {attribute 'noinit'} 
+    InstancePath 											: STRING; 	
+END_VAR
+VAR
+	IOF_GetBoxNameByAddr									:	IOF_GetBoxNameByAddr := (NETID := '', TMOUT := DEFAULT_ADS_TIMEOUT);
+	_Init_													: BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Get device name by address and master device id								*)
+(********************************************************************************)
+
+(* Get name *********************************************************************)
+IF NOT _Init_
+THEN 	
+	IF NOT IOF_GetBoxNameByAddr.START
+	THEN
+		IF AdsAddr.port = 0 
+		THEN
+			adsLogError('AdsAddr.port invalid: %s', InstancePath);
+		END_IF
+		IF EcMasterDevId = 0 
+		THEN
+			adsLogError('EcMasterDevId invalid: %s', InstancePath);
+		END_IF
+			
+		IF AdsAddr.port > 0 AND EcMasterDevId > 0
+		THEN
+			IOF_GetBoxNameByAddr.START						:= TRUE;
+			AmsNetIdStr										:= F_CreateAmsNetId(nIds := AdsAddr.netId);
+		END_IF		
+	END_IF
+	
+	IOF_GetBoxNameByAddr(
+		NETID		:=  , (* Local *)
+		DEVICEID	:= TO_UDINT(EcMasterDevId) ,
+		BOXADDR		:= AdsAddr.port ,
+		START		:= ,
+		TMOUT		:= ,
+		BOXNAME		=> DevName);
+	IF NOT IOF_GetBoxNameByAddr.BUSY 
+	THEN
+		IF IOF_GetBoxNameByAddr.ERR 
+		THEN
+			adsLogError(CONCAT(CONCAT('ADS Error ', DWORD_TO_HEXSTR(IOF_GetBoxNameByAddr.ERRID,4,FALSE)),' reading BoxName of EtherCAT Device: %s'), InstancePath);
+		END_IF
+		IOF_GetBoxNameByAddr(START:= FALSE);
+		_Init_												:= TRUE;
+	END_IF
+END_IF
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="EcSlaveInfoDataExt">
+      <LineId Id="3" Count="3" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="61" Count="1" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="10" Count="2" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="13" Count="1" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="20" Count="7" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="29" Count="4" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

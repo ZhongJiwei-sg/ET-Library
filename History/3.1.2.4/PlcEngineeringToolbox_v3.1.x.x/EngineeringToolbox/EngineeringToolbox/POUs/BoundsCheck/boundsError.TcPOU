@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="boundsError" Id="{89008b2c-51dd-45be-ab84-2bd03bb522cd}" SpecialFunc="None">
+    <Declaration><![CDATA[//Result is TRUE if INT index is out of range
+{attribute 'no_check'}
+FUNCTION boundsError : BOOL
+VAR_INPUT
+	Index													:INT;
+	Lower													:INT;
+	Upper													:INT;
+END_VAR                 								
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[BoundsError:=index < lower OR index > upper;
+]]></ST>
+    </Implementation>
+    <LineIds Name="boundsError">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

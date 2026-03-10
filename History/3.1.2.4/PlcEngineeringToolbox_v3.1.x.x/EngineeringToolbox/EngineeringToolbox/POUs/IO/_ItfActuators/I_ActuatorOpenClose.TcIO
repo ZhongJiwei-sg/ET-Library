@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorOpenClose" Id="{bd168463-178f-45ac-9d01-7cf59f9ad111}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorOpenClose EXTENDS I_ActuatorBase
+]]></Declaration>
+    <Property Name="isClosed" Id="{8bcd1611-367e-4f1a-9f22-e0211a266d4b}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isClosed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8d8e7db6-47ad-4401-b8e9-38f1da3b52cc}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isOpened" Id="{97ff894c-3ff8-430a-b82d-5ddf3587aab3}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOpened : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5f401c41-c682-4bd2-b211-c463625511dd}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="setClose" Id="{5461888a-4a02-458e-bc56-6c7f1b034c3d}">
+      <Declaration><![CDATA[METHOD public setClose : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="setOpen" Id="{757a091d-ffe9-4f16-9550-33df861752ca}">
+      <Declaration><![CDATA[METHOD public setOpen : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

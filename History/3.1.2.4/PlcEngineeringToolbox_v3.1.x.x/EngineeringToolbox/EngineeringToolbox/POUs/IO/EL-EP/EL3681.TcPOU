@@ -1,0 +1,347 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EL3681" Id="{8c2c280e-0811-4294-b658-b4042616ecd5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK EL3681 EXTENDS EcSlaveInfoDataExt
+VAR_INPUT
+	MinValue												: 	LREAL 	:= 0.0;
+	MaxValue												: 	LREAL 	:= 0.0;
+	NoOfDigits												: 	INT 	(0..10)	:= 6; //number of decimal digits of scaled Q variable 
+	OutOnError												:	LREAL 	:= 0.000000000000000001;
+{attribute 'displaymode':='binary'}     	            	
+	Options													:	BYTE  := 2#0000_0010; (* .0 = FALSE Scale value from 0 to e.g. 32767 / TRUE scale singed value e.g. -32768 <-> 32767 , see Options .1 and .2 for more scaling Options 
+																						.1 = FALSE = 32 bit resolution / TRUE = value is based on 24 bit resolution e.g. -> -8388608.0 or 0.0 <-> 8388607.0 
+																						.2 = Right adjust of 32/24 bit value -> value will be shifted by 8 bits (divided bv 256)   
+																						.3 = TRUE = Enable extended range mode -> change scaling to +/-7812500 instead of r+/- 838860x *)
+	Offset													:	LREAL := 0.0;
+END_VAR                 									                                	            	
+VAR_OUTPUT                              	            	
+	Q														:	LREAL;	//scaled result value
+{attribute 'displaymode':='binary'}     	            	
+	Status										AT  %I*		:	WORD := 2#0100_0000_0000_0000;	//Terminal status word -> can also be linked with status byte
+
+	In											AT  %I* 	: 	DINT; 	//Hardware Input 
+
+	ActMode													: 	BYTE; //Setting Mode: 	0 = [V] DC | 1 = [V] AC 	| 2 = [A] DC 	| 3 = [A] AC
+	ActRange												: 	BYTE; //Setting Range: 255 = 0.3 	| 1 = 3 		| 2 = 30 		| 3 = 300 
+
+{attribute 'displaymode':='hex'}
+	Control										AT%Q*		: 	WORD;   
+    	
+END_VAR
+VAR	
+{attribute 'displaymode':='hex'}
+	Settings									AT  %I*		:	WORD; //Actual setting for mode and range 
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();
+
+(* Scaling ******************************************************************)
+	IF MaxValue <> MinValue 
+	THEN
+		IF Options.1 
+		THEN //24 bit resolution
+			IF NOT Options.3
+			THEN
+				Q 	 										:= Offset + Scale(SEL(Options.2 , In , In / 256.0 ) , SEL(Options.0, 0.0, -8388608.0), 8388607.0, MinValue , MaxValue);
+			ELSE
+		 		Q 	 										:= Offset + Scale(SEL(Options.2 , In , In / 256.0 ) , SEL(Options.0, 0.0, -7812500.0), 7812500.0, MinValue , MaxValue);
+			END_IF
+		ELSE //32 bit resolution 
+			Q 	 											:= Offset + Scale(SEL(Options.2 , In , In / 256.0 ) , SEL(Options.0, 0.0, -2147483648.0), 2147483647.0, MinValue , MaxValue);		
+		END_IF
+		IF NoOfDigits > 0
+		THEN
+			Q												:= TO_FMLREAL(Q,NoOfDigits);
+		END_IF
+	
+	ELSIF NoOfDigits > 0 (* Bsp PT100 *)
+	THEN
+		Q													:= Offset + TO_FMLREAL(In,NoOfDigits);
+		
+	ELSE  													
+		Q 													:= 0.0;
+	END_IF
+
+	IF inError AND OutOnError <> 0.000000000000000001
+	THEN
+		Q													:= OutOnError;
+	END_IF
+	
+(* Mode & Range **************************************************************)
+	ActMode.0 												:= Settings.4;
+	ActMode.1 												:= Settings.5;
+	ActMode.2 												:= Settings.6;
+	ActMode.3 												:= Settings.7;
+	
+	ActRange.0 												:= Settings.8;
+	ActRange.1 												:= Settings.9;
+	ActRange.2 												:= Settings.10;
+	ActRange.3 												:= Settings.11;
+	ActRange.4 												:= Settings.12;
+    ActRange.5 												:= Settings.13;
+    ActRange.6 												:= Settings.14;
+    ActRange.7 												:= Settings.15;
+
+(*****************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="autorangeIsDisabled" Id="{6aac41de-6a14-4da5-8ec4-7cc807ffdb19}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC autorangeIsDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{96c5cac8-449e-41e2-99a8-5b6612c407b6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[autorangeIsDisabled := Status.5;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="calibrationInProgress" Id="{118a5291-ec56-482d-acf7-59bb46d71142}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC calibrationInProgress : BOOL]]></Declaration>
+      <Get Name="Get" Id="{067d7aec-ffb2-4fa7-a1be-5a0aec3b6530}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[calibrationInProgress := Status.7;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="dataInvalid" Id="{4ed2eef0-80c5-4f79-ac33-191bf3263a35}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC dataInvalid : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b00533e6-7b7f-46fd-a331-93aca327bd82}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[dataInvalid := Status.3;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="disableAutorange" Id="{43dbe815-4cd8-4ef0-890c-5458091aec81}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC disableAutorange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1d76c3e0-1920-49be-89ce-0830479a805a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DisableAutorange 	:= Control.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{48fce614-8f30-45aa-8171-00183daa03d0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Control.0 								:= DisableAutorange;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="inError" Id="{b877242c-0491-458f-b94d-14363ea67eec}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8adb7e3a-3e76-4bef-a91f-8fcb6e5e197a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[InError					:= Status.6 OR MinValue = MaxValue AND NoOfDigits = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="inExtendedRange" Id="{3842ee38-b201-4aef-80ff-7b12d26fa15b}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inExtendedRange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{470350ab-ac68-4d51-b768-0b8125633e84}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inExtendedRange := Status.2;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="overrange" Id="{c92ded85-77b9-406c-a4be-185651aab3db}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC overrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{58d636da-dec7-4cea-9e85-e4bb7e421043}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[overrange 		:= status.1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="rangeInvalid" Id="{62d80656-c744-4731-b069-aa3c1b2c5a58}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC rangeInvalid : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c772c669-a72b-44a0-9632-53296b562812}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rangeInvalid := Status.4;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="setControlMode" Id="{4b29490d-6d7b-49e3-99a8-3b85f2dd9427}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+// 0 = [V] DC | 1 = [V] AC | 2 = [A] DC | 3 = [A] AC
+PROPERTY PUBLIC setControlMode : INT]]></Declaration>
+      <Get Name="Get" Id="{eab59895-0588-4dcc-b0b3-3b7e9e147361}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[setControlMode.0 := Control.4;
+setControlMode.1 := Control.5;
+setControlMode.2 := Control.6;
+setControlMode.3 := Control.7;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{8f532f7d-de2e-4d6b-a300-c05ef80f8859}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Control.4 := setControlMode.0;
+Control.5 := setControlMode.1;
+Control.6 := setControlMode.2;
+Control.7 := setControlMode.3;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="setControlRange" Id="{99d68934-98c4-404d-a682-fa7d9706ce7d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+// 	disable autorange to use range
+// 	255 = 0.3 		| 1 = 3 		| 2 = 30 		| 3 = 300 
+//	255 = 3*10^-1 	| 1 = 3*10^0 	| 2 = 3*10^1 	| 3 = 3*10^2 
+PROPERTY PUBLIC setControlRange : INT]]></Declaration>
+      <Get Name="Get" Id="{f9e5c2c4-3fbd-4475-9267-587f506f6056}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[setControlRange.0 := Control.8;
+setControlRange.1 := Control.9;
+setControlRange.2 := Control.10;
+setControlRange.3 := Control.11;
+setControlRange.4 := Control.12;
+setControlRange.5 := Control.13;
+setControlRange.6 := Control.14;
+setControlRange.7 := Control.15;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2e2c3c4b-fb8c-4b19-8919-d0f6c43b22fc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Control.8 := setControlRange.0;
+Control.9 := setControlRange.1;
+Control.10 := setControlRange.2;
+Control.11 := setControlRange.3;
+Control.12 := setControlRange.4;
+Control.13 := setControlRange.5;
+Control.14 := setControlRange.6;
+Control.15 := setControlRange.7;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="startCalibration" Id="{33d23d62-e588-4932-b3e4-aa0e3d6f7b68}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC startCalibration : BOOL]]></Declaration>
+      <Get Name="Get" Id="{debd7513-d0ca-4b94-ac91-755dacefcb1d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[StartCalibration 	:= Control.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f1e9df9f-4482-4211-a5e1-94b4591ced85}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Control.1 								:= StartCalibration;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="underrange" Id="{eda3de2a-af3d-4f07-a3c6-f41c11c87494}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC underrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{7fdaaf16-49a1-40ae-978b-f170cb40cc7e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[underrange 		:= status.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="EL3681">
+      <LineId Id="3" Count="48" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.autorangeIsDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.calibrationInProgress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.dataInvalid.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.disableAutorange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.disableAutorange.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.inError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.inExtendedRange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.overrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.rangeInvalid.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.setControlMode.Get">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.setControlMode.Set">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.setControlRange.Get">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.setControlRange.Set">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.startCalibration.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.startCalibration.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3681.underrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

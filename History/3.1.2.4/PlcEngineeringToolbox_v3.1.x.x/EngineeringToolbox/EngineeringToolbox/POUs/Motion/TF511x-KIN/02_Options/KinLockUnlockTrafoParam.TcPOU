@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4018.5">
+  <POU Name="KinLockUnlockTrafoParam" Id="{4db94791-882c-48c4-80e9-5a01b79a99d2}" SpecialFunc="None">
+    <Declaration><![CDATA[//Lock or Unlock kinematic group parameter
+FUNCTION_BLOCK KinLockUnlockTrafoParam
+VAR_INPUT
+	Execute													:	BOOL	:= FALSE;
+	Lock													:	BOOL 	:= TRUE;
+   	oidTrafo												:	UDINT;
+END_VAR                     								
+VAR_OUTPUT                  								
+	Busy													:	BOOL	:= FALSE;
+	Done													:	BOOL	:= FALSE;
+	Error													:	BOOL	:= FALSE;
+	ErrorId													:	UDINT	:= 0;
+END_VAR                     								
+VAR                         	
+	State													:	UDINT	:= 0;
+	ADSWRITE												:	ADSWRITE;
+END_VAR                         							]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[CASE State OF
+0:
+	Done													:= FALSE;
+	Error													:= FALSE;
+	ErrorId													:= 0;
+	Busy 													:= FALSE;
+	
+	IF Execute THEN
+		AdsWrite(WRITE := FALSE);
+		AdsWrite(
+			NETID		:='',
+			PORT		:= 10,
+			IDXGRP		:=oidTrafo,
+			IDXOFFS		:=SEL(Lock, 16#05030210, 16#0503020F),
+			LEN			:= 0,
+			SRCADDR		:=0 ,
+			WRITE		:= TRUE,
+			TMOUT		:= DEFAULT_ADS_TIMEOUT,
+			BUSY		=> ,
+			ERR			=> ,
+			ERRID		=> );
+
+		Busy												:= TRUE;
+		State												:= 10;
+	END_IF
+10:
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+		
+	IF NOT AdsWrite.BUSY 
+	THEN
+		IF NOT AdsWrite.ERR 
+		THEN
+			Done											:= TRUE;
+		END_IF
+		IF NOT Execute THEN
+			State											:= 0;
+		ELSE
+			State											:= 20;
+		END_IF
+		AdsWrite(WRITE:=FALSE);
+	END_IF
+20:
+	Busy													:= FALSE;
+	IF NOT Execute THEN
+		State												:= 0;
+	END_IF
+
+END_CASE]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

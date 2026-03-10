@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="getFilledString" Id="{006d2f2f-c50a-4af9-a960-d623be5c834f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Returns a string which is filled with a defined char on the left or right site with a desired lenght  
+FUNCTION getFilledString : T_MaxString
+VAR_INPUT
+	Strline													:	T_MaxString;	//Start string
+	Lenght													:	INT;			//Desired lenght
+	FillChar												:	STRING(1);		//Fill char
+	LeftInsert												:	BOOL;			//Insert char on left site of start string
+END_VAR             										
+VAR                 										
+	tmp														:	T_MaxString;
+	i 														: INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[GetFilledString 											:= Strline;
+tmp 														:= '';
+
+FOR i := 0 TO Lenght DO
+	IF LEN(getFilledString)+ Lenght >= UINT_TO_INT(SIZEOF(getFilledString)) 
+	THEN
+		RETURN;
+	ELSE
+		IF LeftInsert 
+		THEN
+			IF LEN(tmp) < Lenght - LEN(Strline) 
+			THEN
+				tmp 										:= INSERT(tmp,FillChar,LEN(tmp));
+			ELSE
+				getFilledString 							:= CONCAT(tmp,getFilledString);
+			END_IF                  						
+		ELSE                        						
+			getFilledString									:= INSERT(getFilledString,FillChar,LEN(getFilledString));
+		END_IF
+	END_IF
+END_FOR]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="getFilledString">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

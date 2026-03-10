@@ -1,0 +1,189 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MDP_Fan" Id="{9b9165dd-a4b6-456b-b52e-ff98bd74c0c7}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK MDP_Fan EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	MIN_FAN													:	INT := 1;
+	MAX_FAN													:	INT := 4;
+END_VAR                     								
+VAR_INPUT                   								
+	AmsNetId												: 	T_AmsNetId := '';					//AmsNetId as text
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;		//Ads timeout
+END_VAR                     								
+VAR_OUTPUT                  								
+	Speed													:  ARRAY[MIN_FAN..MAX_FAN] OF	INT;	//current fan speed
+	Count													:	INT; 	//number of CPUs
+	ErrorGrp												:	E_MDP_ErrGroup := eMDP_Err_NoError;
+END_VAR                     								
+VAR                         								
+	idx														:	INT := 1;
+	MDP_ScanModules											:	FB_MDP_ScanModules := ( nModuleType 	:= eMDP_ModT_FAN , iModIdx		:= 0);
+	MDP_Read												: 	FB_MDP_Read;
+	SplitErrorId											:	FB_MDP_SplitErrorID;
+	DstBuf													:	ARRAY[0..4] OF BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Read FAN Information 					V1.0	*)
+(****************************************************)
+
+(* Start Read *******************************************************)
+	IF Execute
+		AND state = 0
+	THEN
+		MEMSET(ADR(Speed),0,SIZEOF(Speed));
+		Count												:= 0;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+		MDP_Read(bExecute := FALSE);
+		MDP_ScanModules(
+			bExecute		:= FALSE,
+			nModuleType		:= eMDP_ModT_FAN,
+			iModIdx			:= 0,
+			tTimeout		:= timeout,
+			sAmsNetId		:= AmsNetId,
+			bBusy			=> ,
+			bError			=> ,
+			nErrID			=> ,
+			nDynModuleId	=> ,
+			iModuleTypeCount=> ,
+			iModuleCount	=> );
+			
+		MDP_ScanModules(bExecute		:= TRUE);		
+		state												:= 1;
+		
+	ELSIF NOT Execute
+		AND State = 99
+	THEN
+		state												:= 0;
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+	END_IF
+
+
+	CASE state OF
+	0:
+		;
+
+	1:
+		MDP_ScanModules();
+		IF NOT MDP_ScanModules.bBusy
+		THEN
+			IF MDP_ScanModules.bError
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_ScanModules.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode		=> ErrorId);
+				state										:= 99;
+				MDP_ScanModules(bExecute := FALSE);
+			ELSE
+				Count										:= MDP_ScanModules.iModuleTypeCount;
+				MDP_Read(bExecute := FALSE);
+				MDP_Read.stMDP_DynAddr.nArea				:= 16#8;
+				MDP_Read.stMDP_DynAddr.nModuleId			:= MDP_ScanModules.nDynModuleId;
+				MDP_Read.stMDP_DynAddr.nTableId				:= 1;
+				MDP_Read.stMDP_DynAddr.nSubIdx				:= 1;
+				
+				MDP_Read(
+					stMDP_DynAddr	:= ,		(* address to request subindex Count of AdressList *)
+					pDstBuf			:= ADR(DstBuf),
+					cbDstBufLen		:= SIZEOF(DstBuf),
+					bExecute		:= TRUE,
+					tTimeout		:= Timeout,
+					sAmsNetId		:= AmsNetId,
+					bBusy			=> ,
+					bError			=> ,
+					nErrId			=> );
+				idx											:= 1;
+				state										:= 2;
+			END_IF
+
+		END_IF
+
+	2:
+		MDP_Read( pDstBuf	:= ADR(DstBuf), cbDstBufLen := SIZEOF(DstBuf));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				MDP_Read(bExecute := FALSE);
+				MEMCPY(ADR(Speed[idx]), ADR(DstBuf), SIZEOF(Speed[idx]));
+				IF idx < Count
+				THEN
+					MDP_Read.stMDP_DynAddr.nModuleId		:= MDP_Read.stMDP_DynAddr.nModuleId + 1;
+					idx 									:= idx + 1;
+				ELSE                                    	
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 99;
+				END_IF
+
+				MDP_Read(
+					stMDP_DynAddr	:= ,(* address to request subindex Count of AdressList *)
+					pDstBuf			:= ADR(DstBuf),
+					cbDstBufLen		:= SIZEOF(DstBuf),
+					bExecute		:= NOT MDP_Read.bBusy AND state = 2,
+					tTimeout		:= Timeout,
+					sAmsNetId		:= AmsNetId,
+					bBusy			=> ,
+					bError			=> ,
+					nErrId			=> );
+			END_IF
+		END_IF
+
+	99: ;
+
+	ELSE
+		;
+	END_CASE
+
+
+	(* reset state for next start *)
+	IF NOT Execute
+		AND state = 99
+	THEN
+		state												:= 0;
+	END_IF
+
+(****************************************************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MDP_Fan">
+      <LineId Id="3" Count="154" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

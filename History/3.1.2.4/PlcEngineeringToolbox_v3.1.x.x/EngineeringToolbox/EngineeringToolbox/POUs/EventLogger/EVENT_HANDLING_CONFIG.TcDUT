@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="EVENT_HANDLING_CONFIG" Id="{ea3753b5-dc94-4bbf-a965-dbba1e0e65ec}">
+    <Declaration><![CDATA[{attribute 'hide'}
+//Library Param structure for EventLogger related function blocks  
+TYPE EVENT_HANDLING_CONFIG :
+STRUCT
+	GRP_CUSTOMISED_MAX_EVENT								:	INT(1..1000) ;
+	
+	EVENTLOG_READ_MSG_LEN_MIN								:	INT(0..1) ;
+	EVENTLOG_READ_MSG_LEN_MAX								:	INT(0..2096) ;	
+                                                                     
+	EVENTLOG_READ_MAX_EVENTS								:	INT(1..1000) ;
+	                                                            
+	ENABLE_DYNAMIC_EVENT_MSG_FORMAT							:	BOOL	; //Enable to adjust the placeholder (format) of the event messages according the use of Parameter EventHandling.Text1,Text2 and pText3
+	
+	CLASS_NONE_QUIT_REQUIRED								:	BOOL     ;
+	CLASS_MAINTENANCE_QUIT_REQUIRED							:	BOOL     ;
+	CLASS_MESSAGE_QUIT_REQUIRED								:	BOOL     ;
+	CLASS_HINT_QUIT_REQUIRED								:	BOOL     ;
+	CLASS_STATEINFO_QUIT_REQUIRED							:	BOOL     ;
+	CLASS_INSTRUCTION_QUIT_REQUIRED							:	BOOL     ;
+	CLASS_WARNING_QUIT_REQUIRED								:	BOOL     ;
+	CLASS_ALARM_QUIT_REQUIRED								:	BOOL     ;
+	CLASS_PARAMERROR_QUIT_REQUIRED							:	BOOL     ;
+	                                                    	             
+	CLASS_NONE_PRIORITY										:	UINT(0..3); //1=high ...3=low 
+	CLASS_MAINTENANCE_PRIORITY								:	UINT(0..3); //1=high ...3=low 
+	CLASS_MESSAGE_PRIORITY									:	UINT(0..3); //1=high ...3=low 
+	CLASS_HINT_PRIORITY										:	UINT(0..3); //1=high ...3=low 
+	CLASS_STATEINFO_PRIORITY								:	UINT(0..3); //1=high ...3=low 
+	CLASS_INSTRUCTION_PRIORITY								:	UINT(0..3); //1=high ...3=low 
+	CLASS_WARNING_PRIORITY									:	UINT(0..3); //1=high ...3=low 
+	CLASS_ALARM_PRIORITY									:	UINT(0..3); //1=high ...3=low 
+	CLASS_PARAMERROR_PRIORITY								:	UINT(0..3); //1=high ...3=low 
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

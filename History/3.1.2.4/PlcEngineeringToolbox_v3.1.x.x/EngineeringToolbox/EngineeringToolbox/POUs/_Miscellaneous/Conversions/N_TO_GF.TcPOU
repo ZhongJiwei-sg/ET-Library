@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="N_TO_GF" Id="{54f4f783-dc88-488c-9aa7-b0558ab952ab}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Newton to Gram-force
+FUNCTION N_TO_GF : LREAL
+VAR_INPUT
+	FN				:	LREAL;
+END_VAR
+VAR
+END_VAR
+(*
+Gram-force to newton (gf to N):
+Fn = Fgf ×0.00980665
+Example:
+If gf = 156 then N = 1.5298374N
+
+Newton to gram-force (N to gf):
+Fgf = Fn / 0.00980665
+*)]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[N_TO_GF := FN / 0.00980664999999998;]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

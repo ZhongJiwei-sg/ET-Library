@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0401" Id="{60d7f79b-d87b-451e-bf04-318d186e1577}">
+    <Declaration><![CDATA[TYPE AX5000_P_0401 :
+STRUCT
+	Positiv_limit_switch: ST_AX5000_P_0401_LimitSwitch;
+	Negativ_limit_switch: ST_AX5000_P_0401_LimitSwitch;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

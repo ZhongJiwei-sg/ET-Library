@@ -1,0 +1,345 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="TCPConnectionCtrl" Id="{4a04b71c-d3b8-4fa1-babf-39b3fc7d31b3}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Helper for TCP Client or Server socket communication communication.
+//(Wrapper for Fbs like SocketAccpet,SocketClose,SocketConnect....)
+//based on TF6310, required lib: Tc2_TcpIp - see Beckhoff Infosys for more information
+FUNCTION_BLOCK TCPConnectionCtrl
+VAR_OUTPUT CONSTANT
+	FNC_CLIENT_SERVER										:	INT := 0; //Plc runs as client implementation (sending connection request)
+	FNC_SERVER_CLIENT										:	INT := 1; //Plc runs as server implementation (acknowledge incomming connetion requests from a client)
+END_VAR
+VAR_INPUT
+	Enable													:	BOOL := FALSE; // FB will be processed as long as enable is TRUE 
+	Fnc														: 	INT (FNC_CLIENT_SERVER..FNC_SERVER_CLIENT) := FNC_CLIENT_SERVER;
+	SrvNetId												: 	T_AmsNetId := ''; //AmsNet id for TcpIp Server instance - '' for local 
+	SrvLocalHost											:	T_IPv4Addr := '127.0.0.1';		 //IP-Adress of local ip-adapter used for server communication
+	SrvLocalPort											:	UDINT;			//IP-Port of local ip-adapter used for server communication
+	SrvAcceptMode											: 	E_SocketAcceptMode :=	eACCEPT_ALL; (* 	eACCEPT_ALL, Accept connection to all remote clients
+																							eACCEPT_SEL_HOST,  Accept connection TO selected host address
+																							eACCEPT_SEL_PORT,  Accept connection to selected port address 
+																							eACCEPT_SEL_HOeSTATE.PORT  Accept connection to selected host and port address *)
+	RemoteHost 												: 	T_IPv4Addr := '' ;//Remote/Client Ip-Adress used for Client/Server communication - Empty for an unspecified adapter
+	RemotePort												: 	UDINT := 0; //Remote/Client socket port used for Client/Server communication - Empty for an unspecified port
+	PT_Reconnect											:	TIME := T#30S; //In Server mode tReconnet can be set to 1ms, as a client the tReconnect value should not be set too low, since timeout periods of > 30 s may occur in the event of a network interruption. If the value is too low, command execution would be interrupted prematurely, and ADS error code 1861 (timeout elapsed) would be returned instead of the Winsocket error WSAETIMEDOUT.
+	PT_LinkStatus											:	TIME := T#5S; //Cycle time to check adapter link status T#0ms = off	
+
+	EnableDebugMode											:	BOOL := FALSE; //Write debug information into twincat logger
+	CloseAllSocket											:	BOOL := TRUE; //Close all socket if server will be diabled - FALSE = close only connected port
+END_VAR                 									
+VAR_OUTPUT              									
+	hSocket													: 	T_HSOCKET ; //
+	hSocketText												:	STRING(80); //
+	Connected												:	BOOL; (* Connection is current running *)
+	LinkNOK													:	BOOL; //TRUE = Link not ok			
+	Reconnecting											:	BOOL; //Reconnet because of new incomming connection		
+	ConnState												:	E_SocketConnectionState; // Socket connection state enum - see TF6310 documentation for further information
+	Busy													:	BOOL;	// Busy is TRUE at the rising edge of Enable and stays TRUE as long as the FB is performing any action. 
+	Error													:	BOOL;	// Rising edge of Error informs that an error occurred during the execution of the Function Block 
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT;	// Error identification - see ADS return codes and TF6310 documentation at Beckhoff infosys for further information 
+	WinsockErrorId											:	E_WinsockError; // Winsocket error enum - see TF6310 documentation for further information
+END_VAR
+VAR
+END_VAR
+VAR
+(* local variables ************************************************************)
+	ReadyToEnable											:	BOOL;
+	hServer													:	T_HSERVER;
+
+(* Trigger **********************************************************)
+
+(* Timer ******************************************************************)
+	LinkDetectionTimer										:	TON;
+	
+(* Insatcnced ***************************************************************)	
+	IpAdapterLinkStatus										:	FB_IpAdapterGetLinkStatus := (sSrvNetId := '', ttimeout := DEFAULT_ADS_TIMEOUT) ;		
+	Server													:	 FB_ServerClientConnection;
+	Server2													:	 FB_ServerClientConnection;
+	Client													:	 FB_ClientServerConnection;
+
+(* Dummys **********************************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Link status ***********************************************************)	
+	LinkDetectionTimer( 
+		IN := Enable
+			AND PT_LinkStatus > T#0MS
+			AND NOT LinkDetectionTimer.Q 	
+			AND NOT IpAdapterLinkStatus.bBusy,
+		PT := PT_LinkStatus);
+	
+	IpAdapterLinkStatus(
+		sSrvNetId		:= , 
+		sLocalHost		:= hSocket.localAddr.sAddr, 
+		bExecute		:= LinkDetectionTimer.Q OR IpAdapterLinkStatus.bBusy ,
+		tTimeout		:=, 
+		bBusy			=> , 
+		bError			=> , 
+		nErrId			=> , 
+		bLinkError		=> );
+	
+	IF NOT IpAdapterLinkStatus.bBusy
+		AND IpAdapterLinkStatus.bExecute
+	THEN
+		LinkNOK												:= 	IpAdapterLinkStatus.bLinkError;
+	END_IF
+
+
+(* Ready to enable ******************************************************)
+	//Enable and disabled server to closed old connection if new incoming connection occured
+	ReadyToEnable											:= Enable 
+																AND NOT IpAdapterLinkStatus.bLinkError
+																AND NOT Error;
+																
+(* Execute ********************************************************************************)	
+IF Fnc = FNC_SERVER_CLIENT AND NOT Client.bBusy
+	OR Server.bBusy OR Server2.bbusy
+THEN //accept client request
+(* run server ************************************************************)																																											
+	_RunAsServer();
+ELSE
+	_RunAsClient();
+END_IF
+
+(**************************************************************************************)
+]]></ST>
+    </Implementation>
+    <Method Name="_RunAsClient" Id="{0fb42327-1dc2-41e6-a037-a01b29061c8f}">
+      <Declaration><![CDATA[METHOD PRIVATE _RunAsClient : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	Client(
+		sSrvNetID		:= SrvNetId,
+		nMode			:= SEL(EnableDebugMode,0,CONNECT_MODE_ENABLEDBG),
+		sRemoteHost		:= RemoteHost,
+		nRemotePort		:= RemotePort,
+		bEnable			:= ReadyToEnable AND Fnc = FNC_CLIENT_SERVER,
+		tReconnect		:= PT_Reconnect,
+		bBusy			=> Busy,
+		bError			=> ,
+		nErrId			=> ,
+		hSocket			=> hSocket,
+		eSTATE			=> ConnState);
+
+	Connected 												:= hSocket.handle <> 0 AND ConnState = E_SocketConnectionState.eSOCKET_CONNECTED;
+	hSocketText												:= HSOCKET_TO_STRING(hSocket);
+	
+	IF Error
+	THEN
+		IF NOT Enable
+		THEN
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			WinsockErrorId									:= WSOK;		
+		END_IF
+	ELSIF Client.bError
+	THEN
+		Error												:= TRUE;
+		IF Client.nErrId >= 16#80070000
+		THEN
+			ErrorId											:= E_AdsErr.CLIENT_W32ERROR;
+			WinsockErrorId									:= ADSERROR_TO_WSERROR(Client.nErrId);
+		ELSE                    								
+			ErrorId											:= Client.nErrId;
+			WinsockErrorId									:= WSOK;
+		END_IF
+	END_IF
+	
+	_RunAsClient											:= Connected;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_RunAsServer" Id="{89ee2e0d-c370-454d-bfa4-4c2c0d5a0033}">
+      <Declaration><![CDATA[METHOD _RunAsServer : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Init Serverhandle *********************************)
+	IF NOT Connected AND ReadyToEnable
+		OR ConnState <> E_SocketConnectionState.eSOCKET_DISCONNECTED AND NOT Enable
+		OR Reconnecting
+	THEN
+		F_CreateServerHnd(
+			sSrvNetID		:= SrvNetId,
+			sLocalHost		:= SrvLocalHost,
+			nLocalPort		:= SrvLocalPort,
+			nMode			:= SEL(EnableDebugMode,0,CONNECT_MODE_ENABLEDBG) OR SEL(CloseAllSocket OR Reconnecting,0,LISTEN_MODE_CLOSEALL),
+			bEnable			:= Server.bEnable OR Server2.bEnable,
+			hServer			:= hServer);
+	END_IF
+
+(* Call Server **************************************)
+	Server(
+		eMode			:= SrvAcceptMode,
+		sRemoteHost		:= RemoteHost,
+		nRemotePort		:= RemotePort,
+		bEnable			:= ,
+		tReconnect		:= PT_Reconnect,
+		hServer			:= hServer,
+		bBusy			=> ,
+		bError			=> ,
+		nErrID			=> ,
+		hSocket			=> ,
+		eSTATE			=> );
+		
+		
+	Server2(
+		eMode			:= SrvAcceptMode,
+		sRemoteHost		:= RemoteHost,
+		nRemotePort		:= RemotePort,
+		bEnable			:= ,
+		tReconnect		:= PT_Reconnect,
+		hServer			:= hServer,
+		bBusy			=> ,
+		bError			=> ,
+		nErrID			=> ,
+		hSocket			=> ,
+		eSTATE			=> );
+	
+	//Control server enable 	
+	IF NOT ReadyToEnable
+	THEN
+		Server2.bEnable										:= FALSE;
+		Server.bEnable										:= FALSE;
+		ConnState											:= eSOCKET_DISCONNECTED;
+		hSocket.handle										:= 0;		
+		
+	ELSIF Server.hSocket.handle <> 0 AND Server2.hSocket.handle	<> 0
+	THEN
+		Server.bEnable										:= Server.hSocket.handle <> hSocket.handle;
+		Server2.bEnable										:= Server2.hSocket.handle <> hSocket.handle;
+		ConnState											:= eSOCKET_DISCONNECTED;	
+	ELSif Server.hSocket.handle <> 0
+	THEN
+		hSocket												:= Server.hSocket;	
+		ConnState											:= Server.eState;
+		Server2.bEnable										:= Server2.hSocket.handle = 0;	
+	ELSIF Server2.hSocket.handle <> 0
+	THEN
+		hSocket												:= Server2.hSocket;	
+		ConnState											:= Server2.eState;
+		Server.bEnable										:= Server.hSocket.handle = 0;	
+	ELSE
+		ConnState											:= eSOCKET_DISCONNECTED;
+		hSocket.handle										:= 0;		
+		Server.bEnable										:= Server.hSocket.handle = 0;
+		Server2.bEnable										:= Server2.hSocket.handle = 0;					
+	END_IF			
+	
+(* Error check *******************************************************)
+	IF Error
+	THEN
+		IF NOT Enable
+		THEN
+			Error											:= FALSE;
+			ErrorId											:= 0;
+			WinsockErrorId									:= WSOK;		
+		END_IF
+		
+	ELSIF LinkNOK AND Connected
+	THEN
+		Error												:= TRUE;
+		ErrorID												:= 16#80070000 OR 16#00002742;
+		WinsockErrorId										:= ADSERROR_TO_WSERROR(ErrorID);
+		
+	ELSIF Server.bError AND Server.bEnable
+	THEN
+		Error												:= TRUE;
+		IF Server.nErrId >= 16#80070000
+		THEN
+			ErrorId											:= E_AdsErr.CLIENT_W32ERROR;
+			WinsockErrorId									:= ADSERROR_TO_WSERROR(Server.nErrId);
+		ELSE                    								
+			ErrorId											:= Server.nErrId;
+			WinsockErrorId									:= WSOK;
+		END_IF                  	
+    ELSIF Server2.bError AND Server2.bEnable
+	THEN
+		Error												:= TRUE;
+		IF Server2.nErrId >= 16#80070000
+		THEN
+			ErrorId											:= E_AdsErr.CLIENT_W32ERROR;
+			WinsockErrorId									:= ADSERROR_TO_WSERROR(Server2.nErrId);
+		ELSE                    								
+			ErrorId											:= Server2.nErrId;
+			WinsockErrorId									:= WSOK;
+		END_IF                
+	END_IF
+	
+(* Status ***********************************************)
+	Connected		 										:= Server.bEnable AND Server2.bEnable AND hSocket.handle <> 0 AND ConnState = eSOCKET_CONNECTED; 
+	Reconnecting											:= Server.bEnable XOR Server2.bEnable;  		
+	
+	IF Connected AND RemoteHost <> '' 
+	THEN 
+		hSocket.remoteAddr.sAddr 							:= RemoteHost; 
+	END_IF		
+	IF Connected AND RemotePort <> 0 
+	THEN 	
+		hSocket.remoteAddr.nPort 							:= RemotePort; 
+	END_IF
+
+	hSocketText												:= HSOCKET_TO_STRING(hSocket);
+	
+	_RunAsServer											:= Connected;
+(************************************************************)
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="TCPConnectionCtrl">
+      <LineId Id="502" Count="2" />
+      <LineId Id="721" Count="0" />
+      <LineId Id="506" Count="37" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TCPConnectionCtrl._RunAsClient">
+      <LineId Id="12" Count="34" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="47" Count="1" />
+    </LineIds>
+    <LineIds Name="TCPConnectionCtrl._RunAsServer">
+      <LineId Id="91" Count="2" />
+      <LineId Id="302" Count="0" />
+      <LineId Id="94" Count="22" />
+      <LineId Id="151" Count="1" />
+      <LineId Id="154" Count="10" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="299" Count="0" />
+      <LineId Id="167" Count="26" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="300" Count="0" />
+      <LineId Id="132" Count="7" />
+      <LineId Id="277" Count="0" />
+      <LineId Id="271" Count="3" />
+      <LineId Id="270" Count="0" />
+      <LineId Id="276" Count="0" />
+      <LineId Id="140" Count="10" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="261" Count="8" />
+      <LineId Id="259" Count="0" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="301" Count="0" />
+      <LineId Id="77" Count="2" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="278" Count="3" />
+      <LineId Id="283" Count="4" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="288" Count="0" />
+      <LineId Id="196" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="81" Count="3" />
+      <LineId Id="80" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0073" Id="{44223577-6f7f-44b6-afd5-479399ad583c}">
+    <Declaration><![CDATA[TYPE AX5000_P_0073 :
+STRUCT
+	Motor_peak_torque:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

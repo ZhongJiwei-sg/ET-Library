@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0511" Id="{536b7ab0-4acc-4a68-ab17-ab528f2e26f0}">
+    <Declaration><![CDATA[TYPE AX5000_P_0511 :
+STRUCT
+	Celocity_filter_low_pass_time_constant:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

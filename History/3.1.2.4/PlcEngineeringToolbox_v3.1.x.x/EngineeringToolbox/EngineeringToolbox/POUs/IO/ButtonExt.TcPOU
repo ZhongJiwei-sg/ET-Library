@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="ButtonExt" Id="{44567a90-34de-4662-83c9-2a53d3b5acdf}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Button with delay function 
+FUNCTION_BLOCK ButtonExt EXTENDS Button
+VAR_INPUT
+	RstTGL													:	BOOL := FALSE; 	//resets the Toggle signal
+	SetTGL													:	BOOL := FALSE;	//sets the Toggle signal
+
+	PT_ON													:	TIME := T#0MS; 	//Delay for Q, Q_RT (TGL) and Q_FT
+END_VAR
+VAR_OUTPUT
+	Q_DIRECT												:	BOOL; 	//Direct signal - undelayed
+END_VAR
+VAR
+	TON														:	TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Button with toggle-function and on-delay		V1.5	*)
+(********************************************************)
+
+(********************************************************)
+TON(IN := ((In OR Force) XOR Invert) AND Enable, PT := PT_ON);
+Q_DIRECT 													:= TON.IN;
+IF NOT Q    												
+THEN        												
+	Q 														:= TON.Q;
+	Q_RT 													:= Q;
+	Q_FT 													:= FALSE;
+ELSE        												
+	Q 														:= TON.IN;
+	Q_RT 													:= FALSE;
+	Q_FT 													:= NOT Q;
+END_IF      	
+
+Q_TGL := NOT RstTGL AND (Q_RT XOR Q_TGL OR SetTGL) ;
+
+(********************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="ButtonExt">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

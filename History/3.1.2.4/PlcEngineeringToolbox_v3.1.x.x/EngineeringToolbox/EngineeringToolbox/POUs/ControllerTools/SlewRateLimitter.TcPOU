@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="SlewRateLimitter" Id="{69b14dad-ebaa-4236-9ab3-2cefa783c1e1}" SpecialFunc="None">
+    <Declaration><![CDATA[//LREAL Slew rate limitter with a timebased change rate
+FUNCTION_BLOCK SlewRateLimitter
+VAR_INPUT
+	IN														: LREAL := 0.0;	 //Actual value
+	Sync													: BOOL := FALSE; //Sync signal sets IN to Q	
+	Cycletime												: LREAL := 0.001; //cycletime in ms
+	Rate													: LREAL := 1.0;	 // changes per second
+END_VAR                 									
+VAR_OUTPUT              									
+	Q														: LREAL := 0.0;   //Output
+END_VAR                 									
+VAR                     	
+	x														: LREAL := 0.0;
+END_VAR                 	
+                        	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Based on MC_AxUtiSlewRateLimitter_BkPlcMc from TcPlcLibHydraulics , Author WOs
+IF Cycletime <= 0.0001 OR Rate <= 0.0 OR Sync
+THEN
+	Q														:= IN;
+ELSE                    									
+	x														:= Cycletime * Rate;
+	IF ABS(IN) > X OR ABS(Q > In)
+	THEN //Start ramping only after In is greater than Rate and as long as Q is greater (if In jumps to zero)
+		Q													:= Q + LIMIT(-x , IN - Q , x); 		
+	ELSE
+		Q													:= In;
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <Method Name="synchronize" Id="{2b3fd695-89db-44b9-938c-b96cee39fdd6}">
+      <Declaration><![CDATA[METHOD PUBLIC synchronize : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	IN														:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q 															:= IN;
+Synchronize 												:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="SlewRateLimitter">
+      <LineId Id="3" Count="5" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SlewRateLimitter.synchronize">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

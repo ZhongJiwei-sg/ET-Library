@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0202" Id="{b34a9f4e-bc98-4f70-b1dd-1714913828c2}">
+    <Declaration><![CDATA[TYPE AX5000_P_0202 :
+STRUCT
+	Main_voltage_positive_tolerance_range:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

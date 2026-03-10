@@ -1,0 +1,99 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="HEXSTR_TO_LWORD" Id="{ba359af6-33fb-4811-802c-6cc34ba8bfa4}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Converts a hex string into a 64 bit LWORD number
+FUNCTION HEXSTR_TO_LWORD : BOOL //Return value TRUE = successful converted / FALSE if there are no valid hex signs or seperators
+VAR_INPUT
+	Hexstring 												: T_MaxString;
+END_VAR
+VAR_IN_OUT
+{attribute 'displaymode':='hexadecimal'}
+	Target													: LWORD;
+END_VAR
+VAR
+	HexMarkerFound											: BOOL;
+	i,j,Max_i,Max_j											: INT;
+{attribute 'displaymode':='hexadecimal'}
+	X														: BYTE;
+{attribute 'displaymode':='hexadecimal'}
+	TmpTarget												: LWORD;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Max_i 														:= LEN(Hexstring) - 1;
+Max_j														:= SIZEOF(Target) * 2;
+TmpTarget 													:= 0;
+HEXSTR_TO_LWORD												:= TRUE;
+FOR i := 0 TO Max_i DO
+	(* read the first character and subtract 48 to get value in decimal 0 = 48 *)
+	(* calculate the value of the digit *)
+	X														:= Hexstring[i];
+	IF j >= Max_j
+	THEN
+		EXIT;
+	ELSIF X > 47 AND x < 58 
+	THEN //x = number 0-9
+		TmpTarget 											:= SHL(TmpTarget,4) + X - 48;
+		j													:= j + 1;
+	ELSIF X > 64 AND X < 71 								
+	THEN //x = letter A-F                   								
+		TmpTarget 											:= SHL(TmpTarget,4) + X - 55;
+		j													:= j + 1;
+	ELSIF X > 96 AND X < 103								 
+	THEN //x = letter a-f                     								
+		TmpTarget 											:= SHL(TmpTarget,4) + X - 87;
+		j													:= j + 1;
+	ELSIF x = 16#58 OR x = 16#78 OR  x = 16#23
+	THEN //found x, X or #, start over again because of 0xFA or 16#AB
+		IF HexMarkerFound
+		THEN
+			HEXSTR_TO_LWORD									:= FALSE;	
+			RETURN;		
+		ELSE
+			TmpTarget										:= 0;
+			HexMarkerFound									:= TRUE;
+			j												:= 0;	
+		END_IF		
+	ELSIF X = 16#2C OR X = 16#3A OR X = 16#2E OR X = 16#3B OR X = 16#20 OR X = 16#5F
+	THEN //Ignore comma,colon,dot,space,underline
+		; 
+	ELSE
+		HEXSTR_TO_LWORD										:= FALSE;	
+		RETURN;
+	END_IF
+END_FOR
+Target														:= TmpTarget;
+]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="HEXSTR_TO_LWORD">
+      <LineId Id="3" Count="22" />
+      <LineId Id="52" Count="1" />
+      <LineId Id="59" Count="1" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="62" Count="1" />
+      <LineId Id="65" Count="1" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="26" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

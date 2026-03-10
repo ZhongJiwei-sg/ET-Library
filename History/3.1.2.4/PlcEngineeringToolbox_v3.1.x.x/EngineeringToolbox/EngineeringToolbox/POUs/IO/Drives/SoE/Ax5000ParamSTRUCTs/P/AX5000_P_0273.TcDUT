@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0273" Id="{de06d2fc-d1f0-4640-a5b8-af811ebc658b}">
+    <Declaration><![CDATA[TYPE AX5000_P_0273 EXTENDS ST_AX5000_P_0273:
+STRUCT
+(*
+	Actual_lenght:UINT:= 112;
+	Max_lenght:UINT := 112;
+(*feedback 1*)
+ {attribute 'GUID' := 'D1EB669D-3061-44CC-A2EE-FBF75E3AC2F6'}
+ {attribute 'Namespace' := 'AX5000'}
+Feedback1 : ST_AX5000_P_0273_Feedback;
+(*
+(*Encoder Memory*)
+	Data_valid1:UINT;
+//	{attribute 'hide'}
+	rsvd1:UINT;
+	Position_offset1:UDINT;
+(*Drive Memory*)
+	Data_valid2:UINT;
+//	{attribute 'hide'}
+	rsvd2:UINT;
+	Feedback_type1:STRING(29);
+//	{attribute 'hide'}
+	rsvd3:UINT;
+	Feedback_serial_number:ARRAY[0..1]OF UDINT;
+	Position_offset2:UDINT;
+*)
+(*feedback 2*)
+{attribute 'GUID' := 'D1EB669D-3061-44CC-A2EE-FBF75E3AC2F6'}
+ {attribute 'Namespace' := 'AX5000'}
+Feedback2 : ST_AX5000_P_0273_Feedback;
+(*
+(*Encoder Memory*)
+	Data_valid3:UINT;
+//	{attribute 'hide'}
+	rsvd4:UINT;
+	Position_offset3:UDINT;
+(*Drive Memory*)
+	Data_valid4:UINT;
+//	{attribute 'hide'}
+	rsvd5:UINT;
+	Feedback_type2:STRING(29);
+//	{attribute 'hide'}
+	rsvd6:UINT;
+	Feedback_serial_number2:ARRAY[0..1]OF UDINT;
+	Position_offset4:UDINT;
+*)	
+
+//	{attribute 'hide'}
+	Rsvd1 : UDINT;
+*)
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

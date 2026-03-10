@@ -1,0 +1,272 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="EcSlaveDevFWUpdater" Id="{86a2a00d-90b4-44d2-b0de-15613e7ec3f5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK EcSlaveDevFWUpdater EXTENDS FbBase
+VAR CONSTANT	
+	{attribute 'displaymode':='hexadecimal'} 
+	COE_FWVERSION_OBJECT								: WORD := 16#100A;
+END_VAR
+VAR_OUTPUT CONSTANT
+	MIN_SLAVE_DEV										:	INT := 1;
+	MAX_SLAVE_DEV										:	INT := Param.ETHERCAT_SLAVE_DEV_FW_UPDATER_MAX_DEV;
+
+	{attribute 'displaymode':='binary'}   
+	MODE_READ											:	BYTE := 0;
+	{attribute 'displaymode':='binary'}   
+	MODE_WRITE											:	BYTE := 1;
+
+	{attribute 'displaymode':='binary'}   
+	OPTION_WRITE_FW_IF_VERSION_MATCH					:	BYTE := 2#0000_0001;
+	
+END_VAR
+VAR_INPUT
+{attribute 'displaymode':='binary'}         			
+	Mode												:	BYTE  := 2#0000_0000; 
+
+{attribute 'displaymode':='binary'}  	
+	Options												:	BYTE  := 2#0000_0000; 		
+				
+	PathName											:	STRING; //Path incl. file name of FW file
+	RegVersion											:	STRING; //Requested version
+	ipSlaveInfoData										:	ARRAY [MIN_SLAVE_DEV..MAX_SLAVE_DEV] OF I_EcSlaveInfoData;
+END_VAR
+VAR_OUTPUT
+	ActVersion											: ARRAY[MIN_SLAVE_DEV..MAX_SLAVE_DEV] OF STRING[20]; 	
+	CntFWNOK											: INT; //Count of terminals FW not OK
+	TermNo												: INT; //No of terminal in progress
+	ProgressWriteFW										: UDINT;	
+	VersionRead											: BOOL;
+END_VAR
+VAR
+(*  Memory *****************************************************)
+	lastState											: INT := 0;
+	MinTerm												: INT;
+
+(*  Timer ******************************************************)
+(*  Trigger ****************************************************)
+
+(*  Blocks *****************************************************)
+	EcCoeSdoReadEx										: FB_EcCoeSdoReadEx := (nIndex := COE_FWVERSION_OBJECT, tTimeout := DEFAULT_ADS_TIMEOUT);
+
+	CoEFwDownLoad										: FB_EcFoeLoad := (tTimeout := DEFAULT_ADS_TIMEOUT,dwPass := 0, eMode := eFoeMode_Write);
+(*  Error ******************************************************)
+(*  Dummys *****************************************************)
+	{attribute 'hide' := ''}
+	i,j													: INT := 0;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(*********************************************************)
+	
+(* state machine ********************************************************)
+	rtExecute(CLK := Execute);
+	CASE state OF
+	0 : 
+		Busy 											:= FALSE;
+		
+		IF NOT Execute THEN
+			Done 										:= FALSE;
+			Error 										:= FALSE;
+			ErrorID 									:= 0;
+		END_IF
+		IF rtExecute.Q THEN
+			IF PathName = '' 
+			THEN
+				Error 									:= TRUE;
+				ErrorID 								:= E_AdsErr.DEVICE_INVALIDPARM;
+
+			ELSIF RegVersion = '' AND Mode = MODE_WRITE AND NOT Options.0
+			THEN
+ 				Error 									:= TRUE;
+				ErrorID 								:= E_AdsErr.DEVICE_INVALIDPARM; 
+									
+			ELSIF ipSlaveInfoData[MIN_SLAVE_DEV] = 0
+			THEN
+ 				Error 									:= TRUE;
+				ErrorID 								:= E_AdsErr.DEVICE_INVALIDPARM; 			
+			ELSE
+				Busy									:= TRUE;	
+				Done 									:= FALSE;
+				Error 									:= FALSE;
+				ErrorID 								:= 0;
+				TermNo									:= MIN_SLAVE_DEV;	
+				ProgressWriteFW							:= 0;
+				CntFWNOK								:= 0;					
+				
+			
+				EcCoeSdoReadEx(bExecute := FALSE);
+				CoEFwDownLoad(bExecute := FALSE);
+				state									:= SEL(Mode = MODE_READ, 1, 2);
+			END_IF
+		END_IF
+			
+	1: (* Write FW *****************************************************************)
+		CoEFwDownLoad(
+			bExecute		:= ipSlaveInfoData[TermNo].rInfoData.AdsAddr.port <> 0 AND (ActVersion[TermNo] <> RegVersion OR Options.0) , 
+			sNetId			:= F_CreateAmsNetId(nIds := ipSlaveInfoData[TermNo].rInfoData.AdsAddr.netId),
+			nSlaveAddr		:= ipSlaveInfoData[TermNo].rInfoData.AdsAddr.port,
+			sPathName		:= PathName,
+			nProgress 		=> ProgressWriteFW);	
+		IF NOT 	CoEFwDownLoad.bBusy
+		THEN
+			ProgressWriteFW								:= 0;
+			IF CoEFwDownLoad.bError
+			THEN
+				ErrorID									:= EcCoESdoReadEx.nErrId;
+				CntFWNOK								:= CntFWNOK + 1;	
+				ActVersion[TermNo]						:= 'ERR_DOWNLOADING';
+			ELSIF CoEFwDownLoad.bExecute	
+			THEN
+				ActVersion[TermNo]						:= 'DOWNLOADED';
+			ELSE
+				ActVersion[TermNo]						:= '------';
+			END_IF
+			//Next terminal
+			TermNo										:= TermNo + 1;
+			
+			IF TermNo > MAX_SLAVE_DEV 
+				OR ipSlaveInfoData[TermNo] = 0
+			THEN //Start reading
+				MEMSET(ADR(ActVersion),0,SIZEOF(ActVersion));
+				VersionRead								:= FALSE;
+				TermNo									:= MIN_SLAVE_DEV;		
+				state									:= 2;
+			END_IF		
+			CoEFwDownLoad(bExecute := FALSE);
+		ELSE
+			ActVersion[TermNo]							:= CONCAT('DOWNLOADING ',CONCAT(TO_STRING(CoEFwDownLoad.nProgress),'%'));
+		END_IF
+	
+	2: (* Read FW Version **********************************************************)
+		EcCoESdoReadEx(
+			bExecute		:= ipSlaveInfoData[TermNo].rInfoData.AdsAddr.port <> 0,
+			sNetId			:= F_CreateAmsNetId(nIds := ipSlaveInfoData[TermNo].rInfoData.AdsAddr.netId),
+			nSlaveAddr		:= ipSlaveInfoData[TermNo].rInfoData.AdsAddr.port,
+			pDstBuf			:= ADR(ActVersion[TermNo]),
+			cbBufLen		:= SIZEOF(ActVersion[TermNo]));
+		IF NOT EcCoESdoReadEx.bBusy
+		THEN
+			IF EcCoESdoReadEx.bError 
+			THEN
+				ActVersion[TermNo]						:= 'ERR_READING';
+				ErrorID									:= EcCoESdoReadEx.nErrId;
+				CntFWNOK								:= CntFWNOK + 1;	
+			ELSIF NOT EcCoESdoReadEx.bExecute 
+			THEN
+				ActVersion[TermNo]						:= 'NOT_CONNECTED';
+			ELSIF ActVersion[TermNo] <> RegVersion
+			THEN
+				CntFWNOK								:= CntFWNOK + 1;	
+			END_IF
+			
+			//Next terminal
+			TermNo										:= TermNo + 1;
+			
+			IF TermNo > MAX_SLAVE_DEV
+				OR ipSlaveInfoData[TermNo] = 0
+			THEN
+				TermNo									:= MAX_SLAVE_DEV;
+				Done									:= CntFWNOK = 0;
+				VersionRead								:= TRUE;
+				Error									:= NOT Done;
+				Busy									:= FALSE;
+				state									:= 0;
+			END_IF
+			EcCoeSdoReadEx(bExecute := FALSE);
+		END_IF
+	END_CASE	
+
+(* Record last state ******************************************)
+IF state <> lastState AND state <> 0 AND NOT Error
+THEN 
+	lastState											:= state;
+END_IF
+
+(*************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="EcSlaveDevFWUpdater">
+      <LineId Id="330" Count="5" />
+      <LineId Id="342" Count="0" />
+      <LineId Id="336" Count="5" />
+      <LineId Id="1036" Count="0" />
+      <LineId Id="1038" Count="0" />
+      <LineId Id="4139" Count="0" />
+      <LineId Id="1041" Count="0" />
+      <LineId Id="2370" Count="1" />
+      <LineId Id="2375" Count="0" />
+      <LineId Id="2372" Count="1" />
+      <LineId Id="2381" Count="0" />
+      <LineId Id="4052" Count="0" />
+      <LineId Id="4079" Count="1" />
+      <LineId Id="4082" Count="0" />
+      <LineId Id="4081" Count="0" />
+      <LineId Id="355" Count="0" />
+      <LineId Id="4067" Count="5" />
+      <LineId Id="4065" Count="0" />
+      <LineId Id="4061" Count="0" />
+      <LineId Id="360" Count="1" />
+      <LineId Id="352" Count="0" />
+      <LineId Id="1033" Count="0" />
+      <LineId Id="1037" Count="0" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="3668" Count="0" />
+      <LineId Id="3719" Count="0" />
+      <LineId Id="3710" Count="0" />
+      <LineId Id="3718" Count="0" />
+      <LineId Id="3712" Count="0" />
+      <LineId Id="3735" Count="0" />
+      <LineId Id="3721" Count="1" />
+      <LineId Id="3832" Count="0" />
+      <LineId Id="3724" Count="1" />
+      <LineId Id="3727" Count="0" />
+      <LineId Id="3731" Count="0" />
+      <LineId Id="3893" Count="0" />
+      <LineId Id="3741" Count="0" />
+      <LineId Id="3905" Count="0" />
+      <LineId Id="3901" Count="0" />
+      <LineId Id="3907" Count="1" />
+      <LineId Id="3902" Count="0" />
+      <LineId Id="3910" Count="0" />
+      <LineId Id="3903" Count="0" />
+      <LineId Id="3909" Count="0" />
+      <LineId Id="3894" Count="1" />
+      <LineId Id="4084" Count="0" />
+      <LineId Id="3924" Count="0" />
+      <LineId Id="3983" Count="0" />
+      <LineId Id="3896" Count="0" />
+      <LineId Id="3743" Count="0" />
+      <LineId Id="3726" Count="0" />
+      <LineId Id="3730" Count="0" />
+      <LineId Id="3830" Count="1" />
+      <LineId Id="3723" Count="0" />
+      <LineId Id="3706" Count="0" />
+      <LineId Id="3458" Count="0" />
+      <LineId Id="3643" Count="12" />
+      <LineId Id="3889" Count="2" />
+      <LineId Id="3672" Count="0" />
+      <LineId Id="3674" Count="1" />
+      <LineId Id="3656" Count="0" />
+      <LineId Id="3921" Count="1" />
+      <LineId Id="3912" Count="0" />
+      <LineId Id="3920" Count="0" />
+      <LineId Id="3913" Count="1" />
+      <LineId Id="4141" Count="0" />
+      <LineId Id="3915" Count="1" />
+      <LineId Id="3982" Count="0" />
+      <LineId Id="3917" Count="2" />
+      <LineId Id="3923" Count="0" />
+      <LineId Id="3657" Count="0" />
+      <LineId Id="3667" Count="0" />
+      <LineId Id="3460" Count="0" />
+      <LineId Id="1247" Count="0" />
+      <LineId Id="1252" Count="0" />
+      <LineId Id="1248" Count="1" />
+      <LineId Id="1251" Count="0" />
+      <LineId Id="1250" Count="0" />
+      <LineId Id="1253" Count="1" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

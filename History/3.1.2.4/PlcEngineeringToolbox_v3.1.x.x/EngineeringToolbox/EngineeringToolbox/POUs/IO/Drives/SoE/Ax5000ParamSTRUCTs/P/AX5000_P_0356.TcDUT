@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0356" Id="{37702c2b-b5ad-4ec8-af8b-c20efd2f91db}">
+    <Declaration><![CDATA[//	{attribute 'hide'}
+TYPE AX5000_P_0356 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+//	{attribute 'hide'}
+	Rsvd:UDINT;
+	Available_for:UINT;
+	Command_mode:UINT;
+	Current_level:UINT;
+	Current_slope:UINT;
+	Wait_time_before_braking:UINT;
+	First_phase_activation_time_with_f_f1:UINT;
+	Rotary_field_frequency_f1:UINT;
+	Rotor_slowdown_mode:UINT;
+	Second_phase_activation_time_with_f_0Hz:UINT;
+	Wait_ime_after_braking:UINT;
+//	{attribute 'hide'}
+	Rsvd1:UINT;
+//	{attribute 'hide'}
+	Rsvd2:UINT;
+	Synchronus_motor:ARRAY[0..11] OF UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

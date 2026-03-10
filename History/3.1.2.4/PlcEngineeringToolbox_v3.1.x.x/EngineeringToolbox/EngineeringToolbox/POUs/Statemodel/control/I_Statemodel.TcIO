@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_Statemodel" Id="{f8a65817-34de-4add-a815-ae68554625c3}">
+    <Declaration><![CDATA[INTERFACE I_Statemodel extends I_StatemodelBase
+]]></Declaration>
+    <Folder Name="methods" Id="{aaf291a0-2489-41f2-aeb7-a9e1689f6b43}" />
+    <Folder Name="properties" Id="{99d9ca30-12e7-4998-8a2b-8060d32a562d}" />
+    <Method Name="addSlave" Id="{e6fa4aca-19ef-49de-b5ae-9d96c2011bf9}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC FINAL addSlave : BOOL
+VAR_INPUT
+	ipSlave					:	I_Statemodel;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="isModeActive" Id="{6b0e237b-9baf-4a4d-ab73-5513299aedf9}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC isModeActive : BOOL
+VAR_INPUT
+	Mode													: eMODE;				
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="isStateActive" Id="{985d2124-940d-46de-a20d-4a3c591f9133}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC isStateActive : BOOL
+VAR_INPUT
+	state						:	eSTATE;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="remoteData" Id="{c46fa9d1-410b-4ef7-b832-2caddbd00267}" FolderPath="properties\">
+      <Declaration><![CDATA[PROPERTY public remoteData : U_64BIT_DATATYPE]]></Declaration>
+      <Get Name="Get" Id="{f7df3378-ca31-4fef-bd0c-0d9aded4dfb5}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{241a40c6-4bec-4501-9de1-f982faa47bcd}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="rErrHdl" Id="{09054363-e1c8-448f-9094-38d2788634a8}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC rErrHdl : REFERENCE to ERROR_HDL]]></Declaration>
+      <Get Name="Get" Id="{8365326b-4d50-46e6-8e55-2ad7e1cbb2c5}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{cc4fc378-c5fe-4800-85b8-698dd0d5bffb}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC reset : boOL //Result = TRUE if Resetting finished - ErrHdl.Flag = FALSE
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="setLocalError" Id="{ccf7109b-5374-48d8-9cb3-a3d04cfa8d29}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setLocalError : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

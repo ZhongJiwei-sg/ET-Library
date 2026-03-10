@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="CiA_DS402Statusword_Parker" Id="{450a9c00-11ee-4927-98b5-e9c717d81103}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Statusword_Parker EXTENDS CiA_DS402Statusword
+VAR_INPUT
+END_VAR
+VAR_OUTPUT	
+	TargetReached				: BOOL; // Bit 10 
+	Running						: BOOL; //Bit 14
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="readStatusword" Id="{951a9c3f-4c82-480b-a468-f35954274f7b}">
+      <Declaration><![CDATA[METHOD PUBLIC readStatusword : BOOL
+VAR_INPUT
+	Statusword 					:	UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+
+	TargetReached											:= Statusword.10;
+	Running													:= Statusword.14;
+
+	readStatusword											:= SUPER^.readStatusword(Statusword);
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Statusword_Parker">
+      <LineId Id="110" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Statusword_Parker.readStatusword">
+      <LineId Id="107" Count="2" />
+      <LineId Id="112" Count="2" />
+      <LineId Id="95" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

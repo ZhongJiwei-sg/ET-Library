@@ -1,0 +1,318 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="RingbufferBase" Id="{038bb044-845d-4f39-8c31-2e2c65ed4856}" SpecialFunc="None">
+    <Declaration><![CDATA[//Ringbuffer basic template based on external memory
+FUNCTION_BLOCK RingbufferBase
+VAR_INPUT	
+	Overwrite												:	BOOL := FALSE; // TRUE = overwrite oldest entry 
+END_VAR
+VAR_OUTPUT
+	Count													:	UDINT := 0; 	// Number of entrys	
+	Full													:	BOOL ;		// TRUE when max number of entrys reached
+	Empty													:	BOOL := TRUE; // TRUE when no entrys present
+	ReadIdx													: 	UDINT := 0;	// Read data from adress 
+	WriteIdx												: 	UDINT := 0;	// Write data to adress
+END_VAR    
+VAR
+	Interlock												:	BOOL; 
+	MaxEntrys												:	UDINT; //Maximum number of entrys based on size of data and size of memory
+	SizeOfEntry												:	UDINT;
+	NoOfStreamEntrys										:	UDINT;
+	cbData													:	UDINT;
+END_VAR 												
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="_dequeue" Id="{ee4c9f39-a77c-4d7a-b770-ed49d10c5278}">
+      <Declaration><![CDATA[METHOD PROTECTED _dequeue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE ;
+	SizeOfData												: 	UDINT ;
+	pMemory													: 	POINTER TO BYTE ;
+	SizeOfMemory											: 	UDINT ;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	pData = 0
+	OR SizeOfData = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+	OR Empty
+THEN
+	_Dequeue												:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN	
+	IF Count > 0
+	THEN 
+		(* copy dataset *)
+		ReadIdx												:= ReadIdx + 1;
+		IF (ReadIdx) > MaxEntrys
+		THEN
+			ReadIdx											:= 1;						
+		END_IF
+		
+		MEMCPY(pData,pMemory + MAX(0, ReadIdx - 1) * SizeOfData,SizeOfData);
+		
+		Count 												:= MAX(0,Count - 1);
+		Empty 												:= Count = 0;
+		Full												:= FALSE;
+		_Dequeue											:= TRUE;	
+	ELSE 
+		_Dequeue											:= FALSE;
+	END_IF
+	
+	Interlock												:= FALSE;
+ELSE
+	_Dequeue												:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_dequeueStream" Id="{6b99fffe-6fba-4cc0-b6d2-2a625b048982}">
+      <Declaration><![CDATA[METHOD PROTECTED _dequeueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE ;
+	SizeOfStream											:	UDINT ; //n * Size of last entry and not greater than SizeOfMemory
+	pMemory													: 	POINTER TO BYTE;
+	SizeOfMemory											: 	UDINT ;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	pData = 0
+	OR SizeOfEntry = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+	OR Empty 
+	OR SizeOfStream > SizeOfMemory
+THEN
+	_DequeueStream											:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN	
+	NoOfStreamEntrys										:= (SizeOfStream / SizeOfEntry); 
+	IF Count > 0  
+	THEN 
+		(* maximum count *)
+		IF ReadIdx + MIN(Count,NoOfStreamEntrys) <= MaxEntrys
+		THEN //Read all data at one time
+			ReadIdx											:= ReadIdx + 1; //Point to start read data			
+			MEMCPY(pData,pMemory + (ReadIdx - 1) * SizeOfEntry, MIN(TO_UDINT(Count) * SizeOfEntry, SizeOfStream));
+			ReadIdx											:= (ReadIdx - 1) + TO_UDINT(MIN(Count, NoOfStreamEntrys)); //Point to next index after reading x entrys
+				
+		ELSE //Read data with overflow					
+			cbData											:= TO_UDINT(MaxEntrys) - ReadIdx; 		 
+			ReadIdx											:= ReadIdx + 1; //Point to start read data	
+			//Copy first part of stream our from buffer
+			MEMCPY(pData, pMemory + ((ReadIdx - 1) * SizeOfEntry), cbData * SizeOfEntry );
+	
+			//Copy second part of stream from beginning of buffer
+			ReadIdx											:= TO_UDINT(MIN(Count,NoOfStreamEntrys)) - cbData; //Point to next index after reading x entrys	
+			MEMCPY( pData + (cbData * SizeOfEntry) , pMemory ,(TO_UDINT(MIN(Count,NoOfStreamEntrys)) - cbData) * SizeOfEntry);			
+		END_IF
+		Count 												:= MAX(0,Count - NoOfStreamEntrys);		
+		Empty 												:= Count = 0;
+		Full												:= FALSE;
+		_DequeueStream										:= TRUE;	
+		
+	ELSE 
+		_DequeueStream										:= FALSE;
+	END_IF
+	
+	Interlock												:= FALSE;
+ELSE
+	_DequeueStream											:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_enqueue" Id="{15235841-99e2-4c5d-baac-9ccc8eaa1d26}">
+      <Declaration><![CDATA[METHOD PROTECTED _enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE ;
+	SizeOfData												: 	UDINT ;
+	pMemory													: 	POINTER TO BYTE ;
+	SizeOfMemory											: 	UDINT ;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pData = 0
+	OR SizeOfData = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+THEN
+	_Enqueue												:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN			
+	_Enqueue												:= FALSE;
+	
+	(* maximum count *)
+	MaxEntrys 												:= (SizeOfMemory / SizeOfData);
+
+	IF Count < MaxEntrys OR Overwrite
+	THEN
+		SizeOfEntry											:= SizeOfData;
+		IF MaxEntrys = Count 
+		THEN //Adapt read index if write index is in front of read index
+			ReadIdx											:= ReadIdx + 1;
+			IF ReadIdx > TO_UDINT(MaxEntrys)
+			THEN
+				ReadIdx										:= 1;								
+			END_IF
+		END_IF	
+		WriteIdx											:= WriteIdx + 1;	
+		IF WriteIdx > TO_UDINT(MaxEntrys)
+		THEN
+			WriteIdx										:= 1;
+		END_IF
+	
+		MEMCPY(pMemory + ((MAX(0,WriteIdx) - 1) * SizeOfData) ,pData,SizeOfData);		
+		Count												:= MIN(Count + 1,  MaxEntrys);
+		Full												:= Count >= MaxEntrys;
+		Empty 												:= FALSE;	
+		_Enqueue											:= TRUE;
+	END_IF
+	
+	Interlock												:= FALSE;
+ELSE
+	_Enqueue												:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_enqueueStream" Id="{2aa200ac-bb77-40b4-b6fc-b7f110af4ece}">
+      <Declaration><![CDATA[METHOD PROTECTED _enqueueStream : BOOL
+VAR_INPUT
+	pData													: 	POINTER TO BYTE ;
+	SizeOfData												: 	UDINT ; //Size of one entry
+	SizeOfStream											:	UDINT ; //n * SizeofData and not greater than SizeOfMemory
+	pMemory													: 	POINTER TO BYTE ;
+	SizeOfMemory											: 	UDINT ;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pData = 0
+	OR SizeOfData = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+	OR SizeOfStream = 0
+	OR SizeOfStream > SizeOfMemory 
+THEN
+	_EnqueueStream											:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN			
+	_EnqueueStream											:= FALSE;
+	
+	(* maximum count *)
+	MaxEntrys 												:= (SizeOfMemory / SizeOfData);
+	SizeOfEntry												:= SizeOfData;
+	NoOfStreamEntrys										:= (SizeOfStream / SizeOfData);
+	
+	IF (WriteIdx) + NoOfStreamEntrys <= MaxEntrys
+	THEN //write full stream
+		IF Count < MaxEntrys OR Overwrite
+		THEN
+			IF MaxEntrys = Count
+			THEN //Adapt read index if write index is in front of read index
+				ReadIdx										:= ReadIdx + TO_UDINT(NoOfStreamEntrys); 			
+			END_IF		
+		
+			MEMCPY(pMemory + (WriteIdx * SizeOfData) ,pData,SizeOfStream);		
+			WriteIdx										:= writeIdx + TO_UDINT(NoOfStreamEntrys);
+			Count											:= MIN(Count + NoOfStreamEntrys, MaxEntrys);
+			Empty 											:= FALSE;	
+			_EnqueueStream									:= TRUE;
+		ELSE
+			_EnqueueStream									:= FALSE;
+		END_IF	
+	ELSIF Count + NoOfStreamEntrys <= (MaxEntrys) OR Overwrite
+	THEN //Stream causes overflow
+		cbData												:= TO_UDINT(MaxEntrys) - WriteIdx; 		 
+		//Copy first part of stream to fill up buffer
+		MEMCPY(pMemory + (WriteIdx * SizeOfData) ,pData, (cbData * SizeOfData) );	
+		//Copy second part of stream to beginning of buffer
+		MEMCPY(pMemory , pData + (cbData * SizeOfData) ,(TO_UDINT(NoOfStreamEntrys) - cbData) * SizeOfData);	
+		
+		WriteIdx											:= (writeIdx + TO_UDINT(NoOfStreamEntrys)) - TO_UDINT(MaxEntrys);
+		Count												:= MIN(Count + NoOfStreamEntrys, MaxEntrys);
+		IF MaxEntrys = Count
+		THEN //Adapt read index if write index is in front of read index
+			ReadIdx											:= WriteIdx;
+		END_IF	
+			
+		Empty 												:= FALSE;	
+		_EnqueueStream										:= TRUE;	
+	ELSE
+		_EnqueueStream										:= FALSE;	
+	END_IF		
+	Full													:= Count >= MaxEntrys;
+	Interlock												:= FALSE;
+ELSE
+	_EnqueueStream											:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_reset" Id="{6f52b152-4767-4fc1-987e-37d2a37f7414}">
+      <Declaration><![CDATA[//Reset complete ring buffer
+METHOD PROTECTED _reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pMemory = 0
+	OR SizeOfMemory = 0
+THEN
+	_reset													:= TRUE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN
+	(* delete *)
+	_reset													:= TRUE;
+	MEMSET(pMemory,0,SizeOfMemory);
+	ReadIdx := WriteIdx										:= 0;
+	Empty 													:= TRUE;
+	Full													:= FALSE;
+	Count 													:= 0;
+	Interlock												:= FALSE;
+ELSE
+	_reset													:= TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="RingbufferBase">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferBase._dequeue">
+      <LineId Id="3" Count="32" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferBase._dequeueStream">
+      <LineId Id="3" Count="43" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferBase._enqueue">
+      <LineId Id="3" Count="11" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="16" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferBase._enqueueStream">
+      <LineId Id="3" Count="59" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferBase._reset">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

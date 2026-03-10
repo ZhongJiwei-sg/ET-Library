@@ -1,0 +1,232 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="NCI_REF" Id="{dafd80c7-c406-4539-8d8c-c059ff6cd766}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK NCI_REF
+VAR_INPUT
+	PlcToNci										AT %Q*	: PLCTONC_NCICHANNEL_REF;	//link PLC to NC
+END_VAR                             				
+VAR_OUTPUT                          	
+	NciToPlc										AT %I*	: NCTOPLC_NCICHANNEL_REF;	//link NC to PLC
+
+(* Extrabits out of the struct *)
+	ItpRunning												:	BOOL := FALSE;	//Interpreter is running
+	ItpGroupActive											:	BOOL;			//Interpreter group is active -> Axes group build 			
+	GrpCnfg													:	NCI_EXT3DGROUP;	//Group configuration
+	                                    					
+(* ChnState *******************)        					
+	IsItpChn												:	BOOL := FALSE;	//TRUE when it is interpreter channel
+	IsEStopRequested										:	BOOL := FALSE;	//TRUE when EStop is requested
+	IsFeedFromBackupList									:	BOOL := FALSE;	//TRUE when parameter feed comes from backup list 
+	IsMovingBackward										:	BOOL := FALSE;	//TRUE when moving forward
+	
+(* configurated parameters of the cyclic channel *)
+	PathRestWay												:	LREAL;	//remaining arc length on the current path segment
+	CurrentPathSetVelo										:	LREAL;	//current path set velocity
+                                        					
+	SAFStatus												:	UDINT;	//SAF state
+	SAFEintraege											:	UDINT;	//current number of SAF entries/tasks
+	SVBStatus												:	UDINT;	//SVB state
+	SVBEintraege											:	UDINT;	//current number of SVB entries/tasks
+	MemLastBlockNo											:	UDINT;	//contains last block number
+END_VAR
+VAR
+	(* NciToPlc channel extend *)
+	SetCyclicLrealOffsets									:	ItpSetCyclicLRealOffsets;
+	SetCyclicLrealOffsetsDone								:	BOOL;
+	SetCyclicUdintOffsets									:	ItpSetCyclicUdintOffsets;
+	SetCyclicUdintOffsetsDone								:	BOOL;
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="readStatus" Id="{17d66efb-1d92-47e2-b5b2-e56c1d783b89}">
+      <Declaration><![CDATA[METHOD readStatus : BOOL 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* NCI Status lesen															*)
+(****************************************************************************)
+
+(****************************************************************************)
+(* 4 LReal variables to configurate the interface cyclely					*)
+(****************************************************************************)
+	IF SetCyclicLRealOffsets.bExecute AND NOT SetCyclicLRealOffsets.bBusy
+	THEN
+		SetCyclicLRealOffsetsDone := NOT SetCyclicLRealOffsets.bErr;
+	END_IF
+
+	IF NOT SetCyclicLRealOffsetsDone
+	THEN
+		SetCyclicLRealOffsets(
+			bExecute			:= NciToPlc.ChnId <> 0 AND NOT SetCyclicLRealOffsetsDone AND NOT SetCyclicLRealOffsets.bErr,
+			tTimeOut			:= DEFAULT_ADS_TIMEOUT,
+			nIndexOffsetParam1	:= 16#500, (* Bahnrestweg (verbleibende Bogenlaenge) auf dem aktuellen Bahnsegment *)
+			nIndexOffsetParam2	:= 16#502 , (* aktuelle Bahnsollgeschwindigkeit *)
+			nIndexOffsetParam3	:= ,
+			nIndexOffsetParam4	:= ,
+			sNciToPlc			:= NciToPlc,
+			bBusy				=> ,
+			bErr				=> ,
+			nErrId				=> );
+	END_IF
+
+	(* reading date *)
+	PathRestWay												:= NciToPlc.DoubleParams[0];	
+	CurrentPathSetVelo										:= NciToPlc.DoubleParams[1];	
+	//														:= NciToPlc.DoubleParams[2];	
+	//														:= NciToPlc.DoubleParams[0];	
+
+(******************************************************************************)
+(* 4 DINT variables cycliaclly das Zyklsiche Interface konfigurieren						*)
+(******************************************************************************)
+	IF SetCyclicUdintOffsets.bExecute 
+	AND NOT SetCyclicUdintOffsets.bBusy
+	THEN
+		SetCyclicUdintOffsetsDone 							:= NOT SetCyclicUdintOffsets.bErr;
+	END_IF
+
+	IF NOT SetCyclicUdintOffsetsDone
+	THEN
+		SetCyclicUdintOffsets(
+			bExecute			:= NciToPlc.ChnId <> 0 AND NOT SetCyclicUdintOffsetsDone AND NOT SetCyclicUdintOffsets.bErr,
+			tTimeOut			:= DEFAULT_ADS_TIMEOUT,
+			nIndexOffsetParam1	:= 16#4, (* Akt SVB Status 4  *)
+			nIndexOffsetParam2	:= 16#5, (* Akt SAF Status -> Running 5 *)
+			nIndexOffsetParam3	:= 16#B, (* Akt Anzahl SVB Eintraege B *)
+			nIndexOffsetParam4	:= 16#C, (* Akt Anzahl SAF Eintraege C *)
+			sNciToPlc			:= NciToPlc,
+			bBusy				=> ,
+			bErr				=> ,
+			nErrId				=> );
+	END_IF	
+
+	(* Daten lesen *)
+	SVBStatus												:= NciToPlc.IntParams[0];	
+	SAFStatus												:= NciToPlc.IntParams[1];	
+	SVBEintraege											:= NciToPlc.IntParams[2];	
+	SAFEintraege											:= NciToPlc.IntParams[3];	
+	
+(******************************************************************************)
+(* Interpreterstatus lesen																		*)
+(******************************************************************************)
+	ItpRunning 												:= NciToPlc.ItpState > NCI_INTERPRETER_READY
+																	AND NciToPlc.ItpState <> NCI_INTERPRETER_ABORTED
+																	OR SAFStatus > 2
+																	OR SVBStatus > 2
+																	OR SAFEintraege > 0
+																	OR SVBEintraege > 0;
+                                							
+	IF NciToPlc.BlockNo > 0 
+	AND MemLastBlockNo <> NciToPlc.BlockNo
+	THEN
+		MemLastBlockNo 	 									:= NciToPlc.BlockNo;
+	END_IF                      							
+	                            							
+	GrpCnfg.nXAxisId										:= NciToPlc.AcsAxisIDs[0];
+	GrpCnfg.nYAxisId										:= NciToPlc.AcsAxisIDs[1];
+	GrpCnfg.nZAxisId										:= NciToPlc.AcsAxisIDs[2];
+	GrpCnfg.nQ1AxisId										:= NciToPlc.AcsAxisIDs[3];
+	GrpCnfg.nQ2AxisId										:= NciToPlc.AcsAxisIDs[4];
+	GrpCnfg.nQ3AxisId										:=	NciToPlc.AcsAxisIDs[5];
+	GrpCnfg.nQ4AxisId										:= NciToPlc.AcsAxisIDs[6];
+	GrpCnfg.nQ5AxisId										:= NciToPlc.AcsAxisIDs[7];
+                                							
+	ItpGroupActive											:= GrpCnfg.nXAxisId <> 0
+																	OR GrpCnfg.nYAxisId <> 0
+																	OR GrpCnfg.nZAxisId <> 0
+																	OR GrpCnfg.nQ1AxisId <> 0
+																	OR GrpCnfg.nQ2AxisId <> 0
+																	OR GrpCnfg.nQ3AxisId <> 0
+																	OR GrpCnfg.nQ4AxisId <> 0
+																	OR GrpCnfg.nQ5AxisId <> 0;
+                                	
+(******************************************************************************)
+(* Channelstatus lesen																			*)
+(******************************************************************************)
+	IsItpChn												:= NciToPlc.ChnState.0;
+	IsEStopRequested										:= NciToPlc.ChnState.8;
+	IsFeedFromBackupList									:= NciToPlc.ChnState.10;
+	IsMovingBackward										:= NciToPlc.ChnState.11;
+
+	
+(* ENUM ItpMode
+	0x0	Defaultbelegung (Abwahl der übrigen Betriebsarten)
+	0x1	Einzelsatzbetrieb im NC-Kern (Satzausführungstask/SAF)
+	0x1000	reserviert
+	0x2000	reserviert
+	0x4000	Einzelsatzbetrieb im Interpreter
+*)
+
+(* ItpStatus
+ITP_STATE_IDLE  The interpreter is in idle state when there is no NC program loaded as yet or when a group reset is being executed.
+The interpreter also goes into idle state when a current program is stopped. In the case a group reset must be executed in order to prevent error 0x42C5. 
+It is therefore recommended to execute a group reset after stopping via the PLC.
+ 
+ITP_STATE_READY  After successful loading of an NC program, the interpreter is in ready state.
+After a program has been successfully processed and exited, the interpreter goes into ready state. 
+In the meantime, however, other states are accepted.  
+ 
+ITP_STATE_ABORTED  Tritt während der Abarbeitung des NC Programms ein Laufzeitfehler auf, 
+so geht der Interpreter in den Aborted eSTATE. Der eigentliche Fehlercode ist dem Kanal Status zu entnehmen.  
+
+ITP_STATE_SINGLESTOP  If a run time error occurs during the processing of an NC program, the interpreter goes into aborted state. The actual error code is given in Channel Status.
+ 
+NCI_INTERPRETER_INITFAILED:	UDINT	:=	0;
+NCI_INTERPRETER_IDLE:			UDINT	:=	1;
+NCI_INTERPRETER_READY:			UDINT	:=	2;
+NCI_INTERPRETER_STARTED:		UDINT	:=	3;
+NCI_INTERPRETER_SCANNING:		UDINT	:=	4;
+NCI_INTERPRETER_RUNNING:		UDINT	:=	5;
+NCI_INTERPRETER_STAY_RUNNING:	UDINT	:=	6;
+NCI_INTERPRETER_WRITETABLE:		UDINT	:=	7;
+NCI_INTERPRETER_SEARCHLINE:		UDINT	:=	8;
+NCI_INTERPRETER_END:			UDINT	:=	9;
+NCI_INTERPRETER_SINGLESTOP:		UDINT	:=	10;
+NCI_INTERPRETER_ABORTING:		UDINT	:=	11;
+NCI_INTERPRETER_ABORTED:		UDINT	:=	12;
+NCI_INTERPRETER_FAULT:			UDINT	:=	13;
+NCI_INTERPRETER_RESET:			UDINT	:=	14;
+NCI_INTERPRETER_STOP:			UDINT := 15;
+NCI_INTERPRETER_WAITFUNC:		UDINT	:=	16;
+NCI_INTERPRETER_FLUSHBUFFERS:	UDINT	:=	17;
+
+*)
+
+	readStatus											:= TRUE;
+(******************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NCI_REF">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NCI_REF.readStatus">
+      <LineId Id="3" Count="146" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="150" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

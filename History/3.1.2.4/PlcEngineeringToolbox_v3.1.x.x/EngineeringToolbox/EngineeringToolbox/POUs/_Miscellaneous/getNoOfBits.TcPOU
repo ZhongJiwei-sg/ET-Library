@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="getNoOfBits" Id="{a9fd464a-5d8b-4417-8992-c15ac95a5670}" SpecialFunc="None">
+    <Declaration><![CDATA[//Returns number of bits set in integer data type variable 
+FUNCTION getNoOfBits : INT 
+VAR_INPUT
+	In														:	ANY_INT;
+END_VAR
+VAR
+{attribute 'displaymode':='binary'}		
+	_ULINT													: 	ULINT;	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	getNoOfBits												:= 0;
+	MEMCPY(ADR(_ULINT) + (SIZEOF(_ULINT) - TO_UDINT(IN.diSize)),In.pValue,TO_UDINT(IN.diSize));
+	WHILE (_ULINT > 0) DO
+		_ULINT 												:= _ULINT AND (_ULINT -1); 
+		getNoOfBits											:= getNoOfBits + 1;
+	END_WHILE
+		]]></ST>
+    </Implementation>
+    <LineIds Name="getNoOfBits">
+      <LineId Id="121" Count="5" />
+      <LineId Id="77" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

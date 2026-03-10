@@ -1,0 +1,737 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EcSlavesDiag" Id="{09836a71-c0f6-49c2-a316-b2a7e9280605}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK EcSlavesDiag EXTENDS FbBase
+VAR CONSTANT
+	SLAVE_ADDR_OFFSET										:	UINT := 1000;
+	DEL_SSTATE_CHANGED										:	 TIME := T#2S;
+END_VAR
+VAR_OUTPUT CONSTANT         								
+	MIN_SLAVES												: 	UINT := 1;
+	MAX_SLAVES												: 	UINT := PARAM.ETHERCAT_DIAG_MAX_SLAVES;	//EC_MAX_SLAVES = 65535 Slaves;
+	
+{attribute 'displaymode':='binary'}
+	OPTION_READ_SCAN_SLAVES									:	BYTE := 2#0000_0001; //Read scanned slaves identity and link State
+{attribute 'displaymode':='binary'}
+	OPTION_SORT_INFO_DATA									:	BYTE := 2#0000_0010; //Sort list of slaves InfoData according to scanned/physical sequence
+{attribute 'displaymode':='binary'}
+	OPTION_UPDATE_TOPO_DATA									:	BYTE := 2#0000_0100; //Read topology data, helpful if hot connect groups are configured
+{attribute 'displaymode':='binary'}
+	OPTION_UPDATE_CONFIG_DATA								:	BYTE := 2#0000_1000; //Read info slave data with with every execution	
+END_VAR           
+VAR_INPUT
+	MasterAmsNetId											:	T_AmsNetId;
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 0;
+END_VAR
+VAR_OUTPUT         
+	NoOfSlaves												:	UINT;			//shows number of configured slaves
+	NoOfSlavesNOK											:	UINT;  			//Shows number of slaves not in OP or with CRC error etc
+	NoOfHCGroups											:	UINT;  			//Shows number of hot connect groups
+	NoOfHCSlaves											:	UINT;  			//Shows number of slave in a hot connect group
+	InfoData												:	ARRAY [MIN_SLAVES..MAX_SLAVES] OF EC_SLAVE_DIAG_INFO_DATA; //configures slaves			
+	LastActiveSlave											:	EC_SLAVE_DIAG_INFO_DATA;	//shows last slave in OP connected to port A 
+	FirstErrorSlave											:	EC_SLAVE_DIAG_INFO_DATA;	//shows first slave with an error
+	InfoDataSorted											:	BOOL; //Info data list sorted according physical sequence vs. configured seq.
+	InvalidVPRS												:	BOOL; //Invalid VPRS active
+	ErrorText												:	T_MAXSTRING;//shows error text of FB
+	ExecutionTime											: 	TIME; //Total cycle time to execute the FB
+END_VAR                     								         								
+VAR                         								
+(* Cache ********************************************************)               								
+	pMemory													:	POINTER TO BYTE;
+	SizeOfMemory											:	UDINT;
+	MemNoOfSlaves											:	UINT;	
+	ScannedSeqMixed											:	BOOL; //Scanned slave sequence is different to configured 
+
+	pScannedSlaves											:	POINTER TO ARRAY [MIN_SLAVES..MAX_SLAVES] OF Tc2_EtherCAT.ST_EcSlaveScannedData;
+	pConfigSlaves											:	POINTER TO ARRAY [MIN_SLAVES..MAX_SLAVES] OF Tc2_EtherCAT.ST_EcSlaveConfigData; 
+	pSlavesState											:	POINTER TO ARRAY [MIN_SLAVES..MAX_SLAVES] OF Tc2_EtherCAT.ST_EcSlaveState;
+	pSlavesStatusCode										:	POINTER TO ARRAY [MIN_SLAVES..MAX_SLAVES] OF DWORD;
+	pTopologyData											:	POINTER TO ARRAY [MIN_SLAVES..MAX_SLAVES] OF Tc2_EtherCAT.ST_TopologyDataEx;
+	
+	StartTime												:	TIME;
+	
+(* timer ********************************************************)
+
+(* trigger ********************************************************)
+
+(* function-blocks *************************************************)
+	EcGetSlaveCount											:	FB_EcGetSlaveCount := (tTimeout	:= T#60S);
+	EcGetConfSlaves											:	FB_EcGetConfSlaves := (tTimeout	:= T#60S);
+	EcGetScannedSlaves										:	FB_EcGetScannedSlaves := (tTimeout	:= T#60S);
+	EcGetAllSlaveStateS										:	FB_EcGetAllSlaveStateS := (tTimeout	:= T#60S);
+	EcGetAllSlaveCrcErrors									:	FB_EcGetAllSlaveCrcErrors := (tTimeout	:= T#60S);
+	EcGetAllSlaveAbnormalStateChanges						:	FB_EcGetAllSlaveAbnormalStateChanges := (tTimeout	:= T#60S);	
+	EcGetSlaveTopologyInfo									: 	FB_EcGetSlaveTopologyInfo := (tTimeout	:= T#60S);	
+	
+(* dummy **********************************************************)
+	i,k,idx													:	UINT := 0;
+	
+END_VAR     ]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Check EtherCAT slaves status			V1	*)
+	(********************************************)
+
+(* Sequence *********************************)
+	rtExecute(CLK := Execute);
+
+	CASE State OF
+	0:
+		Busy 												:= FALSE;
+		IF rtExecute.Q
+		THEN //Clear data if FB is disabled or started
+			Busy 											:= TRUE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			Errorid											:= 0;
+			ErrorText										:= '';	
+
+		//	NoOfSlavesNIO									:= 0;	
+			InvalidVPRS										:= FALSE;
+			ScannedSeqMixed									:= FALSE;
+
+			StartTime										:= TIME();
+			ExecutionTime									:= T#0MS;
+			
+			EcGetSlaveCount(bExecute := FALSE,sNetId := MasterAmsNetId);
+			EcGetConfSlaves(bExecute := FALSE,sNetId := MasterAmsNetId);
+			EcGetSlaveTopologyInfo(bExecute := FALSE,sNetId := MasterAmsNetId);
+			EcGetAllSlaveStates(bExecute := FALSE, sNetId := MasterAmsNetId);
+			EcGetAllSlaveCrcErrors(bExecute := FALSE,sNetId := MasterAmsNetId);
+			EcGetAllSlaveAbnormalStateChanges(bExecute := FALSE,sNetId := MasterAmsNetId);
+			EcGetScannedSlaves(bExecute := FALSE,sNetId := MasterAmsNetId);
+			
+			MEMSET(ADR(LastActiveSlave),0,SIZEOF(LastActiveSlave));
+			MEMSET(ADR(FirstErrorSlave),0,SIZEOF(FirstErrorSlave));
+			
+			IF NoOfSlaves = 0
+			THEN
+				State										:= 1;
+			ELSIF Options.3 OR EcGetConfSlaves.nTotalSlaves = 0 OR InfoDataSorted
+			THEN //Read config it not done or enabled
+				State										:= 2;
+			ELSIF Options.2 OR EcGetSlaveTopologyInfo.nSlaves = 0 OR InfoDataSorted
+			THEN
+				State										:= 10;
+			ELSE
+				State										:= 20;
+			END_IF
+		ELSIF NOT Execute
+		THEN
+			Done											:= FALSE;
+			Error											:= FALSE;
+			Errorid											:= 0;
+			ErrorText										:= '';	
+		END_IF
+		IF StartTime > T#0MS AND ExecutionTime = T#0MS
+		THEN
+			ExecutionTime									:= TIME() - StartTime;
+		END_IF
+	
+	(* Read no of found slaves *********************************************************************)
+	1:
+		EcGetSlaveCount(bExecute := NoOfSlaves = 0);
+		IF NOT EcGetSlaveCount.bBusy
+		THEN
+			IF EcGetSlaveCount.bError 
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcGetSlaveCount.nErrId;
+				ErrorText									:= CONCAT('EcGetSlaveCount Id: ',UDINT_TO_STRING(ErrorId));
+				State 										:= 0;
+			ELSIF EcGetSlaveCount.nSlaves > MAX_SLAVES
+			THEN			
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_INVALIDSIZE  ;
+				ErrorText									:= CONCAT('No of slaves > PARAM.ETHERCAT_MASTER_DIAG_MAX_SLAVES, please update value to ', TO_STRING(EcGetSlaveCount.nSlaves));
+				State										:= 0;  	
+			ELSIF EcGetSlaveCount.bExecute AND NoOfSlaves <> EcGetSlaveCount.nSlaves
+			THEN
+				NoOfSlaves									:= EcGetSlaveCount.nSlaves;					
+
+				//Init Info Data 	
+				MEMSET(ADR(InfoData),0,SIZEOF(InfoData));
+
+				k 											:= NoOfSlaves + 1;
+				//Set buffer lenght according to needed memory space
+				EcGetConfSlaves.cbBufLen					:= SIZEOF(Tc2_EtherCAT.ST_EcSlaveConfigData) * k;
+				EcGetScannedSlaves.cbBufLen					:= SIZEOF(Tc2_EtherCAT.ST_EcSlaveScannedData) * k;
+				EcGetAllSlaveStates.cbBufLen				:= SIZEOF(Tc2_EtherCAT.ST_EcSlaveState) * k;
+				EcGetAllSlaveCrcErrors.cbBufLen				:= SIZEOF(DWORD) * k;	
+				EcGetSlaveTopologyInfo.cbBufLen				:= SIZEOF(Tc2_EtherCAT.ST_TopologyDataEx) * k;	
+				EcGetAllSlaveAbnormalStateChanges.cbBufLen	:= EcGetAllSlaveCrcErrors.cbBufLen;						
+					
+				//Allocate dynamic buffer memory 
+				IF Allocate(MAX(EcGetSlaveTopologyInfo.cbBufLen,MAX(MAX(EcGetConfSlaves.cbBufLen,EcGetAllSlaveCrcErrors.cbBufLen), MAX(EcGetScannedSlaves.cbBufLen,EcGetAllSlaveStateS.cbBufLen) )))
+				THEN
+					//Write buffer lenght per FB	
+					pConfigSlaves							:= pMemory;
+					pScannedSlaves							:= pMemory;
+					pSlavesState							:= pMemory;
+					pSlavesStatusCode						:= pMemory;	
+					pTopologyData							:= pMemory;	
+					
+					State 									:= State + 1;			
+				ELSE
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					ErrorId									:= E_AdsErr.DEVICE_NOMEMORY; //No memory
+					ErrorText								:= CONCAT('EcSlavesDiag.allocate() Id: ',UDINT_TO_STRING(ErrorId));
+					NoOfSlaves								:= 0;
+					State 									:= 0;	
+				END_IF
+
+			ELSE
+				State 										:= State + 1;
+			END_IF
+		ELSE
+			;
+		END_IF		
+	
+	
+	(* Read slaves "configuration" ************************************************************************************************************)
+	2:
+		EcGetConfSlaves(bExecute := TRUE, pArrEcConfSlaveInfo := pConfigSlaves, cbBufLen := (* See State 1 *) );
+			
+		IF NOT EcGetConfSlaves.bBusy
+		THEN
+			IF EcGetConfSlaves.bError 
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcGetConfSlaves.nErrorId;
+				ErrorText									:= CONCAT('FB_EcGetConfSlaves Id: ',UDINT_TO_STRING(ErrorId));
+				State										:= 0;     
+					
+			ELSIF EcGetConfSlaves.nSlaves > MAX_SLAVES
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_INVALIDSIZE  ;
+				ErrorText									:= CONCAT('No of config slaves > PARAM.ETHERCAT_MASTER_DIAG_MAX_SLAVES, please update value to ', TO_STRING(EcGetConfSlaves.nSlaves));
+				State										:= 0;  					
+			ELSE
+				State 										:= State + 1;
+			END_IF
+		END_IF	
+			
+	3: //Fill structure	
+		k													:= MIN(EcGetConfSlaves.nSlaves, NoOfSlaves);
+		FOR i := MIN_SLAVES TO k DO
+			InfoData[i].Addr								:= pConfigSlaves^[i].nAddr;
+			InfoData[i].ConfigType							:= pConfigSlaves^[i].sType; 
+		//	InfoData[i].DevType								:= pConfigSlaves^[i].nDevType;
+			InfoData[i].ConfigName							:= DELETE(pConfigSlaves^[i].sName, LEN(InfoData[i].ConfigType) + 3 , FIND(pConfigSlaves^[i].sName,InfoData[i].ConfigType) - 1); //Delete type if in brakets 	
+			InfoData[i].ConfigTypeIdentity					:= F_ConvProductCodeToString(pConfigSlaves^[i].stSlaveIdentity);
+			InfoData[i].ConfigIdentity						:= pConfigSlaves^[i].stSlaveIdentity;
+		//	InfoData[i].LinkState							:= pConfigSlaves^[i].nLinkStatus; see read slaves state					
+		END_FOR
+		
+		State 												:= SEL(Options.2 OR EcGetSlaveTopologyInfo.nSlaves = 0 OR InfoDataSorted, 20, 10);	
+		
+	(* Read slaves "topology" information *******************************************************************************************************)
+	10:
+		EcGetSlaveTopologyInfo(bExecute := NoOfSlaves > 0 , sNetId	:= MasterAmsNetId,  pAddrBuf := pTopologyData,  cbBufLen	:= (* See State 1 *));
+		IF NOT EcGetSlaveTopologyInfo.bBusy
+		THEN
+			IF EcGetSlaveTopologyInfo.bError 
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcGetSlaveTopologyInfo.nErrId;
+				ErrorText									:= CONCAT('EcGetSlaveTopologyInfo Id: ',UDINT_TO_STRING(ErrorId));
+				State 										:= 0;
+			ELSIF EcGetSlaveTopologyInfo.nSlaves > MAX_SLAVES
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_INVALIDSIZE  ;
+				ErrorText									:= CONCAT('No of scanned slaves > PARAM.ETHERCAT_MASTER_DIAG_MAX_SLAVES, please update value to ', TO_STRING(EcGetScannedSlaves.nSlaves));
+				State										:= 0;  	
+			ELSE
+				State 										:= State + 1;
+			END_IF
+		ELSE
+			;
+		END_IF	
+
+	11:	//Fill structure		
+		NoOfHCGroups										:= 0;
+		NoOfHCSlaves										:= 0;
+		k													:= MIN(EcGetSlaveTopologyInfo.nSlaves, NoOfSlaves);
+		FOR i := MIN_SLAVES TO k DO                 		
+			InfoData[i].TopoOwnPhysicalAddr					:= pTopologyData^[i].nOwnPhysicalAddr; 
+			InfoData[i].TopologyStatus						:= pTopologyData^[i].nStatusBits;
+			InfoData[i].HCSlaveCountCfg  					:= pTopologyData^[i].nHCSlaveCountCfg;
+			InfoData[i].HCSlaveCountAct  					:= pTopologyData^[i].nHCSlaveCountAct;
+			InfoData[i].AutoIncAddr   						:= pTopologyData^[i].nOwnAutoIncAddr;
+			InfoData[i].PhysicalPortAddr    				:= pTopologyData^[i].stPhysicalAddr;
+			InfoData[i].AutoIncPortAddr    					:= pTopologyData^[i].stAutoIncAddr;
+			                                        		
+			InfoData[i].HotConnectNodeStart 				:= InfoData[i].TopologyStatus.3;
+			InfoData[i].HotConnectSlave 					:= InfoData[i].TopologyStatus.4;
+                                                    		
+			NoOfHCGroups									:= SEL(InfoData[i].HotConnectNodeStart , NoOfHCGroups, NoOfHCGroups + 1);
+			NoOfHCSlaves									:= SEL(InfoData[i].HotConnectSlave , NoOfHCSlaves, NoOfHCSlaves + 1);
+			                                        	
+		END_FOR				                        	
+		State 												:= 20;
+		
+	(* Read slaves "EtherCAT State and link state" ***************************************************************************************)
+	20	:
+		EcGetAllSlaveStateS(bExecute := NoOfSlaves > 0, pStateBuf:=  pSlavesState, cbBufLen	:= (* See State 1 *));
+					
+		IF NOT EcGetAllSlaveStateS.bBusy
+		THEN
+			IF EcGetAllSlaveStateS.bError 
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcGetAllSlaveStateS.nErrId;
+				ErrorText									:= CONCAT('FB_EcGetAllSlaveStates Id: ',UDINT_TO_STRING(ErrorId));
+				State 										:= 0;
+			ELSE
+				k											:= MIN(EcGetAllSlaveStateS.nSlaves, NoOfSlaves);
+				FOR i := MIN_SLAVES TO k DO
+					InfoData[i].LinkState					:= pSlavesState^[i].linkState;
+					InfoData[i].DevState					:= pSlavesState^[i].deviceState;
+					InfoData[i].DevStateText				:= F_ConvSlaveStateToString(pSlavesState^[i]);
+					InfoData[i].DevStateBits				:= F_ConvSlaveStateToBitsEx(pSlavesState^[i]);	
+					InfoData[i].ErrorIdentCode.0			:= InfoData[i].DevStateBits.bInvVPRS; //Wrong slave
+					IF InfoData[i].ErrorIdentCode.0 THEN InvalidVPRS := TRUE; END_IF
+					InfoData[i].ErrorIdentCode.1			:= NOT InfoData[i].ErrorIdentCode.0 AND NOT InfoData[i].DevStateBits.bOp AND_THEN(NOT InfoData[i].HotConnectSlave OR NOT InfoData[i].DevStateBits.bInit); //Wrong State
+				END_FOR	
+
+				State 										:= State + 1;
+			END_IF
+		ELSE
+			;
+		END_IF	
+		
+	(* Get all slaves "CRC counter" ********************************************************************)
+	21:	
+		EcGetAllSlaveCrcErrors(bExecute := NoOfSlaves > 0, sNetId	:= MasterAmsNetId,  pCrcErrorBuf:= pSlavesStatusCode,  cbBufLen	:= (* See State 1 *));
+		IF NOT EcGetAllSlaveCrcErrors.bBusy
+		THEN
+			IF EcGetAllSlaveCrcErrors.bError 
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcGetAllSlaveStateS.nErrId;
+				ErrorText									:= CONCAT('FB_EcGetAllSlaveCrcErrors Id: ',UDINT_TO_STRING(ErrorId));
+				State 										:= 0;
+			ELSE
+				k											:= MIN(EcGetAllSlaveCrcErrors.nSlaves, NoOfSlaves);
+				FOR i := MIN_SLAVES TO k DO
+					InfoData[i].ErrorIdentCode.2			:= InfoData[i].CntOfCRCErrors <> pSlavesStatusCode^[i] AND pSlavesStatusCode^[i] > 0; //CRC error increased
+					InfoData[i].CntOfCRCErrors				:= pSlavesStatusCode^[i];				
+				END_FOR				
+				
+				State 										:= State + 1;
+			END_IF
+		ELSE
+			;
+		END_IF
+		
+	(* Get all slaves "no of abnormal state change" *****************************************************************************)
+	22:	
+		EcGetAllSlaveAbnormalStateChanges(bExecute := NoOfSlaves > 0, sNetId	:= MasterAmsNetId,  pAddrBuf := pSlavesStatusCode,  cbBufLen	:= (* See State 1 *));
+		IF NOT EcGetAllSlaveAbnormalStateChanges.bBusy
+		THEN
+			IF EcGetAllSlaveAbnormalStateChanges.bError 
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcGetAllSlaveAbnormalStateChanges.nErrId;
+				ErrorText									:= CONCAT('FB_EcGetAllSlaveAbnormalStateChanges Id: ',UDINT_TO_STRING(ErrorId));
+				State 										:= 0;
+			ELSE
+				k											:= MIN(EcGetAllSlaveAbnormalStateChanges.nSlaves, NoOfSlaves);
+				FOR i := MIN_SLAVES TO k DO
+					InfoData[i].ErrorIdentCode.3			:= InfoData[i].NoOfAbnormalStateChanges <> pSlavesStatusCode^[i] AND pSlavesStatusCode^[i] > 0; //Abnormal State change increased
+					InfoData[i].NoOfAbnormalStateChanges	:= pSlavesStatusCode^[i];	
+				END_FOR				
+				
+				State 										:= SEL(Options.0 OR EcGetScannedSlaves.nSlaves = 0, 40, 30);
+			END_IF
+		ELSE
+			;
+		END_IF
+
+	(* Start to read scanned slaves *************************************************************************)
+	30:
+		EcGetScannedSlaves(bExecute := TRUE, pArrEcScannedSlaveInfo  := pScannedSlaves, cbBufLen := (* See State 1 *));
+			
+		IF NOT EcGetScannedSlaves.bBusy
+		THEN
+			IF EcGetScannedSlaves.bError 
+				AND EcGetScannedSlaves.nErrorId <> 1817 //device has a timeout -> not error if no slave is connected 
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= EcGetScannedSlaves.nErrorId;
+				ErrorText									:= CONCAT('FB_EcGetScannedSlaves Id: ',UDINT_TO_STRING(ErrorId));
+				State										:= 0;     
+
+			ELSIF EcGetScannedSlaves.nSlaves > MAX_SLAVES
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_INVALIDSIZE  ;
+				ErrorText									:= CONCAT('No of scanned slaves > PARAM.ETHERCAT_MASTER_DIAG_MAX_SLAVES, please update value to ', TO_STRING(EcGetScannedSlaves.nSlaves));
+				State										:= 0;  			
+			
+			ELSE	
+				FOR i := MIN_SLAVES TO NoOfSlaves 
+				DO					
+					InfoData[i].ScannedTypeIdentity			:= '<not present>';
+					MEMSET(ADR(InfoData[i].ScannedIdentity),0,SIZEOF(InfoData[i].ScannedIdentity));								
+					InfoData[i].DataLinkStatusReg			:= 0;	
+					InfoData[i].ScannedSeq					:= 0;						
+				END_FOR
+				State 										:= SEL(EcGetScannedSlaves.nSlaves = 0, State + 1, 40);
+			END_IF
+		END_IF
+		
+	31: //Fill structure
+		k													:= MIN(EcGetScannedSlaves.nSlaves,NoOfSlaves); //No of scanned slaves
+		idx													:= 0;
+		ScannedSeqMixed										:= FALSE;
+		FOR i := MIN_SLAVES TO NoOfSlaves DO		
+			IF i <= EcGetScannedSlaves.nSlaves
+			THEN
+				idx											:= SEL(pScannedSlaves^[i].nAddr > SLAVE_ADDR_OFFSET, idx + 1 ,pScannedSlaves^[i].nAddr - SLAVE_ADDR_OFFSET);
+				InfoData[idx].ScannedTypeIdentity			:= F_ConvProductCodeToString(pScannedSlaves^[i].stSlaveIdentity);
+				InfoData[idx].ScannedIdentity				:= pScannedSlaves^[i].stSlaveIdentity;				
+				InfoData[idx].DataLinkStatusReg				:= pScannedSlaves^[i].ndlStatusReg;		
+				InfoData[idx].ScannedSeq					:= i;	
+				ScannedSeqMixed								:= i <> idx OR ScannedSeqMixed;
+			ELSE
+				EXIT;
+			END_IF
+		
+		END_FOR
+		
+		State 												:= 40;
+		
+	(* Search for error slaves **************************************************************************)
+	40:
+		k													:= EcGetScannedSlaves.nSlaves + 1; 
+		NoOfSlavesNOK										:= 0;
+		FOR i := MIN_SLAVES TO NoOfSlaves				
+		DO
+			//Fill PhysicalSeq number of missed slaves for possible sorting
+			IF ScannedSeqMixed AND Options.1
+			THEN
+				IF InfoData[i].ScannedSeq = 0
+				THEN 										
+					InfoData[i].ScannedSeq 					:= k;
+					k										:= k + 1;
+				END_IF
+			END_IF
+		
+			//Search for first slave with error
+			IF InfoData[i].ErrorIdentCode <> 0
+			THEN
+				NoOfSlavesNOK								:= NoOfSlavesNOK + 1;
+				IF FirstErrorSlave.Addr = 0
+				THEN
+					FirstErrorSlave 						:= InfoData[i]; 					
+					IF i - 1 > 0
+					THEN
+						LastActiveSlave 					:= InfoData[i - 1];
+					END_IF
+				END_IF						
+			END_IF
+		END_FOR   	
+	
+		IF ScannedSeqMixed AND Options.1
+		THEN
+			InfoDataSorted									:= TRUE;
+			State											:= State + 1;
+		ELSE
+			InfoDataSorted									:= FALSE;
+			Busy											:= FALSE;
+			Done											:= TRUE;
+			State											:= 0;   
+		END_IF
+	
+	(* Sort InfoData list if sequence is mixed and option selected **************************************************************************)	
+	41: 
+		IF sortList()
+		THEN
+			Busy											:= FALSE;
+			Done											:= TRUE;
+			State											:= 0;   
+		ELSE
+			Busy											:= FALSE;
+			Error											:= TRUE;
+			ErrorId											:= E_AdsErr.DEVICE_INVALIDDATA  ; //Invalid data
+			ErrorText										:= 'Error sorting InfoData list ';
+			State											:= 0;  			
+		END_IF	
+ 
+	ELSE
+		;
+	END_CASE
+
+(***********************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="allocate" Id="{84c9eb29-241f-45cf-9e2d-f9926d3a919d}">
+      <Declaration><![CDATA[METHOD PROTECTED FINAL allocate : BOOL
+VAR_INPUT 
+	MemSize													:	UDINT;
+END_VAR
+VAR
+END_VAR	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF MemSize = 0
+THEN
+	allocate												:= FALSE;	
+ELSIF pMemory = 0 
+THEN
+	pMemory													:= __NEW(BYTE,MemSize );
+	SizeOfMemory											:= MemSize;
+	IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+	THEN
+		AdsLogHint('EngineeringToolbox | FB EcSlavesDiag | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(MemSize));
+	END_IF
+	Allocate												:= TRUE;	
+ELSIF MemSize > SizeOfMemory
+THEN//Size increased, allocate new memory
+	__DELETE(pMemory);  //Delete reference to old memory
+	
+	pMemory													:= __NEW(BYTE,MemSize );
+	SizeOfMemory											:= MemSize;
+	IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+	THEN
+		AdsLogWarn('EngineeringToolbox | FB EcSlavesDiag | No of slaves increased and one instance allocated additional %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(MemSize));
+	END_IF
+
+	Allocate												:= TRUE;
+ELSE
+	Allocate												:= FALSE;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_exit" Id="{ef2288a3-2b10-45cb-8f96-c8c520cb638f}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode AND pMemory <> 0
+THEN //Release memory in case the PLC stopps
+	__DELETE(pMemory);
+	SizeOfMemory								:= 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optReadScannedSlaves" Id="{73aa36a5-be0c-4d95-8705-df64663316b0}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optReadScannedSlaves : bool]]></Declaration>
+      <Get Name="Get" Id="{3069d7d7-f45a-4540-9219-648190bce5dd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optReadScannedSlaves := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{43182471-5a82-4564-b235-80f407e98be4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.0 := optReadScannedSlaves;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optSortInfoData" Id="{ccfc582a-e2cf-4d24-8113-802f54dabf6d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optSortInfoData : bool]]></Declaration>
+      <Get Name="Get" Id="{bfa02dd4-9df3-4e68-83ba-933e4e495ab6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optSortInfoData := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{8c5766ff-ad6e-46bf-913c-2d5ba2d9d34d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.2 := optSortInfoData;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optUpdateConfigData" Id="{bc7580a9-c605-4bce-ba51-1cc35a73aecf}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optUpdateConfigData : bool]]></Declaration>
+      <Get Name="Get" Id="{e9938d5f-549d-420e-bc83-c9e97d93f0ed}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optUpdateConfigData := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d8a46366-4072-46f9-a637-ec7b026cc600}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.3 := optUpdateConfigData;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optUpdateTopoData" Id="{e65090fc-71fe-4d65-8ab6-84fc7e410a24}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optUpdateTopoData : bool]]></Declaration>
+      <Get Name="Get" Id="{22d12c57-b0d6-44ef-b162-384059d8d9dd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optReadScannedSlaves := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2ca1fa85-db84-4c83-a17e-6064738334af}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[OPtions.1 := optReadScannedSlaves;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="sortList" Id="{814e500e-48df-4b09-a192-c54932994c28}">
+      <Declaration><![CDATA[METHOD INTERNAL sortList : BOOL
+VAR_INPUT
+END_VAR
+VAR
+	SlaveInfoData1											:	EC_SLAVE_DIAG_INFO_DATA;
+	SlaveInfoData2											:	EC_SLAVE_DIAG_INFO_DATA;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	sortList												:= TRUE;
+	
+	i														:= MIN_SLAVES;
+	WHILE i <= NoOfSlaves OR SlaveInfoData1.ScannedSeq <> 0 
+	DO
+		IF SlaveInfoData1.ScannedSeq > 0
+		THEN
+			IF SlaveInfoData1.ScannedSeq > NoOfSlaves
+			THEN //Error seq no
+				sortList									:= FALSE;
+				EXIT;
+			ELSE
+				SlaveInfoData2 								:= InfoData[SlaveInfoData1.ScannedSeq]; //Backup target
+				InfoData[SlaveInfoData1.ScannedSeq].ScannedSeq	:= 0; //Mark as copied				
+				InfoData[SlaveInfoData1.ScannedSeq]			:= SlaveInfoData1; //Copy from cache into target	
+				SlaveInfoData1								:= SlaveInfoData2; //Write backed up data into cache
+			END_IF
+
+		ELSIF InfoData[i].ScannedSeq > 0 AND InfoData[i].ScannedSeq <> i
+		THEN
+			//Put target into cache
+			SlaveInfoData1									:= InfoData[InfoData[i].ScannedSeq];
+			InfoData[InfoData[i].ScannedSeq]				:= InfoData[i];		
+			InfoData[i].ScannedSeq							:= 0; //Mark as copied
+		ELSE
+			;				
+		END_IF   
+		i													:= i + 1;
+	END_WHILE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EcSlavesDiag">
+      <LineId Id="4280" Count="70" />
+      <LineId Id="4753" Count="0" />
+      <LineId Id="4758" Count="0" />
+      <LineId Id="4757" Count="0" />
+      <LineId Id="4754" Count="2" />
+      <LineId Id="4752" Count="0" />
+      <LineId Id="4351" Count="31" />
+      <LineId Id="4750" Count="0" />
+      <LineId Id="4383" Count="36" />
+      <LineId Id="4421" Count="149" />
+      <LineId Id="4680" Count="0" />
+      <LineId Id="4571" Count="108" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.allocate">
+      <LineId Id="387" Count="2" />
+      <LineId Id="252" Count="1" />
+      <LineId Id="261" Count="0" />
+      <LineId Id="378" Count="0" />
+      <LineId Id="308" Count="1" />
+      <LineId Id="311" Count="0" />
+      <LineId Id="310" Count="0" />
+      <LineId Id="305" Count="0" />
+      <LineId Id="330" Count="0" />
+      <LineId Id="334" Count="0" />
+      <LineId Id="358" Count="1" />
+      <LineId Id="363" Count="1" />
+      <LineId Id="369" Count="2" />
+      <LineId Id="368" Count="0" />
+      <LineId Id="356" Count="0" />
+      <LineId Id="332" Count="0" />
+      <LineId Id="379" Count="1" />
+      <LineId Id="306" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.FB_exit">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.optReadScannedSlaves.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.optReadScannedSlaves.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.optSortInfoData.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.optSortInfoData.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.optUpdateConfigData.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.optUpdateConfigData.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.optUpdateTopoData.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.optUpdateTopoData.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcSlavesDiag.sortList">
+      <LineId Id="53" Count="1" />
+      <LineId Id="147" Count="0" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="126" Count="20" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="36" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

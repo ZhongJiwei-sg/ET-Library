@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0103" Id="{16fa34ff-5c49-447b-bd85-bea4b0684b1e}">
+    <Declaration><![CDATA[TYPE AX5000_P_0103 :
+STRUCT
+	ASM_boost_voltage:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

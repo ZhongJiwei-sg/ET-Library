@@ -1,0 +1,550 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="MDP_IpcDiag" Id="{3e1ee768-b712-41a2-9728-9b64ed987b55}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//General IPC diagnosis based on Beckhoff MDP - invalid values are reported via EventLogger 
+//based on Tc2_MDP.lib - please see Beckhoff documentation for further information about Tc2_MDP.lib (IPC diagnostics)
+//EventHandlingGrp10 instance used inside
+//Info:
+// 0x   	a    	nn   	x   
+// 0x   	8   	03   	1   
+// a 	= Area Code (e.g. 8 = Configuration Area) 
+// nn 	= Modul-ID (e.g. dynamic modul id from list F020) 
+// x	= Tabel id (e.g. 1 = Table 0x8nn1 - NIC Properties at area code 8) 
+FUNCTION_BLOCK MDP_IpcDiag
+VAR CONSTANT
+	MIN_CPU													:	INT := 1;
+	MAX_CPU													:	INT := 4;
+	                    									
+	MIN_FAN													:	INT := 1;
+	MAX_FAN													:	INT := 4;
+	                    									
+	MIN_VOLTAGE												:	INT := 1;
+	MAX_VOLTAGE												:	INT := 8;		
+END_VAR                 									
+VAR_INPUT               									
+	Enable													:	BOOL := FALSE;	//FB will be processed as long as enable is TRUE 
+	CycleTime												:	TIME := T#100MS; //Delay between ads call to read a single value 
+	AmsNetId												: 	T_AmsNetId := ''; //Ams net Id
+	Timeout													: 	TIME := DEFAULT_ADS_TIMEOUT; //Ads timeout
+{attribute 'displaymode':='bin'}
+	FanMask													:	BYTE := 2#0000_0011; //Installed fans inside the PC 
+	
+//Threshold values 	    									
+	MinSpeedFan												:	INT := 2500; 	//rpm
+	MaxTempMB												:	INT := 85; 		//°C
+	MaxTempCPU												:	INT := 100; 	//°C
+	TempWarningThreshold									:	INT := 10; 		//°C
+	VoltageFactor											:	LREAL := 0.7; 	//% of nominal voltage before an error occurs
+END_VAR                 									
+VAR_OUTPUT              										                									
+	MB_Temp													:	INT; //Motherboard temp with one decimal digit  
+	Voltage_Count											:	INT := 0; //count of voltage measurement points with one decimal digit 
+	MB_NominalVoltage										:	ARRAY[MIN_VOLTAGE..MAX_VOLTAGE] OF INT; //in mV
+	MB_Voltage												:	ARRAY[MIN_VOLTAGE..MAX_VOLTAGE] OF INT;  //in mV
+	CPU_Count												:	INT := 0; //Readed number of CPUs
+	CPU_Temp												:	ARRAY[MIN_CPU..MAX_CPU] OF INT; //cpu temperatur with one decimal digit
+	FAN_Count												:	INT := 0; //Number of FANs in config. Note, the number may be two where only the second fan is p
+	FAN_Speed												:	ARRAY[MIN_FAN..MAX_FAN] OF INT; //in rpm for each available fan
+	OsImage													:	STRING; //Image version 
+	ExecutionTime											:	TIME; 	//Cylce time to execute function block        
+	Busy													:	BOOL;	//Busy is TRUE at the rising edge of Enable and stays TRUE as long as the FB is performing any action. 
+	Valid													:	BOOL;	//data valid
+	Error													:	BOOL;	//Rising edge of Error informs that an error occurred during the execution of the Function Block 
+{attribute 'displaymode':='hex'}
+	ErrorId													:	UDINT;	//Error identification - see documentation about IPC diagnostic for further detailed informantion 
+	ErrorGrp												:	E_MDP_ErrGroup := eMDP_Err_NoError; //MDP Error code - see Beckhoff documentation MDP for further informantion
+END_VAR	
+VAR
+(* cache variables ************************************************************)
+	state													:	INT := 0;
+	
+	dwData													:	ARRAY [1..2] OF WORD;
+	                    									
+	MemLen													:	BYTE := 0;
+	MemModIdMB												:	BYTE;
+	MemModIdCPU												:	ARRAY[MIN_CPU..MAX_CPU] OF BYTE;
+	MemModIdFan												:	ARRAY[MIN_FAN..MAX_FAN] OF BYTE;
+	MEmModIdUPS												:	BYTE;
+	MemMBSubIdxVoltage										:	ARRAY[MIN_VOLTAGE..MAX_VOLTAGE] OF BYTE;
+	MemTimeStartCycle										:	TIME;
+	MemErrState												:	INT := 0;
+	
+(* timer ***************************************************************************)
+	TON_Cycle												:	TON;
+	
+(* function-blocks *****************************************************************)
+	MDP_Read												: 	FB_MDP_Read		:= (tTimeout := DEFAULT_ADS_TIMEOUT, stMDP_DynAddr := (nArea := INT_TO_BYTE(eMDP_Area_DeviceArea), nModuleId := 16#02, nTableId := 16#00, nFlag := 16#00, nSubIdx := 16#00));
+	SplitErrorId											:	FB_MDP_SplitErrorID;
+	
+(* internal used variables **********************************************************)
+	i,k														:	INT;
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* MDP IPC diag compact						V1.1	*)
+(****************************************************)
+
+(* Sequence *******************************************************)
+IF Enable
+THEN
+	CASE state OF
+	0:	
+		IF NOT MDP_Read.bBusy
+			AND NOT Error
+		THEN
+			Busy											:= TRUE;
+			Valid											:= FALSE;
+		
+			Fan_Count										:= 0;
+			CPU_Count										:= 0;
+			Voltage_Count									:= 0;
+			MemLen											:= 0;
+			MB_Temp											:= 0;
+			MEMSET(ADR(MB_Voltage),0,SIZEOF(MB_Voltage));
+			MEMSET(ADR(CPU_Temp),0,SIZEOF(CPU_Temp));
+			MEMSET(ADR(FAN_Speed),0,SIZEOF(FAN_Speed));
+			MEMSET(ADR(MemModIdCPU),0,SIZEOF(MemModIdCPU));
+			MEMSET(ADR(MemModIdFan),0,SIZEOF(MemModIdFan));
+			MEMSET(ADR(MemMBSubIdxVoltage),0,SIZEOF(MemMBSubIdxVoltage));
+			MEMSET(ADR(MB_NominalVoltage),0,SIZEOF(MB_NominalVoltage));
+			
+			MDP_Read.stMDP_DynAddr.nArea					:= INT_TO_BYTE(eMDP_Area_GeneralArea);
+			MDP_Read.stMDP_DynAddr.nModuleId				:= 16#00;
+			MDP_Read.stMDP_DynAddr.nTableId					:= 16#0A;
+			MDP_Read.stMDP_DynAddr.nSubIdx					:= 16#00;
+                                                    			                                        		
+			state											:= 1;
+		ELSE
+			MDP_Read(bExecute := FALSE);	
+		END_IF
+		
+	1:
+	//Read OS version 	
+		MDP_Read(bExecute := TRUE , pDstBuf := ADR(OsImage), cbDstBufLen := SIZEOF(OsImage));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				MemErrState									:= state;		
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE //Os Image readed
+				k											:= UDINT_TO_INT(MDP_Read.nCount + 1);	
+				OsImage[k]									:= 0; //Terminate string
+				MDP_Read(bExecute := FALSE);	
+				
+				//Deveice area F + Modul Id 02 + Tabel Id = 0 -> Index 0xF020 – Modul ID Liste in deveice area
+				MDP_Read.stMDP_DynAddr.nArea				:= INT_TO_BYTE(eMDP_Area_DeviceArea); //Index F
+				MDP_Read.stMDP_DynAddr.nModuleId			:= 16#02; //Modul id 02 in Config area dynamic modul ids are used!
+				MDP_Read.stMDP_DynAddr.nTableId				:= 16#00; //Table Id 0
+				MDP_Read.stMDP_DynAddr.nSubIdx				:= 16#00; //Len = number of dyn moduls			
+				state										:= 2;								
+			END_IF
+		END_IF		
+		
+	2: // search list with dynamic moduls
+		MDP_Read(bExecute := TRUE, pDstBuf := ADR(dwData), cbDstBufLen := SIZEOF(dwData));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				MemErrState									:= state;	
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				IF MemLen = 0
+				THEN (* Init Modul count *)
+					MemLen									:= WORD_TO_BYTE(dwData[1]);
+				ELSIF MDP_Read.stMDP_DynAddr.nSubIdx > 0
+				THEN (* copy emlement dat					a *)
+					CASE dwData[2] OF //High word = Modul type, Low word = Modul Id
+					Tc2_MDP.E_MDP_ModuleType.eMDP_ModT_Mainboard:
+						MemModIdMB		 					:= WORD_TO_BYTE(dwData[1]);		
+
+					Tc2_MDP.E_MDP_ModuleType.eMDP_ModT_UPS:
+						MEmModIdUPS							:= WORD_TO_BYTE(dwData[1]);
+
+					Tc2_MDP.E_MDP_ModuleType.eMDP_ModT_CPU:
+						CPU_Count							:= CPU_Count + 1;
+						MemModIdCPU[CPU_Count]				:= WORD_TO_BYTE(dwData[1]);
+
+					Tc2_MDP.E_MDP_ModuleType.eMDP_ModT_Fan:
+						Fan_Count							:= Fan_Count + 1;
+						MemModIdFan[Fan_Count]				:= WORD_TO_BYTE(dwData[1]);
+												
+					ELSE
+						; 
+					END_CASE				
+				END_IF
+				MDP_Read(bExecute := FALSE);
+				MDP_Read.stMDP_DynAddr.nSubIdx:= MDP_Read.stMDP_DynAddr.nSubIdx + 1;
+				IF MDP_Read.stMDP_DynAddr.nSubIdx > MemLen
+					OR MDP_Read.stMDP_DynAddr.nSubIdx > 255
+				THEN
+					state									:= SEL(MemModIdMB > 0 , 9 , 3);								
+				ELSE
+					MDP_Read(bExecute := TRUE,	pDstBuf	:= ADR(dwData), cbDstBufLen := SIZEOF(dwData));
+				END_IF
+			END_IF
+
+		END_IF
+				
+	3: //reading motherboardconfig (SubIndex Voltage)
+		MDP_Read.stMDP_DynAddr.nArea						:= INT_TO_BYTE(eMDP_Area_ConfigArea);
+		MDP_Read.stMDP_DynAddr.nModuleId					:= INT_TO_BYTE(MemModIdMB);
+		MDP_Read.stMDP_DynAddr.nTableId						:= 16#04;
+		MDP_Read.stMDP_DynAddr.nSubIdx						:= 16#00;
+		MemLen												:= 0;
+		i													:= 0;
+		
+		MDP_Read(
+			stMDP_DynAddr	:= ,		(* address to request subindex Count of AdressList *)
+			pDstBuf			:= ADR(dwData[1]),
+			cbDstBufLen		:= SIZEOF(dwData[1]),
+			bExecute		:= NOT MDP_Read.bBusy,
+			tTimeout		:= ,
+			sAmsNetId		:= AmsNetId,
+			bBusy			=> ,
+			bError			=> ,
+			nErrId			=> );	
+			
+		state												:= 4;	
+	
+	4: 
+		MDP_Read(pDstBuf := ADR(dwData[1]), cbDstBufLen := SIZEOF(dwData[1]));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				MemErrState									:= state;		
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				IF MemLen = 0
+				THEN (* Init Entry count *)
+					MemLen									:= WORD_TO_BYTE(dwData[1]);
+				ELSE 
+					MDP_Read(bExecute := FALSE);
+					(* copy emlement data
+						00 = LOCATION_UNKNOWN
+						01 = LOCATION_OTHER
+						02 = LOCATION_PROCESSOR
+						03 = LOCATION_DISK
+						04 = LOCATION_SYSTEM_MANAGEMENT_MODULE
+						05 = LOCATION_MOTHERBOARD
+						06 = LOCATION_MEMORY_MODULE
+						07 = LOCATION_POWER_SUPPLY
+						08 = LOCATION_ADDIN_CARD
+						09 = LOCATION_FRONT_PANEL_BOARD
+						10 = LOCATION_BACK_PANEL_BOARD
+						11 = LOCATION_PERIPHERIE
+						12 = LOCATION_CHASSIS
+						13 = LOCATION_BATTERY
+						14 = LOCATION_UPS
+						15 = LOCATION_GRAFFIC_BOARD
+						16 = LOCATION_SUPERIO
+						17 = LOCATION_CHIPSET
+					*)
+
+				
+					CASE dwData[1] OF
+					7, //PowerSupply			
+					13: //Battery
+						Voltage_Count						:= Voltage_Count + 1;
+						MemMBSubIdxVoltage[Voltage_Count]	:= MDP_Read.stMDP_DynAddr.nSubIdx; 
+					ELSE
+						; 
+					END_CASE			
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= MDP_Read.stMDP_DynAddr.nSubIdx + 1; 				
+							
+					IF MDP_Read.stMDP_DynAddr.nSubIdx > MemLen
+						OR MDP_Read.stMDP_DynAddr.nSubIdx > 255
+						OR Voltage_Count >= MAX_Voltage
+					THEN
+						IF Voltage_Count > 0
+						THEN
+							i 								:= MIN_VOLTAGE;
+							MDP_Read.stMDP_DynAddr.nTableId	:= 16#06;
+							MDP_Read.stMDP_DynAddr.nSubIdx	:= MemMBSubIdxVoltage[i];
+							MDP_Read(bExecute := TRUE,	pDstBuf	:= ADR(dwData[1]), cbDstBufLen := SIZEOF(dwData[1]));												
+							state							:= 5;				
+						ELSE
+							state							:= 9;	
+						END_IF
+				
+					ELSE
+						MDP_Read(bExecute := TRUE,	pDstBuf	:= ADR(dwData[1]), cbDstBufLen := SIZEOF(dwData[1]));
+					END_IF
+				END_IF
+			END_IF
+
+		END_IF	
+
+	5:	//Nominal Voltage lesen
+		MDP_Read(pDstBuf := ADR(dwData[1]), cbDstBufLen := SIZEOF(dwData[1]));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				MemErrState									:= state;		
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE //Nominal Volage
+				MDP_Read(bExecute := FALSE);
+				MB_NominalVoltage[i]						:= WORD_TO_INT(dwData[1]); 
+				i 											:= i + 1;
+				IF i > MAX_VOLTAGE
+					OR i > Voltage_Count
+				THEN //Ende der Bearbeitung
+					state									:= 9;								
+				ELSE
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= MemMBSubIdxVoltage[i];
+					MDP_Read(bExecute := TRUE,	pDstBuf	:= ADR(dwData[1]), cbDstBufLen := SIZEOF(dwData[1]));
+				END_IF
+			END_IF
+
+		END_IF	
+							
+	//Start Cylce Read
+	9: 	
+		TON_Cycle(IN := FALSE);
+		MemTimeStartCycle									:= T#0MS;
+		i													:= 0;
+		state												:= 10;	
+		
+	//Start lesen der Zyklischen Daten 
+	10..90: 
+		MDP_Read(pDstBuf := ADR(dwData[1]), cbDstBufLen := SIZEOF(dwData[1]));
+		IF NOT MDP_Read.bBusy
+		THEN			
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				MemErrState									:= state;	
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSIF NOT TON_Cycle.IN
+			THEN		
+				MDP_Read(bExecute := FALSE);
+				CASE state OF
+				10:
+					MDP_Read.stMDP_DynAddr.nModuleId		:= MemModIdMB;
+					MDP_Read.stMDP_DynAddr.nTableId			:= 16#01;
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 10;
+					dwData[1]								:= 0;	
+					TON_Cycle.IN							:= MDP_Read.stMDP_DynAddr.nModuleId > 0;			
+					state									:= 11;
+								
+				11: 
+					MB_Temp									:= WORD_TO_INT(dwData[1]); //Daten sichern
+					
+					i 										:= MIN_VOLTAGE;	
+					IF Voltage_Count > 0
+					THEN					
+						MDP_Read.stMDP_DynAddr.nModuleId	:= MemModIdMB;
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#05;
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= MemMBSubIdxVoltage[i];
+						TON_Cycle.IN						:= MDP_Read.stMDP_DynAddr.nModuleId > 0;	
+					ELSE
+						dwData[1]							:= 0;	
+					END_IF						
+					
+					state									:= 12;		
+			
+				12:
+					MB_Voltage[i]							:= WORD_TO_INT(dwData[1]); //Daten sichern
+				
+					i 										:= i + 1;	
+					IF i > Voltage_Count
+					THEN //CPUTemp lesen 
+						i									:= MIN_CPU;
+						MDP_Read.stMDP_DynAddr.nModuleId	:= MemModIdCPU[i];
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#01;
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 3;
+						TON_Cycle.IN						:= MDP_Read.stMDP_DynAddr.nModuleId > 0;		
+						state								:= 13;					
+					ELSE //weiter Voltage lesen
+						MDP_Read.stMDP_DynAddr.nModuleId	:= MemModIdMB;
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#05;
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= MemMBSubIdxVoltage[i];	
+						TON_Cycle.IN						:= MDP_Read.stMDP_DynAddr.nModuleId > 0;		
+					END_IF								
+			
+				13: 
+					CPU_Temp[i]								:= WORD_TO_INT(dwData[1]);
+					
+					i 										:= i + 1;	
+					IF i > CPU_Count //Start next read
+					THEN //Fan auslesen 	
+						IF Fan_Count > 0
+						THEN
+							i								:= MIN_FAN;
+							
+							MDP_Read.stMDP_DynAddr.nModuleId:= MemModIdFan[i];
+							MDP_Read.stMDP_DynAddr.nTableId	:= 16#01;
+							MDP_Read.stMDP_DynAddr.nSubIdx	:= 1;		
+							TON_Cycle.IN					:= MDP_Read.stMDP_DynAddr.nModuleId > 0;			
+						ELSE
+							dwData[1]						:= 0;				
+						END_IF
+						
+						state								:= 14;
+						
+					ELSE //CPU weiter auslesen
+						MDP_Read.stMDP_DynAddr.nModuleId	:= MemModIdCPU[i];
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#01;
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 3;		
+						TON_Cycle.IN						:= MDP_Read.stMDP_DynAddr.nModuleId > 0;						
+					END_IF			
+				
+				14: 
+					FAN_Speed[i]							:= WORD_TO_INT(dwData[1]);
+					
+					i 										:= i + 1;	
+					IF i > Fan_Count
+					THEN //CPU Usage auslesen
+						(*
+						i									:= MIN_CPU;
+						MDP_Read.stMDP_DynAddr.nModuleId	:= MemModIdCPU[i];
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#01;
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 2;
+						*)
+						TON_Cycle.IN						:= MDP_Read.stMDP_DynAddr.nModuleId > 0;		
+					//	state								:= 15;
+						state								:= 90;	//final state in this section		
+					
+					ELSE //Fan weiter auslesen
+						MDP_Read.stMDP_DynAddr.nModuleId	:= MemModIdFan[i];
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#01;
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 1;
+						TON_Cycle.IN						:= MDP_Read.stMDP_DynAddr.nModuleId > 0;						
+					END_IF				
+				
+				(*
+				15:
+					CPU_Usage[i]							:= WORD_TO_USINT(dwData[1]);
+					
+					i 										:= i + 1;	
+					IF i > CPUCount
+					THEN //Ups status auslesen 	
+						IF MEmModIdUPS <> 0
+						THEN
+							MDP_Read.stMDP_DynAddr.nModuleId:= MEmModIdUPS;
+							MDP_Read.stMDP_DynAddr.nTableId	:= 16#01;
+							MDP_Read.stMDP_DynAddr.nSubIdx	:= 7;	
+							TON_Cycle.IN					:= MDP_Read.stMDP_DynAddr.nModuleId > 0;
+						ELSE
+							dwData[1]						:= 0;								
+						END_IF					
+						state								:= 16;	
+						
+					ELSE //CPU weiter auslesen
+						MDP_Read.stMDP_DynAddr.nModuleId	:= MemModIdCPU[i];
+						MDP_Read.stMDP_DynAddr.nTableId		:= 16#01;
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 2;		
+						TON_Cycle.IN						:= MDP_Read.stMDP_DynAddr.nModuleId > 0;						
+					END_IF	
+			
+				16:
+					UPS_PowerStatus							:= WORD_TO_INT(dwData[1]);
+					state									:= state * -1;	
+				*)
+				ELSE //90			
+					Valid									:= TRUE;
+					ExecutionTime	 						:= TIME() - MemTimeStartCycle;
+					MemTimeStartCycle 						:= T#0MS;
+					state									:= 10;	
+				END_CASE
+			END_IF
+			TON_Cycle(PT := CycleTime);
+			MDP_Read(bExecute := TON_Cycle.Q,	pDstBuf	:= ADR(dwData), cbDstBufLen := SIZEOF(dwData));
+			
+			IF MDP_Read.bExecute 
+			THEN 
+				TON_Cycle(IN := FALSE); 		
+			END_IF 
+			
+			IF MemTimeStartCycle = T#0MS
+			THEN
+				MemTimeStartCycle 							:= TIME();	
+			END_IF
+			
+		END_IF
+			
+	//Error State	
+	99:	
+		; //Wait for disable
+				
+	ELSE
+		;
+	END_CASE
+ELSE //Not Enable
+	state													:= 0;
+	Error													:= FALSE;
+	ErrorId													:= 0;
+	ErrorGrp												:= eMDP_Err_NoError;
+	Busy													:= FALSE;
+	Valid													:= FALSE;
+	MDP_Read(bExecute := FALSE);
+
+END_IF			
+
+(****************************************************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MDP_IpcDiag">
+      <LineId Id="3" Count="326" />
+      <LineId Id="699" Count="0" />
+      <LineId Id="330" Count="92" />
+      <LineId Id="619" Count="0" />
+      <LineId Id="433" Count="13" />
+      <LineId Id="509" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,342 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxAdmin" Id="{090b5e15-cc95-466a-8eed-9d3dca9cf711}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Nc-axis administration - Axis reset, set operation and override
+//based on Tc2_MC2 library
+//Call cyclic to update AXIS_REF.status
+FUNCTION_BLOCK AxAdmin 
+VAR_INPUT
+	ResetTrig												:	BOOL := FALSE; // Reset NC Error and restart current cmd if possible
+	Enable													: 	BOOL := FALSE; // Cyclic NCAxis enable operational - FALSE = Stop 
+	EnablePos												: 	BOOL := FALSE; // feed enable positiv 
+	EnableNeg												: 	BOOL := FALSE; // feed enable negative 
+	BufferMode												:	MC_BufferMode := MC_Aborting;	(* 	MC_Aborting,
+																									MC_Buffered,
+																									MC_BlendingLow,
+																									MC_BlendingPrevious,
+																									MC_BlendingNext,
+																									MC_BlendingHigh *) 
+                                							
+	Override												:	LREAL; // Override 
+	PT_Ready												:	TIME := T#10MS; //Delay of ready signal after NC-Axis has been enabled
+	ShowNCErrIfDisabled										:	BOOL := FALSE; // FB reports and NC-Error even if axis has been diabled
+	EnableNcDebugFlag										:	BOOL := FALSE; //TRUE writes every MC2 start command into TwinCAT and Windows logger. 
+	ExeMcStopToDisable										:	BOOL := FALSE; //Initiats the execution of MC_Stop on a running axis if "Enable" is set to FALSE
+	Dec														:	LREAL := 0.0; //Deceleration during disable, if the value is 0, the deceleration parameterized with the last Move command is used / see also ExeMcStopToDisable
+	Jerk													:	LREAL := 0.0; //Jerk during disable, if the value is 0, the deceleration parameterized with the last Move command is used / see also ExeMcStopToDisable
+	rAxis													:	REFERENCE TO AXIS_REF := 0;
+
+END_VAR                         							
+VAR_IN_OUT                      							
+END_VAR                         							
+VAR_OUTPUT                      							
+	EnableOK												:	BOOL; // Enable is send to NC
+	Ready													:	BOOL; // NC-Axis is enabled
+	StartRel												:	BOOL; // NC-Axis is enabled (Ready) and in PTPMode, not protected or motion command disabeld and at least one movment direction enabled
+	Busy													:	BOOL; //Internal MC functionblock is busy
+//	Done													:	BOOL; 
+	Error													:	BOOL; // Error occured at one internal MC functionblock 
+{attribute 'displaymode':='hex'}
+	ErrorID													:	UDINT;// ErrorID of one internal MC functionblock 
+	ErrorText												:	STRING(40); // Name of internal MC functionblock which has an error
+	DriveAddress											:	ST_DriveAddress;
+END_VAR
+VAR
+(* Cache **************************************************************************)
+	MethSeqEnable											: 	BOOL := TRUE;	(* NCAchse BTB/Freigabe setzen - FALSE = Stop, auch ueber Methoden set/reset bar *)
+	                        	
+(* Timer *)                 	
+	TON_Ready												:	TON;
+
+(* Trigger *)
+
+(* Instanzierung der MC Bausteine *******************************************************)
+	MC_Power												: MC_Power;
+	MC_Reset												: MC_Reset;
+	MC_Stop													: MC_Stop;
+	MC_ReadDriveAddress										: MC_ReadDriveAddress;
+	
+(* Dummy Speicher **********************************************************)
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(*	NC axis administration															*)
+	(*	Call function-block cyclic to enable axis and refresh AxisRef.Status structure	*)
+	(************************************************************************************)
+
+(* abortinf function-block-call if reference is invalid *********************************)
+IF NOT __ISVALIDREF(rAxis) THEN
+	EnableOK												:= FALSE;
+	Busy													:= NOT Error;
+	Ready													:= FALSE;
+	Error													:= TRUE;
+	ErrorId													:= E_adsErr.DEVICE_INVALIDPARM;
+//	Done													:= FALSE;
+	StartRel												:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	RETURN;	
+END_IF
+
+(* reading axis-status from NCtoPLC-channel ***********************************************)
+	rAxis.ReadStatus();
+	raxis.PlcToNc.ControlDWord.31							:= EnableNcDebugFlag;
+	
+(* read drive address information **********************************************)
+IF MC_ReadDriveAddress.DriveAddress.SlaveAddress = 0
+	OR MC_ReadDriveAddress.Busy
+THEN
+	MC_ReadDriveAddress(
+		Axis:= rAxis, 
+		Execute:= NOT rAxis.Status.DriveDeviceError AND NOT rAxis.Status.IoDataInvalid AND(NOT ResetTrig OR NOT MC_ReadDriveAddress.Error), 
+		Done=> , 
+		Busy=> , 
+		Error=> , 
+		ErrorID=> , 
+		DriveAddress=> DriveAddress);
+END_IF
+
+(* Enable OK ****************************************************************************)
+	EnableOK 												:= Enable AND MethSeqEnable;
+
+(* stop **********************************************************************************)
+	MC_Stop(
+		Axis		:= rAxis, 
+		Execute		:= rAxis.Status.Moving AND NOT EnableOK AND ExeMcStopToDisable, 
+		Deceleration:= Dec, 
+		Jerk		:= Jerk, 
+		Options		:= , 
+		Done		=> , 
+		Busy		=> , 
+		Active		=> , 
+		CommandAborted=> , 
+		Error		=> , 
+		ErrorID		=> );
+
+(* set axis operational  *****************************************************************)
+	MC_Power(
+		Enable			:= 	EnableOK 
+							OR 
+							MC_Power.Active AND MC_Stop.Busy,
+		Enable_Positive	:= EnablePos,
+		Enable_Negative	:= EnableNeg,
+		Override		:= Override,
+		BufferMode		:= (* PwrBufferMode *),
+		Axis			:= rAxis,
+		Status			=> ,
+		Busy			=> ,
+		Active			=> ,
+		Error			=> ,
+		ErrorID			=> );
+
+(* Reset axis ****************************************************************)
+	MC_Reset(
+		Execute	:= 	ResetTrig 
+					AND (NOT rAxis.Status.ProtectedMode OR rAxis.Status.DriveDeviceError)
+					AND (rAxis.NcToPlc.ErrorCode <> 0 OR NOT rAxis.Status.HasJob)
+					OR MC_Reset.Execute,
+		Axis	:= rAxis,
+	//	Done	=> Done,
+		Busy	=> ,
+		Error	=> ,
+		ErrorID	=> );
+		
+	MC_Reset.Execute										:= FALSE; 	
+
+(********************************************************************************)
+(* axis status																	*)
+(********************************************************************************)
+	(* Delay axis is ready to move *)
+	TON_Ready(
+		IN := MC_Power.Status,//ControlLoopClosed
+		PT 	:= PT_Ready, 
+		Q	=> Ready);
+
+	(* Axis Ready to Start *)
+	StartRel												:= Ready
+																AND rAxis.Status.PTPmode
+																AND NOT rAxis.Status.ProtectedMode
+																AND NOT rAxis.Status.MotionCommandsLocked
+																AND (MC_Power.Enable_Negative OR MC_Power.Enable_Positive);
+                                							
+(********************************************************************************)
+(* Ctrl Status 															 		*)
+(********************************************************************************)
+	Busy													:= (MC_Power.Busy AND NOT MC_Power.Status) //Show MC_Power busy only if as long as axis is not enabled  
+																OR MC_Stop.Busy 
+																OR MC_Reset.Busy;
+	IF NOT ShowNCErrIfDisabled AND NOT EnableOK
+	THEN
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorText											:= '';	
+	ELSIF MC_Power.Error
+		AND NOT MC_Reset.Execute
+	THEN
+		Error												:= TRUE;
+		ErrorId												:= MC_Power.ErrorID;
+		ErrorText											:= CONCAT('MC_Power ErrorId: ', UDINT_TO_STRING(Errorid));
+	ELSIF MC_Reset.Execute  								
+		AND MC_Reset.Error  								
+	THEN                    								
+		Error												:= TRUE;
+		ErrorId												:= MC_Reset.ErrorID;
+		ErrorText											:= CONCAT('MC_Reset ErrorId: ', UDINT_TO_STRING(Errorid));
+	ELSIF MC_Stop.Execute  								
+		AND MC_Stop.Error  								
+	THEN                    								
+		Error												:= TRUE;
+		ErrorId												:= MC_Stop.ErrorID;
+		ErrorText											:= CONCAT('MC_Stop ErrorId: ', UDINT_TO_STRING(Errorid));
+	ELSIF rAxis.NcToPlc.ErrorCode <> 0 
+	THEN
+		Error												:= TRUE;
+		ErrorId												:= rAxis.NcToPlc.ErrorCode;
+		ErrorText											:= CONCAT('NC ErrorId: ', UDINT_TO_STRING(Errorid));
+	ELSIF MC_ReadDriveAddress.Execute  								
+		AND MC_ReadDriveAddress.Error  								
+	THEN                    								
+		Error												:= TRUE;
+		ErrorId												:= MC_ReadDriveAddress.ErrorID;
+		ErrorText											:= CONCAT('MC_ReadDriveAddress ErrorId: ', UDINT_TO_STRING(Errorid));
+		
+	ELSE                    								
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorText											:= '';
+	END_IF
+
+(**************************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="forceFeed" Id="{c8436140-25eb-4e9f-aa53-5e727e73e08f}">
+      <Declaration><![CDATA[METHOD PUBLIC forceFeed : BOOL //Return value = TRUE if execution finished 
+VAR_INPUT
+	IN														:	booL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.EnableNeg 											:= IN;
+THIS^.EnablePos 											:= IN;
+
+forceFeed 													:=  TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isResetting" Id="{dda17a2b-5457-4f27-80e7-29f358e4c535}">
+      <Declaration><![CDATA[PROPERTY PUBLIC isResetting : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b6c18436-b481-4b8d-9046-8c1816fbb3b4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isResetting := MC_Reset.Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isStopping" Id="{25da3e54-b726-4742-99a4-7cfea72efa71}">
+      <Declaration><![CDATA[PROPERTY PUBLIC isStopping : BOOL]]></Declaration>
+      <Get Name="Get" Id="{65b9051f-acf4-42da-ac45-80364c491e5f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isStopping := MC_Stop.Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{c4019e0c-24f4-47d5-bbb0-11d875911d34}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = True if Busy
+//required parameter
+//rAxis
+VAR_INPUT
+	IN						:	BOOL; //Force to send a reset, even if the axis is not in error state. With FALSE, reset will be only send if axis has an error
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+//	Done													:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	RETURN;             								
+END_IF
+
+	MC_Reset(
+		Execute	:= NOT rAxis.Status.ProtectedMode
+					AND (	ResetTrig 
+							OR IN 
+							OR rAxis.NcToPlc.ErrorCode <> 0 
+							OR NOT rAxis.Status.HasJob) ,
+		Axis	:= rAxis,
+		Done	=> ,
+		Busy	=> Busy,
+		Error	=> Error,
+		ErrorID	=> ErrorId);
+
+	IF Error 
+	THEN
+		ErrorText											:= SEL(MC_Reset.Error , '' ,  CONCAT('Error MC_Reset id: ',  UDINT_TO_STRING(Errorid)));
+	ELSE            										
+		ErrorText											:= '';
+	END_IF          										
+	                	
+	reset													:= Busy;
+	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seqEnable" Id="{4101de5a-1646-4fcc-b3f1-5a97ff44de42}">
+      <Declaration><![CDATA[METHOD PUBLIC seqEnable : BOOL //Return = Ready - Enable and disabel per method from external
+VAR_INPUT
+	IN														:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.MethSeqEnable 										:= IN;
+seqEnable													:= Ready;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxAdmin">
+      <LineId Id="3" Count="144" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxAdmin.forceFeed">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxAdmin.isResetting.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxAdmin.isStopping.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxAdmin.reset">
+      <LineId Id="3" Count="30" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxAdmin.seqEnable">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0099" Id="{d3687147-1fe4-4517-b268-546f3b19c84d}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0099 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Request:UINT;
+	Encoder_connector:UINT;
+	File:UINT;
+	File_size_in_words:UINT;
+//	{attribute 'hide'}
+	Rsvd:ARRAY [0..1] OF UINT;
+	Offset_in_Words:UINT;
+	Length_in_words:UINT;
+	Response:UINT;
+	Data_state:UINT;
+	File_size_in_words2:UINT;
+//	{attribute 'hide'}
+	Rsvd1:UINT;
+//	{attribute 'hide'}
+	Rsvd2: UDINT;
+	Offset_in_words2:UINT;
+	Length_in_words2:UINT;
+	Data_array:ARRAY[0..255] OF UINT;
+
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

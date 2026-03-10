@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="checkBounds" Id="{706e5b28-932f-444f-ba58-2c15abf9af8f}" SpecialFunc="CheckBounds">
+    <Declaration><![CDATA[//Implicit function for checking array bounds - called by system
+//This check bounds implementation includes "CheckBoundsInfo (FB)", which is already an instance object of this library and can be found at ET.<Gvl>.CheckBoundsInfo.
+//CheckBoundsInfo creates a an entry in the TwinCAT logger and provides information about the number of errors and signal variables if an error occures.
+//Example of TwinCAT logger message: 	'Array index too low! Lower: 1 Upper: 10 Index: 11'
+//
+//please copy code example as shown after END_VAR as a command.
+FUNCTION checkBounds : DINT
+VAR_INPUT
+	Index, Lower, Upper: DINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF  index < lower 
+THEN
+	(* Return right index *)
+	CheckBounds 											:= lower;	
+
+	//
+	IF TestAndSet(ET.CheckBoundsInfo.Interlock)
+	THEN
+		ET.CheckBoundsInfo.SetErrorLower(index,lower,upper);
+		ET.CheckBoundsInfo.Interlock						:= FALSE;
+	END_IF
+
+ELSIF index > upper 
+THEN
+	(* Return right index *)
+	CheckBounds 											:= upper;
+	
+	IF TestAndSet(ET.CheckBoundsInfo.Interlock)
+	THEN
+		ET.CheckBoundsInfo.SetErrorUpper(index,lower,upper);
+		ET.CheckBoundsInfo.Interlock						:= FALSE;
+	END_IF
+	
+ELSE  
+	CheckBounds 											:= index;
+END_IF
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="checkBounds">
+      <LineId Id="3" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

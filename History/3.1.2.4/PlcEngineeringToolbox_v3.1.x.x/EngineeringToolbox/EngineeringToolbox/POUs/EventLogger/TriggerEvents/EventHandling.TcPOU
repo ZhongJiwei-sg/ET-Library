@@ -1,0 +1,172 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EventHandling" Id="{af15fe8a-813d-42de-a6df-40a14522662a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//ADSLOGEVENT wrapper for a convenient and pre configured use - see Beckhoff documentation for more information about AdsEventLogger
+//See Param constanst to configure whether the TcEventClass need to be acknowledged (confirmation required) 
+FUNCTION_BLOCK EventHandling
+VAR_INPUT
+	Flag													:	BOOL := FALSE; //Fire event 
+	ConfirmTrig												:	BOOL := FALSE; //Ack event
+	MsgId													:	UINT := 0; //Event number
+	SourceId												: 	UDINT:= 0; //Event source number
+	eClass													:	E_TcEventClass := TCEVENTCLASS_ALARM; (*	TC2_SYSTEM.TCEVENTCLASS_NONE		
+																											TC2_SYSTEM.TCEVENTCLASS_MAINTENANCE
+																											TC2_SYSTEM.TCEVENTCLASS_MESSAGE		
+																											TC2_SYSTEM.TCEVENTCLASS_HINT		
+																											TC2_SYSTEM.TCEVENTCLASS_STATEINFO	
+																											TC2_SYSTEM.TCEVENTCLASS_INSTRUCTION	
+																											TC2_SYSTEM.TCEVENTCLASS_WARNING		
+																											TC2_SYSTEM.TCEVENTCLASS_ALARM		
+																											TC2_SYSTEM.TCEVENTCLASS_PARAMERROR	*)
+
+	Text1													:	STRING(20) := ''; //Short info text with lenght 20 chars 
+	Text2													:	STRING(40) := ''; //Long info text with lenght 40 chars
+	pText3													:	POINTER TO STRING := 0; //Pointer to extended info text 
+END_VAR
+VAR_OUTPUT
+{attribute 'displaymode':='hex'}
+	State													:	UDINT ; (*	TCEVENTSTATE_INVALID  	: WORD := 16#0000; 		
+																			TCEVENTSTATE_SIGNALED  	: WORD := 16#0001; 		- The event is signaled 
+																			TCEVENTSTATE_RESET  	: WORD := 16#0002; 		- The event is gone 
+																			TCEVENTSTATE_CONFIRMED  : WORD := 16#0010 (16); - The event is confirmed 
+																			TCEVENTSTATE_RESETCON  	: WORD := 16#0012 (18); - The event is gone AND confirmed *)
+{attribute 'displaymode':='binary'}
+	Status													:	DWORD; (*	.0 - .8 = event <class id>  / .15 confirm required / .16 = Level 0 , .17 = Level 1 , .18 = Level 2, .......... / .31 active
+																			TCEVENTCLASS_NONE			:=0,
+																			TCEVENTCLASS_MAINTENANCE	:=1,
+																			TCEVENTCLASS_MESSAGE		:=2,
+																			TCEVENTCLASS_HINT			:=3,
+																			TCEVENTCLASS_STATEINFO		:=4, 
+																			TCEVENTCLASS_INSTRUCTION	:=5,
+																			TCEVENTCLASS_WARNING		:=6,
+																			TCEVENTCLASS_ALARM			:=7,
+																			TCEVENTCLASS_PARAMERROR		:=8	 *)
+END_VAR
+VAR
+	format													:	STRING(6) := '%s%s%s';
+	pPara													:	ARRAY[1..3] OF POINTER TO BYTE;
+	TmpString												:	STRING(1) := '';
+	AdsEvent												:	ADSLOGEVENT :=(
+																	NETID				:= '',
+																	PORT				:= AMSPORT_EVENTLOG,
+																	TMOUT 				:= DEFAULT_ADS_TIMEOUT,
+																	EventDataLength		:= 0,	
+																	EventConfigData 	:= (
+																		Class 				:= TCEVENTCLASS_ALARM,
+																		Prio 				:= TCEVENTPRIO_IMPLICIT,
+																		ProgId 				:= 'TcEventFormatter.TcXmlFormatter',
+																		Flags 				:= TCEVENTFLAG_LOG OR TCEVENTFLAG_SRCID, // 16#0140 (* T *),
+																		StreamType 			:= TCEVENTSTREAM_SIMPLE (* TCEVENTSTREAM_NORMAL *),
+																		bQuitRequired 		:= TRUE));
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EventHandling including textinfos which are send to the eventlogger  	v4.3	*)
+(* specific eventclasses have to be quit, see Param.EventConfig...					*)
+(************************************************************************************)
+
+(* sequence *************************************************************)
+	IF Status.31 //Message active
+	THEN (* work EventLogger *)
+		AdsEvent(
+			NETID			:= ,(* see declaration *)
+			PORT			:= ,(* see declaration *)
+			Event			:= NOT AdsEvent.FbCleanup AND(Flag OR AdsEvent.EventState = TCEVENTSTATE_INVALID AND NOT AdsEvent.Quit), (* Set Event until state <> invalid *)
+			EventQuit		:= AdsEvent.EventState <> TCEVENTSTATE_INVALID
+								AND AdsEvent.EventConfigData.bQuitRequired
+								AND NOT AdsEvent.Eventstate.4 //confirmed
+								AND NOT AdsEvent.Quit
+								AND(
+								ConfirmTrig
+								OR AdsEvent.EventQuit), (* quit send *)
+			EventConfigData	:= ,(* see declaration *)
+			EventDataAddress:= ADR(pPara),
+			EventDataLength	:= ,(* see declaration *)
+			FbCleanup		:= NOT AdsEvent.FbCleanup AND(AdsEvent.Err OR AdsEvent.EventState = TCEVENTSTATE_RESETCON),
+			TMOUT			:= ,(* see declaration *)
+			EventState		=> ,
+			Err				=> ,
+			ErrId			=> ,
+			Quit			=> );
+			
+		IF AdsEvent.Event 
+			AND AdsEvent.EventState = TCEVENTSTATE_INVALID
+		THEN
+			State 											:= SEL(Flag, TCEVENTSTATE_RESET, TCEVENTSTATE_SIGNALED);
+		ELSIF AdsEvent.Quit
+			AND AdsEvent.EventState = TCEVENTSTATE_INVALID
+			AND AdsEvent.EventQuit
+			OR 
+			AdsEvent.FbCleanup		
+		THEN
+			State 											:= TCEVENTSTATE_RESETCON;
+		ELSIF(AdsEvent.Err OR NOT AdsEvent.Event AND AdsEvent.EventState = TCEVENTSTATE_INVALID)
+			AND_THEN Gvl.EventHandlingStatistic.CountOut(Status)
+		THEN
+			State											:= TCEVENTSTATE_INVALID;
+		ELSE
+			State											:= MAX(State, AdsEvent.EventState);
+		END_IF
+			
+	ELSIF Flag AND SourceId > 0 
+	THEN (* fire event *)
+		IF PARAM.EVENT_HANDLING_CONFIG.ENABLE_DYNAMIC_EVENT_MSG_FORMAT
+		THEN
+			IF pText3 <> 0 AND_THEN pText3^[0] > 0
+			THEN 
+				format 										:= '%s%s%s'; 
+			ELSIF Text2[0] > 0 
+			THEN 
+				format 										:= '%s%s';
+			ELSIF Text1[0] > 0 
+			THEN 												
+				format 										:= '%s';
+			ELSE
+				format 										:= '';
+			END_IF
+		END_IF
+							 
+		AdsEvent.EventConfigData.DataFormatStrAddress		:= ADR(format);
+		AdsEvent.EventConfigData.Id 						:= UINT_TO_UDINT(MsgID);
+		AdsEvent.EventConfigData.SourceId 					:= SourceId;
+		Status												:= Gvl.EventHandlingStatistic.InitEvent(SetClass := eClass, EventConfig := AdsEvent.EventConfigData);		
+
+		(* Data *)
+		pPara[1] 											:= ADR(Text1);
+		pPara[2] 											:= ADR(Text2);
+		pPara[3] 											:= SEL(pText3 <> 0,ADR(TmpString) ,pText3);
+	
+		IF AdsEvent.Err AND NOT AdsEvent.FbCleanup
+		THEN
+			AdsEvent(
+				Event			:= FALSE,
+				EventQuit 		:= FALSE,
+				EventDataAddress:= ADR(pPara),
+				FbCleanup		:= TRUE,
+				EventState		=> );
+				
+		ELSE (* Fire Event *)
+			AdsEvent( 	
+				Event			:= FALSE,
+				EventQuit 		:= FALSE, 
+				FbCleanup 		:= FALSE, 
+				EventDataAddress:= ADR(pPara));
+						
+			AdsEvent( 	Event 	:= TRUE);
+			IF NOT AdsEvent.Err AND_THEN Gvl.EventHandlingStatistic.CountIn(Status) //Add event to statistic and continue if added successfully
+			THEN			
+				State 										:= TCEVENTSTATE_SIGNALED;
+			END_IF
+						
+		END_IF
+	END_IF
+
+(**********************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="EventHandling">
+      <LineId Id="672" Count="99" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,453 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="EventHandlingStatisticInfo" Id="{582af54a-d6ec-44e6-a1bd-132c115e89cb}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Collection with count and class types of active events 
+FUNCTION_BLOCK EventHandlingStatisticInfo
+VAR_OUTPUT CONSTANT
+	MIN_CLASS												: 	UINT := TCEVENTCLASS_NONE;
+	MAX_CLASS												: 	UINT := TCEVENTCLASS_PARAMERROR;
+	MIN_PRIORITY											: 	INT := 0;
+	MAX_PRIORITY											: 	INT := 7;
+END_VAR
+VAR_INPUT
+	ClassInfo												:	ARRAY[MIN_CLASS..MAX_CLASS] OF INT; (* No of active messages in each class
+																										TCEVENTCLASS_NONE			:=0
+																										TCEVENTCLASS_MAINTENANCE	:=1	
+																										TCEVENTCLASS_MESSAGE		:=2
+																										TCEVENTCLASS_HINT			:=3	
+																										TCEVENTCLASS_STATEINFO		:=4	
+																										TCEVENTCLASS_INSTRUCTION	:=5	
+																										TCEVENTCLASS_WARNING		:=6	
+																										TCEVENTCLASS_ALARM			:=7	
+																										TCEVENTCLASS_PARAMERROR		:=8 *)
+	PriorityInfo											:	ARRAY[MIN_PRIORITY..MAX_PRIORITY] OF INT; //No of active messages per priority - see Param.EVENT_HANDLING_CONFIG
+	NoOfQuitRequiredEvents									:	INT;
+	NoOfActiveEvents										:	INT;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	TaskInterlockCountIn									:	BOOL;
+	TaskInterlockCountOut									:	BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Folder Name="getClassProperties" Id="{dc080ec0-d961-48b5-82ed-54c0f725f636}" />
+    <Property Name="classAlarmActive" Id="{81ded192-00b5-411a-b22a-375cb865a679}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classAlarmActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f2c686ad-a2f5-4894-a3ca-d1601e07ec9d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[classAlarmActive													:= ClassInfo[TCEVENTCLASS_ALARM] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="classHintActive" Id="{6d5ee0e0-55b3-4dbd-9838-959f0ffe1aac}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classHintActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5ce118ce-d44d-45dc-8628-271beba2929c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[classHintActive													:= ClassInfo[TCEVENTCLASS_HINT] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="classInstructionActive" Id="{2cdf6175-b4f9-47fa-a634-295f05ff4361}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classInstructionActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{85d9636f-f878-4e4a-ace6-95cc8e2c2b24}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[classInstructionActive													:= ClassInfo[TCEVENTCLASS_INSTRUCTION] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="classMaintenanceActive" Id="{db338d47-021c-485a-8091-94aa871ba624}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classMaintenanceActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a1f58603-ddc3-49b3-8d59-a0b9dc069f71}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[classMaintenanceActive													:= ClassInfo[TCEVENTCLASS_MAINTENANCE] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="classMessageActive" Id="{639ec132-627e-4359-8ba3-d6fba5cb8ae7}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classMessageActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3362d65b-9dde-450c-ade8-a4ce673d5725}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[classMessageActive													:= ClassInfo[TCEVENTCLASS_MESSAGE] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="classNoneActive" Id="{36cf422c-9940-4ca1-8f53-3eb6c82778b4}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classNoneActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{76b4a038-efcd-4dfc-a192-dc193453b9b1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ClassNoneActive													:= ClassInfo[TCEVENTCLASS_NONE] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="classParamErrorActive" Id="{d024e297-9ba1-4ca2-a8a5-0deafdcbf4ee}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classParamErrorActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{73858a01-8442-4fd5-ab5f-9131395d40ba}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ClassParamErrorActive													:= ClassInfo[TCEVENTCLASS_PARAMERROR] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="classStateinfoActive" Id="{64261e36-251e-4e17-ba61-13dd4c24c934}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classStateinfoActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{bc79309a-18b5-4964-ad0f-cf73512e759f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ClassStateinfoActive													:= ClassInfo[TCEVENTCLASS_STATEINFO] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="classWarningActive" Id="{8ec36f32-8183-4664-acfc-90889c0a439d}" FolderPath="getClassProperties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC classWarningActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a2343370-8e55-4413-98b3-4dfc7f99e2ff}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ClassWarningActive													:= ClassInfo[TCEVENTCLASS_WARNING] <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="clear" Id="{5477e460-22ec-4305-a16a-8a45933a6a1e}">
+      <Declaration><![CDATA[METHOD PUBLIC clear : BOOL //Return value = TRUE if execution finished 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MEMSET(ADR(ClassInfo),0,SIZEOF(ClassInfo));
+	MEMSET(ADR(PriorityInfo),0,SIZEOF(PriorityInfo));
+	NoOfQuitRequiredEvents									:= 0;	
+	NoOfActiveEvents										:= 0;
+	Clear													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="countIn" Id="{57541033-13ff-4698-810a-58f391f3e4a4}">
+      <Declaration><![CDATA[{attribute 'hide'}
+METHOD PUBLIC countIn : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	Status													:	DWORD; (*	.0 - .8 = event of <class id> is active / .15 confirm required / .16 = Level 0 , .17 = Level 1 , .18 = Level 2, ..........
+																			TCEVENTCLASS_NONE			:=0,	(* No class *)
+																			TCEVENTCLASS_MAINTENANCE	:=1,	(* Maintenance hint *)
+																			TCEVENTCLASS_MESSAGE		:=2,	(* Message *)
+																			TCEVENTCLASS_HINT			:=3,	(* Hint *)
+																			TCEVENTCLASS_STATEINFO		:=4,	(* State information *)
+																			TCEVENTCLASS_INSTRUCTION	:=5,	(* Instruction *)
+																			TCEVENTCLASS_WARNING		:=6,	(* Warning *)
+																			TCEVENTCLASS_ALARM			:=7,	(* Alarm *)
+																			TCEVENTCLASS_PARAMERROR		:=8		(* Parameter error *)  *)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(TaskInterlockCountIn)
+THEN
+	IF Status.0 THEN ClassInfo[TCEVENTCLASS_NONE] 				:= ClassInfo[TCEVENTCLASS_NONE] + 1; 									
+	ELSIF Status.1 THEN ClassInfo[TCEVENTCLASS_MAINTENANCE] 	:= ClassInfo[TCEVENTCLASS_MAINTENANCE] + 1; 
+	ELSIF Status.2 THEN ClassInfo[TCEVENTCLASS_MESSAGE] 		:= ClassInfo[TCEVENTCLASS_MESSAGE] + 1; 	
+	ELSIF Status.3 THEN ClassInfo[TCEVENTCLASS_HINT] 			:= ClassInfo[TCEVENTCLASS_HINT] + 1; 		
+	ELSIF Status.4 THEN ClassInfo[TCEVENTCLASS_STATEINFO] 		:= ClassInfo[TCEVENTCLASS_STATEINFO] + 1; 	
+	ELSIF Status.5 THEN ClassInfo[TCEVENTCLASS_INSTRUCTION] 	:= ClassInfo[TCEVENTCLASS_INSTRUCTION] + 1; 
+	ELSIF Status.6 THEN ClassInfo[TCEVENTCLASS_WARNING] 		:= ClassInfo[TCEVENTCLASS_WARNING] + 1; 	
+	ELSIF Status.7 THEN ClassInfo[TCEVENTCLASS_ALARM] 			:= ClassInfo[TCEVENTCLASS_ALARM] + 1; 		
+	ELSIF Status.8 THEN ClassInfo[TCEVENTCLASS_PARAMERROR] 		:= ClassInfo[TCEVENTCLASS_PARAMERROR] + 1; 	
+	END_IF
+	
+	IF Status.15 THEN NoOfQuitRequiredEvents 					:= NoOfQuitRequiredEvents + 1; END_IF
+	
+	IF status.16 THEN PriorityInfo[0]							:= PriorityInfo[0] + 1;						
+	ELSIF status.17 THEN PriorityInfo[1]						:= PriorityInfo[1] + 1	;						
+	ELSIF status.18 THEN PriorityInfo[2]						:= PriorityInfo[2] + 1;						
+	ELSIF status.19 THEN PriorityInfo[3]						:= PriorityInfo[3] + 1;						
+	ELSIF status.20 THEN PriorityInfo[4]						:= PriorityInfo[4] + 1;						
+	ELSIF status.21 THEN PriorityInfo[5]						:= PriorityInfo[5] + 1;						
+	ELSIF status.22 THEN PriorityInfo[6]						:= PriorityInfo[6] + 1;						
+	ELSIF status.23 THEN PriorityInfo[7]						:= PriorityInfo[7] + 1	;						
+	END_IF
+	
+	//set active flag	
+	NoOfActiveEvents											:= NoOfActiveEvents + 1;
+	
+	status.31 													:= TRUE; 
+	CountIn														:= TRUE;
+	TaskInterlockCountIn										:= FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="countOut" Id="{4df4917a-1f10-497f-ac49-69dec041198d}">
+      <Declaration><![CDATA[// {attribute 'hide'}
+METHOD PUBLIC countOut : BOOL //Return value = TRUE if execution finished 
+VAR_IN_OUT
+	Status													:	DWORD; (*	.0 - .8 = event of <class id> is active / .15 confirm required / .16 = Level 0 , .17 = Level 1 , .18 = Level 2, ..........
+																			TCEVENTCLASS_NONE			:=0,	(* No class *)
+																			TCEVENTCLASS_MAINTENANCE	:=1,	(* Maintenance hint *)
+																			TCEVENTCLASS_MESSAGE		:=2,	(* Message *)
+																			TCEVENTCLASS_HINT			:=3,	(* Hint *)
+																			TCEVENTCLASS_STATEINFO		:=4,	(* State information *)
+																			TCEVENTCLASS_INSTRUCTION	:=5,	(* Instruction *)
+																			TCEVENTCLASS_WARNING		:=6,	(* Warning *)
+																			TCEVENTCLASS_ALARM			:=7,	(* Alarm *)
+																			TCEVENTCLASS_PARAMERROR		:=8		(* Parameter error *)  *)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(TaskInterlockCountOut)
+THEN
+	IF Status.0 THEN ClassInfo[TCEVENTCLASS_NONE] 				:= MAX(0,ClassInfo[TCEVENTCLASS_NONE] - 1); 		
+	ELSIF Status.1 THEN ClassInfo[TCEVENTCLASS_MAINTENANCE] 	:= MAX(0,ClassInfo[TCEVENTCLASS_MAINTENANCE] - 1);	
+	ELSIF Status.2 THEN ClassInfo[TCEVENTCLASS_MESSAGE] 		:= MAX(0,ClassInfo[TCEVENTCLASS_MESSAGE] - 1); 		
+	ELSIF Status.3 THEN ClassInfo[TCEVENTCLASS_HINT] 			:= MAX(0,ClassInfo[TCEVENTCLASS_HINT] - 1); 		
+	ELSIF Status.4 THEN ClassInfo[TCEVENTCLASS_STATEINFO] 		:= MAX(0,ClassInfo[TCEVENTCLASS_STATEINFO] - 1); 	
+	ELSIF Status.5 THEN ClassInfo[TCEVENTCLASS_INSTRUCTION] 	:= MAX(0,ClassInfo[TCEVENTCLASS_INSTRUCTION] - 1);	
+	ELSIF Status.6 THEN ClassInfo[TCEVENTCLASS_WARNING] 		:= MAX(0,ClassInfo[TCEVENTCLASS_WARNING] - 1); 	
+	ELSIF Status.7 THEN ClassInfo[TCEVENTCLASS_ALARM] 			:= MAX(0,ClassInfo[TCEVENTCLASS_ALARM] - 1); 		
+	ELSIF Status.8 THEN ClassInfo[TCEVENTCLASS_PARAMERROR] 		:= MAX(0,ClassInfo[TCEVENTCLASS_PARAMERROR] - 1); 	
+	END_IF
+																	  
+	IF Status.15 THEN NoOfQuitRequiredEvents 					:=  MAX(0,NoOfQuitRequiredEvents - 1); 	
+	END_IF
+																	   
+	IF status.16 THEN PriorityInfo[0]							:=  MAX(0,PriorityInfo[0] - 1);						
+	ELSIF status.17 THEN PriorityInfo[1]						:=  MAX(0,PriorityInfo[1] - 1);						
+	ELSIF status.18 THEN PriorityInfo[2]						:=  MAX(0,PriorityInfo[2] - 1);						
+	ELSIF status.19 THEN PriorityInfo[3]						:=  MAX(0,PriorityInfo[3] - 1);						
+	ELSIF status.20 THEN PriorityInfo[4]						:=  MAX(0,PriorityInfo[4] - 1);						
+	ELSIF status.21 THEN PriorityInfo[5]						:=  MAX(0,PriorityInfo[5] - 1);						
+	ELSIF status.22 THEN PriorityInfo[6]						:=  MAX(0,PriorityInfo[6] - 1);						
+	ELSIF status.23 THEN PriorityInfo[7]						:=  MAX(0,PriorityInfo[7] - 1);						
+	END_IF
+	
+	NoOfActiveEvents											:= MAX(0,NoOfActiveEvents - 1);
+	status.31													:= FALSE; //Active flag reset
+	CountOut													:= TRUE;
+	TaskInterlockCountOut										:= FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="initEvent" Id="{2d0cc16a-95dd-41ca-8387-4af54a235c54}">
+      <Declaration><![CDATA[METHOD INTERNAL initEvent : DWORD //Return status 
+VAR_IN_OUT
+	SetClass								:	E_TcEventClass;
+	EventConfig								:	TcEvent;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[		(* Event Config *)
+		InitEvent											:= 0;
+		IF SetClass = TC2_SYSTEM.TCEVENTCLASS_NONE 				
+		THEN	
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_NONE_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_NONE_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_NONE_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_NONE_PRIORITY) + 16);	
+			InitEvent.0										:= TRUE;													
+			
+		ELSIF SetClass = TC2_SYSTEM.TCEVENTCLASS_MAINTENANCE 
+		THEN
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_MAINTENANCE_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_MAINTENANCE_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_MAINTENANCE_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_MAINTENANCE_PRIORITY) + 16);
+			InitEvent.1										:= TRUE;
+		ELSIF SetClass = TC2_SYSTEM.TCEVENTCLASS_MESSAGE 		
+		THEN
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_MESSAGE_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_MESSAGE_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_MESSAGE_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_MESSAGE_PRIORITY) + 16);
+			InitEvent.2										:= TRUE;
+		ELSIF SetClass = TC2_SYSTEM.TCEVENTCLASS_HINT 			
+		THEN
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_HINT_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_HINT_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_HINT_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_HINT_PRIORITY) + 16);
+			InitEvent.3										:= TRUE;
+		ELSIF SetClass = TC2_SYSTEM.TCEVENTCLASS_STATEINFO 	
+		THEN
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_STATEINFO_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_STATEINFO_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_STATEINFO_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_STATEINFO_PRIORITY) + 16);
+			InitEvent.4										:= TRUE;
+		ELSIF SetClass = TC2_SYSTEM.TCEVENTCLASS_INSTRUCTION 
+		THEN
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_INSTRUCTION_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_INSTRUCTION_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_INSTRUCTION_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_INSTRUCTION_PRIORITY) + 16);
+			InitEvent.5										:= TRUE;
+		ELSIF SetClass = TC2_SYSTEM.TCEVENTCLASS_WARNING 		
+		THEN
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_WARNING_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_WARNING_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_WARNING_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_WARNING_PRIORITY) + 16);
+			InitEvent.6										:= TRUE;
+		ELSIF SetClass = TC2_SYSTEM.TCEVENTCLASS_ALARM 		
+		THEN
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_PRIORITY) + 16);
+			InitEvent.7										:= TRUE;
+		ELSIF SetClass = TC2_SYSTEM.TCEVENTCLASS_PARAMERROR 	
+		THEN
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_PARAMERROR_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_PARAMERROR_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_PARAMERROR_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_PARAMERROR_PRIORITY) + 16);
+			InitEvent.8										:= TRUE;
+		ELSE 
+			EventConfig.Class								:= SetClass;
+			EventConfig.bQuitRequired						:= PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_QUIT_REQUIRED;
+			InitEvent.15									:= PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_QUIT_REQUIRED;
+			EventConfig.Prio								:= PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_PRIORITY;
+			InitEvent										:= SETBIT32(InitEvent,TO_SINT(PARAM.EVENT_HANDLING_CONFIG.CLASS_ALARM_PRIORITY) + 16);
+			InitEvent.7										:= TRUE;
+		END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isClassActive" Id="{951b07c0-631a-4be1-a89c-2a9caead546f}">
+      <Declaration><![CDATA[METHOD PUBLIC isClassActive : BOOL  //Return value = TRUE if EventClass is currently active
+VAR_INPUT
+	TcEventClass											:	E_TcEventClass;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TcEventClass < MIN_CLASS OR TcEventClass > MAX_CLASS
+THEN
+	IsClassActive											:= TRUE;
+ELSE
+	IsClassActive											:= ClassInfo[TcEventClass] <> 0;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isConfirmReqActive" Id="{de9400da-674b-425c-96ef-b5ece9e03208}">
+      <Declaration><![CDATA[PROPERTY PUBLIC isConfirmReqActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8573f42c-bd18-4bd2-97b0-69ffc6025aaa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isConfirmReqActive											:= NoOfQuitRequiredEvents <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="isPriorityActive" Id="{a1342ed9-59ac-45f4-b1c6-91f79ac8fdd8}">
+      <Declaration><![CDATA[METHOD PUBLIC isPriorityActive : BOOL //Return value = TRUE if priority is active
+VAR_INPUT
+	IN														:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF IN < MIN_PRIORITY OR IN > MAX_PRIORITY
+THEN
+	IsPriorityActive										:= TRUE;
+ELSE
+	IsPriorityActive										:= PriorityInfo[In] <> 0;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EventHandlingStatisticInfo">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classAlarmActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classHintActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classInstructionActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classMaintenanceActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classMessageActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classNoneActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classParamErrorActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classStateinfoActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.classWarningActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.clear">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.countIn">
+      <LineId Id="45" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="3" Count="26" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.countOut">
+      <LineId Id="47" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="3" Count="25" />
+      <LineId Id="43" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.initEvent">
+      <LineId Id="3" Count="81" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.isClassActive">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.isConfirmReqActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingStatisticInfo.isPriorityActive">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

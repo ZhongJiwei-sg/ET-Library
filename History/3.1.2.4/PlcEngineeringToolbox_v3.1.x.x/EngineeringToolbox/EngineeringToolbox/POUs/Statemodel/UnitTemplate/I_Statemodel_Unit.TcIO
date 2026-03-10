@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_Statemodel_Unit" Id="{0d0bdbaa-f45c-4a38-92c7-cb6712a67538}">
+    <Declaration><![CDATA[INTERFACE I_Statemodel_Unit Extends __System.IQueryInterface 
+]]></Declaration>
+    <Property Name="rUnit" Id="{96ea5089-1131-4fc2-aecd-238062c254aa}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public rUnit : REFERENCE TO Statemodel]]></Declaration>
+      <Get Name="Get" Id="{4b90b070-040e-4d63-853b-d009745eabd8}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

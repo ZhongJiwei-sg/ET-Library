@@ -1,0 +1,134 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="NciEventHandling" Id="{434a7952-5653-4d32-868d-29485c60e7f4}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EventHandlingGrp10 instance used inside
+FUNCTION_BLOCK NciEventHandling
+VAR CONSTANT
+END_VAR                     								
+VAR_INPUT                   								
+	Enable													:	BOOL := TRUE; (* Show alarm message, warnings or hint. always reported !!! *)
+	ConfirmTrig												:	BOOL := FALSE;
+	SourceId												:	UDINT := 101200; //TwinCat-NCI channel default multisource Id + Channel id
+	ErrorId													:	UDINT := 0;
+	Name													:	STRING(30) := '';
+	rNci													:	REFERENCE TO NCI_REF := 0;
+END_VAR
+VAR_OUTPUT
+{attribute 'displaymode':='binary'}
+	Status													:	DWORD;
+	NoOfActiveEvents										:	INT;
+END_VAR
+VAR
+(* Zwischenspeicher ***********************************************)
+	QuitInternal 											: BOOL;
+
+(* Timer **********************************************************)
+
+(* Trigger ********************************************************)
+
+(* Bausteine ******************************************************)
+	Event													:	EventHandlingGrp10 := (
+																	AutoConfirm			:= FALSE, 
+																	SetClass 			:= TC2_SYSTEM.TCEVENTCLASS_ALARM );
+	ChnEvent												:	NciChnEventHandling;
+
+(* Dummy Speicher *************************************************)
+	i														:	INT ;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Error message NCI channel to EventLogger 	V1.0	DS	*)
+(***********************************************************)
+
+(* Sequence **************************************************************)
+IF __ISVALIDREF(rNci) 
+THEN
+	(* get Quit signal **************************************************)
+	IF ConfirmTrig 
+	THEN 
+		QuitInternal 										:= TRUE; 
+	END_IF (* set false see below *)
+
+(* Event Logger Meldungen *****************************************************)
+	Event.no[1].Flag 										:= rNci.IsEStopRequested;
+	Event.no[2].Flag 										:= rNci.IsFeedFromBackupList;   
+	Event.no[3].Flag 										:= rNci.IsMovingBackward;   
+	
+(*
+	Event.no[4].Flag 										:= FALSE;
+	Event.no[5].Flag 										:= FALSE;
+	Event.no[6].Flag 										:= FALSE;
+	Event.no[7].Flag 										:= FALSE;
+	Event.no[8].Flag 										:= FALSE;
+	Event.no[9].Flag 										:= FALSE;
+	Event.no[10].Flag 										:= FALSE;
+*)
+(* workl Event Ctrl *************************************************)
+	IF Event.no[1].Text2 <> Name OR Event.no[1].Text2 <> ''
+	THEN
+		//Init EventClass
+		Event.no[1].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_HINT;
+		Event.no[2].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[3].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+
+		(* Init Name *)
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+			Event.no[i].Text2								:= SEL(LEN(name)>1,CONCAT('Channel id:',DWORD_TO_STRING(rNci.NciToPlc.ChnId)),name);
+		END_FOR
+	END_IF
+
+	Event(
+		ConfirmTrig := ConfirmTrig,
+		Disable		:= NOT Enable,
+		SourceId	:= SourceId + rNci.NciToPlc.ChnId,
+		Status	 	=> );	
+
+(* Send ErrorId Message Text **********************************)
+	ChnEvent(
+		ConfirmTrig	:= NOT Enable OR QuitInternal OR ErrorId = 0 AND ChnEvent.State <> 0,
+		Name		:= name,
+		ChannelId	:= rNci.NciToPlc.ChnId,
+		SourceId	:= Event.SourceId,
+		Flag		:= ErrorId > 0 AND Enable,
+		ErrorID		:= ErrorId,
+		State		=> );
+
+(* EventStatus *************************************************)
+	Status													:= ChnEvent.Status OR Event.Status;
+	NoOfActiveEvents										:= Event.NoOfActiveEvents + SEL(ChnEvent.Status.31 , 0, 1);
+
+(* Error unkonw pointer or channel id *****************************)
+ELSE
+	NoOfActiveEvents										:= 0;
+	ChnEvent(Flag := FALSE, ConfirmTrig := ChnEvent.State <> 0);
+	Event(Disable := TRUE, Status =>  ); 
+	Status													:= ChnEvent.Status OR Event.Status;
+END_IF
+
+(* Default reset Quit Internal *******************************)
+	QuitInternal 											:= FALSE;
+
+(**************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="confirm" Id="{190f8159-ea68-4b2d-afb8-e2a4df4d9eb9}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : bool  //Return value = TRUE if execution finished 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[QuitInternal 												:= TRUE;
+confirm														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciEventHandling">
+      <LineId Id="289" Count="70" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciEventHandling.confirm">
+      <LineId Id="13" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

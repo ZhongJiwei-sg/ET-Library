@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0001" Id="{c5a2fa29-622a-4452-990a-43be5643069c}">
+    <Declaration><![CDATA[TYPE AX5000_S_0001 :
+STRUCT
+	Switching_frequency_of_the_IGBT_module:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

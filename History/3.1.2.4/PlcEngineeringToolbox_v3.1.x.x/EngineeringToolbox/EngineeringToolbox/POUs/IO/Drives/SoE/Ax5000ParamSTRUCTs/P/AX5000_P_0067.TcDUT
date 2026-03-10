@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0067" Id="{8083d0ec-13b0-47c7-8234-b726f8128432}">
+    <Declaration><![CDATA[TYPE AX5000_P_0067 :
+STRUCT
+	Motor_winding_dielektric_strength:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

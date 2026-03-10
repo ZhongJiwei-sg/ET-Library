@@ -1,0 +1,255 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="BlockEconomySmart" Id="{1c89a717-627a-4b09-8542-874899511f32}" SpecialFunc="None">
+    <Declaration><![CDATA[//Block Economy Smart 
+//FB is able to control and read all values from Block Ecomemy Smart Fuse
+{attribute 'no_check'}
+FUNCTION_BLOCK BlockEconomySmart
+VAR CONSTANT 										
+	MIN_DATA												: INT := 0;
+	MAX_DATA												: INT := 96;
+END_VAR
+VAR_OUTPUT CONSTANT
+	MIN_CHANNEL												: INT := 1;
+	MAX_CHANNEL												: INT := 8;
+	STATUS_ON												: BYTE := 0;
+	STATUS_OFF												: BYTE := 1;
+	STATUS_TRIP												: BYTE := 2;
+	STATUS_OVERCURRENT										: BYTE := 3;
+END_VAR                         							
+VAR_INPUT                       							
+	Enable													: BOOL := TRUE; //Enable communication 
+	Force													: ARRAY[MIN_CHANNEL..MAX_CHANNEL] OF BOOL; 	// 	simulates channel
+	Control													: ARRAY[MIN_CHANNEL..MAX_CHANNEL] OF BOOL; 	// 	Enable/Disable channel 
+	SetCtrl													: BOOL := FALSE;		// 	Write channel control to output (Econemy Smart Fuse)
+	ResetTrig												: BOOL := FALSE;		// 	Reset tripped fuses/channels
+	ReadSetValues											: BOOL := FALSE;		// 	Read trip set value of all cannels
+	ReadChecksum											: BOOL := FALSE;		// 	Read checksumm
+	ExtProtocolSampleingDivider								: UINT := 0;			//  0 = read only short protocol / >0 = read long protocol every n cycles 					
+END_VAR
+VAR_OUTPUT
+	Voltage													: LREAL;					// [V] actual voltage
+	Current													: ARRAY[MIN_CHANNEL..MAX_CHANNEL] OF LREAL;	// [A] actual cannel current[1-8]
+	Status													: ARRAY[MIN_CHANNEL..MAX_CHANNEL] OF BYTE;	// Fuse status
+	FuseTripped												: BOOL := FALSE;		// min 1 Fuse has tripped
+	UpdateCycle												: UINT := 0;			// update Cycle counter
+	Busy													: BOOL; 				// 
+	ErrorCom												: BOOL;					// 				
+END_VAR
+VAR 
+	In												AT%I*	: BOOL;
+	Out												AT%Q*	: BOOL;
+END_VAR
+VAR
+//local cache ************************************************************************************
+	State													: INT := -1;
+	CycleTime												: LREAL; // [ms] Cycle Time of PLC Task
+	_BaseClock												: INT := 100; // MIN: 70 MAX: 200
+	CurrentCycles											: UDINT;
+	CyclePerTick											: UDINT;
+	_InternReset											: BOOL;
+
+	BitIdx,RecBits											: INT;
+	SendData												: ARRAY[MIN_DATA..MAX_DATA] OF BOOL;
+	ReceiveBits												: ARRAY[MIN_DATA..MAX_DATA] OF BOOL;
+	ReceiveBytes											: ARRAY[MIN_DATA..MAX_DATA/8] OF BYTE;
+	
+	{attribute 'displaymode':='binary'}
+	Temp 													: BYTE;		
+
+
+				
+//trigger *********************************************************************************
+	
+//timer ***********************************************************************************
+	Delay													: TON;
+	
+//instances ***********************************************************************************             								
+	GETCURTASKINDEX											: GETCURTASKINDEX;
+
+
+//Dummys ****************************************************************************************
+	i,j														: INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Block Economy Smart communication 					*)
+	(********************************************************)
+
+(* Initiat reset of channel ***********************************************)
+	IF ResetTrig THEN reset();	END_IF
+
+(* State machine to read and write data ************************************)
+	CASE State OF
+	-1: // init
+		GETCURTASKINDEX();
+		CycleTime 											:= TwinCAT_SystemInfoVarList._TaskInfo[GETCURTASKINDEX.index].CycleTime / 10_000;
+		IF CycleTime > 0 THEN           						
+			CyclePerTick									:= LREAL_TO_UDINT(_BaseClock / CycleTime);	
+			CyclePerTick									:= CyclePerTick + (CyclePerTick MOD 2);
+			State											:= 0;
+		END_IF                          						
+																
+	0: // idle          
+		IF Enable
+		THEN    	   
+			Busy											:= TRUE; 						
+			FOR i := MIN_CHANNEL TO MAX_CHANNEL DO    									
+				SendData[i]									:= Control[9-i];
+			END_FOR                 						
+			SendData[9]										:= SetCtrl;			    	
+			SendData[10]									:= extProtocolSampleingDivider <> 0
+																AND(	
+																(UpdateCycle MOD extProtocolSampleingDivider) = 0
+																OR UpdateCycle = 0)
+																OR ReadSetValues;
+			SendData[11]									:= ReadSetValues;
+			SendData[12]									:= FALSE;
+			SendData[13]									:= FALSE;
+			SendData[14]									:= ReadChecksum AND NOT SetCtrl;
+			BitIdx											:= 0;		
+			State											:= SEL(_InternReset, 10, 5); // Reset tripped if flag is true
+			RecBits											:= SEL( SendData[10], 16, 88) 	// short / long
+															+  SEL( ReadChecksum, 0, 8);	// checksum on/off
+			ReadSetValues 									:= FALSE;	
+			SetCtrl 										:= FALSE;														
+		ELSE
+			Busy											:= FALSE;
+			Out												:= FALSE;
+			State											:= 0;
+			Voltage											:= 0.0;
+			MEMSET(ADR(Current),0,SIZEOF(Current));			
+			MEMSET(ADR(Status),0,SIZEOF(Status));	        
+			FuseTripped										:= FALSE;
+			UpdateCycle										:= 0;		
+		END_IF
+																
+	5:	//reset triped          								
+		Out													:= TRUE;
+		Delay(IN:= NOT Delay.Q, PT := T#600MS);             
+															
+		IF Delay.Q THEN             						
+			_InternReset									:= FALSE;
+			Delay(IN := FALSE);                             
+			State 											:= 20;
+		END_IF                  							
+															
+	10: // receive	            							
+		Out													:= SendData[BitIdx] XOR CurrentCycles <= CyclePerTick / 2;		
+															
+		IF CurrentCycles >= CyclePerTick					 
+		THEN                            	                
+			ReceiveBits[BitIdx]								:= In;
+			CurrentCycles									:= 0;
+			BitIdx											:= BitIdx + 1;
+			IF BitIdx > RecBits
+			THEN
+				Out											:= FALSE;
+				State										:= 20;
+			END_IF                  	
+		ELSE	                    	
+			CurrentCycles									:= CurrentCycles + 1;
+		END_IF
+		
+	20:	 // interpret Channels
+		Delay( IN:= NOT Delay.Q AND NOT IN, PT := TO_TIME(_BaseClock*3));
+		IF Delay.Q THEN		// stop Bit		
+			Delay(IN := FALSE);
+			
+			// Cannel Status
+			FOR i := MIN_CHANNEL TO MAX_CHANNEL DO	
+				IF Force[i] THEN
+					Status[i]								:= STATUS_ON;				
+				ELSIF ReceiveBits[9-i] AND ReceiveBits[17-i] THEN   
+					Status[i]								:= STATUS_OVERCURRENT;	
+				ELSIF ReceiveBits[9-i] THEN                     
+					Status[i]								:= STATUS_ON;
+				ELSIF ReceiveBits[17-i] THEN                    
+					Status[i]								:= STATUS_TRIP;
+				ELSE                                        
+					Status[i]								:= STATUS_OFF;
+				END_IF                                      
+			END_FOR		                                    
+		      
+			//  interpret Checksum
+			FOR i := MIN_DATA TO MAX_DATA/8 DO
+				ReceiveBytes[0+i].0 						:= ReceiveBits[8*i+0];
+				ReceiveBytes[0+i].1 						:= ReceiveBits[8*i+1];
+				ReceiveBytes[0+i].2 						:= ReceiveBits[8*i+2];
+				ReceiveBytes[0+i].3 						:= ReceiveBits[8*i+3];
+				ReceiveBytes[0+i].4 						:= ReceiveBits[8*i+4];
+				ReceiveBytes[0+i].5 						:= ReceiveBits[8*i+5];
+				ReceiveBytes[0+i].6 						:= ReceiveBits[8*i+6];
+				ReceiveBytes[0+i].7 						:= ReceiveBits[8*i+7];
+			END_FOR
+			ErrorCom := 	SendData[14]
+						AND (	( ReceiveBytes[1] XOR ReceiveBytes[2]) = ReceiveBytes[3] AND BitIdx < 30
+							OR 	((ReceiveBytes[1] XOR ReceiveBytes[2] XOR ReceiveBytes[3] XOR ReceiveBytes[4] XOR ReceiveBytes[5] XOR ReceiveBytes[6] XOR
+						 		  ReceiveBytes[7] XOR ReceiveBytes[8] XOR ReceiveBytes[9] XOR ReceiveBytes[10] XOR ReceiveBytes[11]) = ReceiveBytes[12] AND BitIdx > 30)
+							 );
+                                              
+			// set collective triped bit                    
+			FuseTripped										:= FALSE;
+			FOR i := MIN_CHANNEL TO MAX_CHANNEL DO          
+				IF Status[i] = STATUS_TRIP THEN             
+					FuseTripped								:= TRUE;
+					EXIT;
+				END_IF
+			END_FOR
+			
+			// interpret extended protoccol
+			IF 	SendData[10] 
+				OR 	SendData[11] 
+			THEN			
+				FOR i := MIN_CHANNEL TO MAX_CHANNEL DO // Voltage
+					Temp									:= SHL(Temp,1) OR TO_BYTE(ReceiveBits[16+i]);
+				END_FOR		  
+				Voltage										:= Temp/16.0 + 16;
+				FOR j := MIN_CHANNEL TO MAX_CHANNEL DO // Current[1-8]
+					FOR i := MIN_CHANNEL TO MAX_CHANNEL DO    // bit shifting
+						Temp								:= SHL(Temp,1) OR TO_BYTE(ReceiveBits[24+((j-1)*8)+i]);
+					END_FOR		  
+					Current[j]								:= Temp/16.0;
+				END_FOR
+			END_IF          
+				
+			UpdateCycle 									:= UpdateCycle + 1; 
+			State 											:= 0;
+		END_IF	
+	END_CASE
+	
+(*****************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="baseClock" Id="{5818c14b-4c38-44bc-8e0b-8d076aa6a215}">
+      <Declaration><![CDATA[PROPERTY PUBLIC baseClock : INT // MIN: 70 MAX: 200]]></Declaration>
+      <Get Name="Get" Id="{e95b137a-971c-481f-aef8-22e6505027fe}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[BaseClock := _BaseClock; ]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ef19d419-ad08-4b04-ac36-daac76539d10}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_BaseClock := LIMIT(70, BaseClock, 200);
+State := -1;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="reset" Id="{18c58bb7-d618-4ecf-9206-ba366ab610bb}">
+      <Declaration><![CDATA[METHOD reset : BOOL //Resetting tripped channel / Return TRUE as lons as FuseTripped = TRUE
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_InternReset													:= FuseTripped;
+reset															:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

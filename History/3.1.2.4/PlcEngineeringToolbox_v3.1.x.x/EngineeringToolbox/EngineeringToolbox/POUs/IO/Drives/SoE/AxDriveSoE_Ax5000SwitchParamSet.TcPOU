@@ -1,0 +1,305 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="AxDriveSoE_Ax5000SwitchParamSet" Id="{4b9a4b4d-ac4b-4988-b06b-6bead11cc4f7}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxDriveSoE_Ax5000SwitchParamSet EXTENDS FbBase
+VAR_INPUT
+	rAxis													:	REFERENCE TO AXIS_REF := 0; 	// Axis Ref
+	TimeOut													:	TIME := DEFAULT_ADS_TIMEOUT;	// Timeout time
+	NewParamSet												:	INT;							// Value for new parameterset
+END_VAR
+VAR_IN_OUT	
+(* important for function *)	
+	AdsAddr													:	AMSADDR;						// AdsAddr of AX5000
+	Channel													:	USINT;                          // Drive channel number
+END_VAR
+VAR_OUTPUT
+	ErrorText												:	T_MaxString;					// Error Text
+	ActParamSet												:	INT := -1; 						// Value of active parameter set
+END_VAR
+VAR
+(* Memory **********************************************************)
+	StartSwitchParamSet										:	INT := 0;
+	
+	CountError												:	USINT;
+(* Timer ***********************************************************)
+	TimerWait												:	TON;
+	TimerTimeOut											:	TON;
+	
+(* Functionsblocks *************************************************)
+
+	SoEWrite												:	FB_SoEWrite_ByDriveRef	:= (tTimeOut := DEFAULT_ADS_TIMEOUT);
+	SoERead													:	FB_SoERead_ByDriveRef	:= (tTimeOut := DEFAULT_ADS_TIMEOUT);
+(*******************************************************************)
+END_VAR
+VAR CONSTANT
+	ST_IDLE													:	INT := 0;
+	ST_REFRESH												:	INT := 10;
+	ST_PRESELECT											:	INT := 100;
+	ST_DISABLED												:	INT := 110;
+	ST_RESETEXECUTE											:	INT := 120;
+	ST_SETPARAM												:	INT := 130;
+	ST_WAIT													:	INT := 140;
+	ST_ERROR												:	INT := 998;
+	ST_RESET												:	INT := 999;
+	
+	ERR_REFRESH												:	UDINT := 1;
+	ERR_PRESELECT											:	UDINT := 2;
+	ERR_TIMEOUT_DISABLED									:	UDINT := 3;
+	ERR_RESETEXECUTE										:	UDINT := 4;
+	ERR_EXECUTE												:	UDINT := 5;
+	
+	PT_WAIT_TIME											:	TIME := T#20MS;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* abort function-call if the reference is invalid *****************)
+	IF NOT __ISVALIDREF(rAxis) THEN
+		Busy												:= NOT Error;
+		Error												:= TRUE;
+		ErrorId												:= 16#4B30;
+		ErrorText											:= 'Referenz rAxis invalid (0)';
+		RETURN;
+	END_IF
+
+(* Init drive ref **************************************************)
+	IF AdsAddr.port <> SoERead.stDriveRef.nSlaveAddr
+	THEN
+		SoERead.stDriveRef.sNetId							:= F_CreateAmsNetId(AdsAddr.netId);
+		SoERead.stDriveRef.nSlaveAddr						:= AdsAddr.port;
+		SoERead.stDriveRef.nDriveNo							:= Channel;
+		
+		SoEWrite.stDriveRef									:= SoERead.stDriveRef;
+	END_IF
+(* Trigger Execute *************************************************)
+	rtExecute(CLK := Execute);
+	
+(* switch parameter set ********************************************)
+	CASE State OF
+	ST_IDLE:			// wait for command
+	(* Get actual parameter set after restart *)
+		IF ActParamSet < 0 
+		THEN
+			State											:= ST_REFRESH;
+	(* Start switch parameter set *)
+		ELSIF rtExecute.Q
+		THEN
+			setNewParam(NewParamSet);
+		ELSIF NOT Execute
+		THEN
+			Error											:= FALSE;
+			Done											:= FALSE;
+			Busy											:= TRUE;
+			ErrorId											:= 0;
+			ErrorTExt										:= '';
+		END_IF
+		
+	ST_REFRESH: 		// Refresh ActParamSet Variable
+		IF NOT SoERead.bBusy
+			AND SoERead.bExecute
+		THEN
+			State											:= SEL(SoERead.bError, ST_IDLE, ST_ERROR);
+			Done											:= State = ST_IDLE;
+			Error											:= State = ST_ERROR;	
+			ErrorID											:= SEL(SoERead.bError, 0, ERR_REFRESH);
+			ErrorText										:= SEL(SoERead.bError, '', 'Fehler beim Aktualisieren des aktuellen Parametersatzes');
+		END_IF
+		
+		SoERead(
+			stDriveRef	:= ,  //See init for drive ref
+			nIdn		:= S_0_IDN + 254,
+			nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+			pDstBuf		:= ADR(ActParamSet),
+			cbBufLen	:= SIZEOF(ActParamSet),
+			bExecute	:= State = ST_REFRESH,
+			tTimeout	:= ,
+			bBusy		=> ,
+			bError		=> ,
+			iAdsErrId	=> ,
+			iSercosErrId=> ,
+			dwAttribute	=> );
+			
+		ST_PRESELECT:		// Set New param value in drive preselection
+			IF NewParamSet = ActParamSet
+			THEN
+				State										:= ST_IDLE;
+			ELSIF NOT SoEWrite.bBusy
+				AND SoEWrite.bExecute
+			THEN
+				State										:= SEL(SoEWrite.bError, ST_DISABLED, ST_ERROR);
+				ErrorID										:= SEL(SoERead.bError, 0, ERR_PRESELECT);
+				ErrorText									:= SEL(SoERead.bError, '', 'Fehler beim Schreiben der Vorwahl');
+			END_IF
+			
+			SoEWrite(
+				stDriveRef	:= ,  //See init for drive ref
+				nIdn		:= S_0_IDN + 217,
+				nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+				pSrcBuf		:= ADR(NewParamSet),
+				cbBufLen	:= SIZEOF(NewParamSet),
+				bExecute	:= State = ST_PRESELECT,
+				tTimeout	:= ,
+				bBusy		=> ,
+				bError		=> ,
+				iAdsErrId	=> ,
+				iSercosErrId=> );
+				
+		ST_DISABLED:		// check if axis is disabled
+			TimerTimeOut(IN := NOT rAxis.Status.Disabled, PT := TimeOut);
+			IF TimerTimeOut.Q THEN
+				TimerTimeOut(IN := FALSE);
+				State											:= ST_ERROR;
+				ErrorID											:= SEL(SoERead.bError, 0, ERR_TIMEOUT_DISABLED);
+				ErrorText										:= SEL(SoERead.bError, '', 'Achse ist nicht deaktiviert');
+			ELSIF rAxis.Status.Disabled THEN
+				TimerTimeOut(IN := FALSE);
+				State											:= ST_RESETEXECUTE;
+			END_IF
+		
+		ST_RESETEXECUTE:	// reset the execute command in drive	
+			StartSwitchParamSet									:= 0;
+			IF NOT SoEWrite.bBusy
+				AND SoEWrite.bExecute
+			THEN
+				State											:= SEL(SoEWrite.bError, ST_SETPARAM, ST_ERROR);
+				ErrorID											:= SEL(SoERead.bError, 0, ERR_RESETEXECUTE);
+				ErrorText										:= SEL(SoERead.bError, '', 'Fehler beim Zurücksetzen des Ausführungskomamando');
+			END_IF
+			SoEWrite(
+				stDriveRef	:= ,  //See init for drive ref
+				nIdn		:= S_0_IDN + 216,
+				nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+				pSrcBuf		:= ADR(StartSwitchParamSet),
+				cbBufLen	:= SIZEOF(StartSwitchParamSet),
+				bExecute	:= State = ST_RESETEXECUTE,
+				tTimeout	:= ,
+				bBusy		=> ,
+				bError		=> ,
+				iAdsErrId	=> ,
+				iSercosErrId=> );		
+				
+		ST_SETPARAM:		// Execute switch parameter set
+			StartSwitchParamSet								:= 3;
+			IF NOT SoEWrite.bBusy
+				AND SoEWrite.bExecute
+			THEN
+				State										:= SEL(SoEWrite.bError, ST_WAIT, ST_ERROR);
+				ErrorID										:= SEL(SoERead.bError, 0, ERR_EXECUTE);
+				ErrorText									:= SEL(SoERead.bError, '', 'Fehler beim Setzen des Ausführungskommandos');
+			END_IF
+			SoEWrite(
+				stDriveRef	:= ,  //See init for drive ref
+				nIdn		:= S_0_IDN + 216,
+				nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+				pSrcBuf		:= ADR(StartSwitchParamSet),
+				cbBufLen	:= SIZEOF(StartSwitchParamSet),
+				bExecute	:= State = ST_SETPARAM,
+				tTimeout	:= ,
+				bBusy		=> ,
+				bError		=> ,
+				iAdsErrId	=> ,
+				iSercosErrId=> );
+				
+		ST_WAIT:			// wait a short time while the drive works with the command
+			TimerWait(IN := TRUE, pt := PT_WAIT_TIME);
+			IF TimerWait.Q THEN
+				TimerWait(IN := FALSE);
+				State										:= ST_REFRESH;
+			END_IF
+			
+		ST_ERROR:			// wait till Error is quit
+			IF TRUE
+			THEN
+				State										:= ST_RESET;
+			END_IF
+			
+		ST_RESET:			// Reset Error			
+			State											:= ST_IDLE;
+			SoEWrite(
+				stDriveRef	:= ,  //See init for drive ref
+				nIdn		:= S_0_IDN + 216,
+				nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+				pSrcBuf		:= ADR(StartSwitchParamSet),
+				cbBufLen	:= SIZEOF(StartSwitchParamSet),
+				bExecute	:= FALSE,
+				tTimeout	:= ,
+				bBusy		=> ,
+				bError		=> ,
+				iAdsErrId	=> ,
+				iSercosErrId=> );
+			SoERead(
+				stDriveRef	:= ,  //See init for drive ref
+				nIdn		:= S_0_IDN + 254,
+				nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+				pDstBuf		:= ADR(ActParamSet),
+				cbBufLen	:= SIZEOF(ActParamSet),
+				bExecute	:= FALSE,
+				tTimeout	:= ,
+				bBusy		=> ,
+				bError		=> ,
+				iAdsErrId	=> ,
+				iSercosErrId=> ,
+				dwAttribute	=> );
+	END_CASE
+	Busy													:= State <> ST_IDLE ;
+(*******************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="setNewParam" Id="{a242a9ae-a494-4817-bc38-77670d1652da}">
+      <Declaration><![CDATA[METHOD setNewParam : BOOL	// Result = Busy
+VAR_INPUT
+	ParamNo					:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+	IF ParamNo <> ActParamSet
+		AND State = ST_IDLE
+	THEN
+		Error											:= FALSE;
+		Done											:= FALSE;
+		Busy											:= TRUE;
+		ErrorId											:= 0;
+		ErrorTExt										:= '';
+		NewParamSet 									:= ParamNo;
+		TimerWait(IN := FALSE);
+		TimerTimeOut(IN := FALSE);
+		State											:= ST_PRESELECT;
+	END_IF
+	
+	SetNewParam											:= State <> ST_IDLE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="AxDriveSoE_Ax5000SwitchParamSet">
+      <LineId Id="3" Count="25" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="262" Count="1" />
+      <LineId Id="265" Count="3" />
+      <LineId Id="264" Count="0" />
+      <LineId Id="37" Count="6" />
+      <LineId Id="261" Count="0" />
+      <LineId Id="259" Count="0" />
+      <LineId Id="44" Count="18" />
+      <LineId Id="253" Count="1" />
+      <LineId Id="256" Count="0" />
+      <LineId Id="255" Count="0" />
+      <LineId Id="64" Count="85" />
+      <LineId Id="152" Count="3" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="161" Count="25" />
+      <LineId Id="188" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000SwitchParamSet.setNewParam">
+      <LineId Id="3" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="18" Count="1" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

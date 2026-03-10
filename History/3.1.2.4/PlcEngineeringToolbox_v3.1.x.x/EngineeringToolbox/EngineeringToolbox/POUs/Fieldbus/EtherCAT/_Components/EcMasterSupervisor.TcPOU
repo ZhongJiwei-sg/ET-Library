@@ -1,0 +1,453 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="EcMasterSupervisor" Id="{a490373e-4190-455c-bc7c-208e41b416cf}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+// Set state of EtherCAT Master(ReqState <> 0) or read state and frame statistic 
+// The FB will automatically perform a device reset if the requested state cannot be reached within the TIMEOUT_SET_STATE period
+// In addition via options is possible to clear the frame statistic while set or read the Master state
+FUNCTION_BLOCK EcMasterSupervisor EXTENDS FbBase
+VAR CONSTANT
+	TIMEOUT_SET_STATE										:	TIME := T#15S;
+END_VAR
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}
+	OPTION_CLEAR_CRC_ERROR_COUNTER							:	BYTE := 2#0000_0001; //delete the CRC error counters of all EtherCAT slaves
+{attribute 'displaymode':='binary'}
+	OPTION_CLEAR_LOST_FRAMES_COUNTER						:	BYTE := 2#0000_0010; //delete the CRC error counters of all EtherCAT slaves.
+{attribute 'displaymode':='binary'}	
+	OPTION_CLEAR_TXRX_ERROR_COUNTER							:	BYTE := 2#0000_0100; //delete the error counters of the miniport driver of the network card
+{attribute 'displaymode':='binary'}	
+	OPTION_FORCE_DEVICE_RESET								:	BYTE := 2#1000_0000; //Force to execute a device reset prior to set state
+END_VAR
+VAR_INPUT
+	AmsNetId												:	T_AmsNetId;	
+	DevId													:	WORD;		//Id of mentioned device
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 0; //Select	which error counter should be deleted 
+{attribute 'displaymode':='hex'}
+	ReqState												:	WORD := 0; (* 	Requested EtherCAT state 
+																				EC_DEVICE_STATE_INIT		:BYTE 	:=16#01;
+																				EC_DEVICE_STATE_PREOP		:BYTE 	:=16#02;
+																				EC_DEVICE_STATE_BOOTSTRAP	:BYTE 	:=16#03;
+																				EC_DEVICE_STATE_SAFEOP		:BYTE 	:=16#04;
+																				EC_DEVICE_STATE_OP			:BYTE 	:=16#08; *)
+
+END_VAR                     							
+VAR_OUTPUT                  										
+	ReqStateOK												:	BOOL;	//Requested EtherCAT state OK
+{attribute 'displaymode':='hex'}
+	CurrState												:	WORD;	//Shows current EtherCAT state
+	StateText												:	STRING;	//EtherCAT State as text
+	DevResetDone											:	BOOL;	//Device was reseted
+//Frames statistic
+    LostFrames 												: 	UDINT; //Current number of lost or invalid cyclic frames
+    FramesPerSecond 										: 	LREAL; //Current number of cyclic frames per second
+    LostQueuedFrames 										: 	UDINT; //Current number of lost or invalid queued (acyclic) frames
+    QueuedFramesPerSecond 									: 	LREAL; //Returns the current number of queued (acyclic) frames per second
+	
+	ErrorText												:	STRING;
+END_VAR                     								
+VAR                         								
+	ErrCntreset													:	INT;
+	TON_TimeoutSetStatus									:	TON;
+	TON_GetStateTrig										:	TON;
+	MemReqState												:	WORD;
+
+	SetMasterState											:	FB_EcSetMasterState := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	GetMasterState											:	FB_EcGetMasterState := (tTimeout := DEFAULT_ADS_TIMEOUT);
+	ReadMasterFrameStatistic								:	FB_EcMasterFrameStatistic:= (tTimeout := DEFAULT_ADS_TIMEOUT);
+	FrameStatisticClearCRC									:	FB_EcMasterFrameStatisticClearCRC:= (tTimeout := DEFAULT_ADS_TIMEOUT);
+	FrameStatisticClearFrames								:	FB_EcMasterFrameStatisticClearFrames:= (tTimeout := DEFAULT_ADS_TIMEOUT);
+	FrameStatisticClearTxRxErr								:	FB_EcMasterFrameStatisticClearTxRxErr:= (tTimeout := DEFAULT_ADS_TIMEOUT);
+	IoDevreset												:	IOF_DeviceReset := (TMOUT := DEFAULT_ADS_TIMEOUT);
+END_VAR                     	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read or set (ReqState <> 0) EtherCAT Master State			*)
+	(****************************************************************)
+
+(* Process ******************************************************)
+	rtExecute(CLK := Execute);
+
+	CASE state OF
+	(* Cyclic reading of state ***********************************)
+	0:
+		Busy 												:= FALSE;
+                                        					
+		IF rtExecute.Q THEN            					
+			Busy 											:= TRUE;
+			Done 											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			Errortext										:= '';
+			DevResetDone									:= FALSE;
+			CurrState										:= 0;
+			ReqStateOK										:= FALSE;
+			StateText										:= '';
+			GetMasterState(bExecute := FALSE,sNetId	:= AmsNetId);
+			SetMasterState(bExecute := FALSE,sNetId	:= AmsNetId );
+			ReadMasterFrameStatistic(bExecute := FALSE,sNetId	:= AmsNetId );
+			FrameStatisticClearCRC(bExecute := FALSE,sNetId	:= AmsNetId );
+			FrameStatisticClearFrames(bExecute := FALSE,sNetId	:= AmsNetId );
+			FrameStatisticClearTxRxErr(bExecute := FALSE,sNetId	:= AmsNetId );
+			IoDevReset(RESET := FALSE);
+			TON_TimeoutSetStatus(IN := FALSE);
+
+			IF ReqState <> 0 
+				AND (ReqState <> CurrState OR ReqState <> MemReqState)
+			THEN
+				SetMasterState( bExecute	:= TRUE, reqState	:= ReqState);
+				MemReqState 								:= ReqState;
+				state 										:= SEL(Options.7, 10, 11) ; //Start with reset device
+			ELSE
+				(* Start Read Status *)
+				GetMasterState(bExecute	:= TRUE);
+				state 										:= 1;
+			END_IF
+		ELSIF NOT Execute THEN
+			Done 											:= FALSE;
+			DevResetDone 									:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorText										:= '';
+		END_IF                      					
+
+	(* Read state ******************************************)
+	1:
+		GetMasterState(bExecute := TRUE);
+		IF NOT GetMasterState.bBusy
+		THEN
+			IF GetMasterState.bError THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= GetMasterState.nErrId;
+				ErrorText									:= CONCAT('FB_EcGetMasterState Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSE                
+				CurrState									:= GetMasterState.state;
+				ReqStateOK									:= CurrState = ReqState OR ReqState = 0;
+				StateText									:= F_ConvStateToString(CurrState);							
+				state 										:= state + 1;
+			END_IF
+		END_IF
+		
+	(* read frame statistic ******************************************)
+	2:
+		ReadMasterFrameStatistic(bExecute := TRUE);
+		IF NOT ReadMasterFrameStatistic.bBusy
+		THEN
+			IF ReadMasterFrameStatistic.bError THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= ReadMasterFrameStatistic.nErrId;
+				ErrorText									:= CONCAT('FB_EcMasterFrameStatistic Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSE                
+				LostFrames 									:= ReadMasterFrameStatistic.nLostFrames;
+				FramesPerSecond 							:= ReadMasterFrameStatistic.fFramesPerSecond;
+				LostQueuedFrames 							:= ReadMasterFrameStatistic.nLostQueuedFrames;
+				QueuedFramesPerSecond 						:= ReadMasterFrameStatistic.fQueuedFramesPerSecond;		
+				state 										:= 20;
+			END_IF
+		END_IF
+		
+	(* Set state *****************************************)
+	10:
+		TON_TimeoutSetStatus(IN := TRUE, PT := TIMEOUT_SET_STATE);
+		SetMasterState(bExecute := TRUE);
+		IF NOT SetMasterState.bBusy
+		THEN
+			IF SetMasterState.bError AND DevResetDone
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= SetMasterState.nErrId;
+				ErrorText									:= CONCAT('FB_EcSetMasterState Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSIF SetMasterState.currState = MemReqState 
+			THEN
+				CurrState									:= SetMasterState.currState;
+				ReqStateOK									:= CurrState = ReqState;
+				StateText									:= F_ConvStateToString(CurrState);			
+				state 										:= 2;
+			ELSIF DevResetDone          					
+			THEN     
+				Busy										:= FALSE;                   					
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_ABORTED;
+				ErrorText									:= 'Device Reset failed - Master state <> ReqState';
+				state 										:= 0;
+			ELSE //Try to reset master 
+				state 										:= state + 1;
+			END_IF                      	
+            SetMasterState(bExecute := FALSE);                            	
+		ELSIF TON_TimeoutSetStatus.Q 
+		THEN
+			IF NOT DevResetDone 
+			THEN (* try to reset master one time  *)
+				state 										:= state + 1;
+				IoDevReset(RESET := FALSE);
+			ELSE
+				Busy										:= FALSE;
+				ErrCntReset 								:= ErrCntReset +1;
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_TIMEOUT;
+				ErrorText									:= CONCAT('FB_EcSetMasterState busy for more then ', TO_STRING(TIMEOUT_SET_STATE));
+				state 										:= 0;
+			END_IF  
+			SetMasterState(bExecute := FALSE);                						
+		END_IF
+
+	11:
+		TON_TimeoutSetStatus(IN := FALSE);
+		state 												:= state + 1;
+
+	(* Reset Device by setting Error State  **********************)
+	12:	
+		IoDevReset(DEVICEID	:= DevId,RESET	:= TRUE );
+		IF NOT IoDevReset.BUSY
+		THEN
+			IF IoDevReset.ERR THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= IoDevReset.ERRID;
+				ErrorText									:= CONCAT('IOF_DeviceReset Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSE //Tr to                         					
+				Error										:= FALSE;
+				ErrorId										:= 0;
+				ErrorText									:= '';
+				DevResetDone 								:= TRUE;
+				TON_TimeoutSetStatus(IN := FALSE);
+				state 										:= 10;
+			END_IF
+		ELSE
+			;
+		END_IF
+		
+	(* Start to clear frame statistic **********************************)
+	20: 
+		FrameStatisticClearCRC(bExecute := Options.0);
+		IF NOT FrameStatisticClearCRC.bBusy
+		THEN
+			IF FrameStatisticClearCRC.bError THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= FrameStatisticClearCRC.nErrId;
+				ErrorText									:= CONCAT('FB_EcMasterFrameStatisticClearCRC Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSE                
+				state 										:= state + 1;
+			END_IF
+		END_IF		
+	
+	21: 
+		FrameStatisticClearFrames(bExecute := Options.1);
+		IF NOT FrameStatisticClearFrames.bBusy
+		THEN
+			IF FrameStatisticClearFrames.bError THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= FrameStatisticClearFrames.nErrId;
+				ErrorText									:= CONCAT('FB_EcMasterFrameStatisticClearFrames Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSE                
+				state 										:= state + 1;
+			END_IF
+		END_IF	
+
+	22: 
+		FrameStatisticClearTxRxErr(bExecute := Options.2);
+		IF NOT FrameStatisticClearTxRxErr.bBusy
+		THEN
+			IF FrameStatisticClearTxRxErr.bError THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= FrameStatisticClearTxRxErr.nErrId;
+				ErrorText									:= CONCAT('FB_EcMasterFrameStatisticClearTxRxErr Id: ',UDINT_TO_STRING(ErrorId));
+				state 										:= 0;
+			ELSE                
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				state 										:= 0;
+			END_IF
+		END_IF	
+		
+	ELSE
+		;
+	END_CASE
+                										
+(*********************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Property Name="optClearCRCErrorCounter" Id="{1ede2a66-83c1-4d6c-81b9-e3541fe34569}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optClearCRCErrorCounter : BOOL]]></Declaration>
+      <Get Name="Get" Id="{badd5d26-a887-4060-b3fb-9d7d01bb722d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optClearCRCErrorCounter := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{49240a00-f721-46a9-8fcd-87bb199a8e8e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optClearCRCErrorCounter;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optClearLostFramesCounter" Id="{3699eb14-11ee-4d71-86ff-08d26c335e8c}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optClearLostFramesCounter : BOOL]]></Declaration>
+      <Get Name="Get" Id="{23b63958-58dc-4b12-bab3-f000317f9264}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optClearLostFramesCounter := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1b461a1f-57a5-48c9-a8bb-ede60e8691e3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optClearLostFramesCounter;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optClearTCRXErrCounter" Id="{7370dc6c-eb9c-4d4b-8ada-c740044a1028}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optClearTCRXErrCounter : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0827d336-5d52-48f2-ad3b-f769842ab0a7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optClearTCRXErrCounter := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{395d7060-eff5-4d04-8ee4-e1281e28519f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.2 := optClearTCRXErrCounter;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optForceDevReset" Id="{51fd8dbe-de84-44c0-a369-96c85c35b432}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optForceDevReset : BOOL]]></Declaration>
+      <Get Name="Get" Id="{71c71ea9-1fb0-4e39-94ea-edf75beb1011}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optForceDevReset := Options.7;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3760c57b-8c28-4fd6-a640-8510e473d2fe}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.7 := optForceDevReset;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="EcMasterSupervisor">
+      <LineId Id="262" Count="17" />
+      <LineId Id="511" Count="0" />
+      <LineId Id="513" Count="0" />
+      <LineId Id="510" Count="0" />
+      <LineId Id="280" Count="1" />
+      <LineId Id="602" Count="3" />
+      <LineId Id="282" Count="3" />
+      <LineId Id="507" Count="0" />
+      <LineId Id="288" Count="0" />
+      <LineId Id="293" Count="0" />
+      <LineId Id="298" Count="3" />
+      <LineId Id="309" Count="12" />
+      <LineId Id="487" Count="0" />
+      <LineId Id="322" Count="0" />
+      <LineId Id="324" Count="1" />
+      <LineId Id="515" Count="0" />
+      <LineId Id="326" Count="4" />
+      <LineId Id="525" Count="1" />
+      <LineId Id="524" Count="0" />
+      <LineId Id="343" Count="1" />
+      <LineId Id="347" Count="0" />
+      <LineId Id="625" Count="0" />
+      <LineId Id="607" Count="11" />
+      <LineId Id="626" Count="2" />
+      <LineId Id="621" Count="2" />
+      <LineId Id="358" Count="0" />
+      <LineId Id="680" Count="0" />
+      <LineId Id="359" Count="4" />
+      <LineId Id="365" Count="0" />
+      <LineId Id="499" Count="1" />
+      <LineId Id="518" Count="0" />
+      <LineId Id="501" Count="2" />
+      <LineId Id="498" Count="0" />
+      <LineId Id="367" Count="1" />
+      <LineId Id="528" Count="1" />
+      <LineId Id="527" Count="0" />
+      <LineId Id="369" Count="0" />
+      <LineId Id="378" Count="1" />
+      <LineId Id="519" Count="0" />
+      <LineId Id="380" Count="3" />
+      <LineId Id="505" Count="1" />
+      <LineId Id="384" Count="8" />
+      <LineId Id="522" Count="0" />
+      <LineId Id="393" Count="5" />
+      <LineId Id="521" Count="0" />
+      <LineId Id="403" Count="0" />
+      <LineId Id="413" Count="0" />
+      <LineId Id="415" Count="0" />
+      <LineId Id="417" Count="4" />
+      <LineId Id="489" Count="0" />
+      <LineId Id="422" Count="0" />
+      <LineId Id="424" Count="1" />
+      <LineId Id="490" Count="0" />
+      <LineId Id="426" Count="5" />
+      <LineId Id="492" Count="0" />
+      <LineId Id="433" Count="7" />
+      <LineId Id="449" Count="0" />
+      <LineId Id="685" Count="45" />
+      <LineId Id="684" Count="0" />
+      <LineId Id="731" Count="0" />
+      <LineId Id="450" Count="2" />
+      <LineId Id="457" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcMasterSupervisor.optClearCRCErrorCounter.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcMasterSupervisor.optClearCRCErrorCounter.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcMasterSupervisor.optClearLostFramesCounter.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcMasterSupervisor.optClearLostFramesCounter.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcMasterSupervisor.optClearTCRXErrCounter.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcMasterSupervisor.optClearTCRXErrCounter.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcMasterSupervisor.optForceDevReset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcMasterSupervisor.optForceDevReset.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

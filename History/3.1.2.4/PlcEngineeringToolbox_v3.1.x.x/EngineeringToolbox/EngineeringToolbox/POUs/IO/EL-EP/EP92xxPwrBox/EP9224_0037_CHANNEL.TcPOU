@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="EP9224_0037_CHANNEL" Id="{61563838-543e-450d-ad18-810cca04c049}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK EP9224_0037_CHANNEL
+VAR_INPUT
+	OutputUs					AT %Q*	:	BOOL := TRUE;	// switches system voltage on with a rising edge
+	OutputUp					AT %Q*	:	BOOL := TRUE;  // resets system voltage with a rising edge      
+	ResetTrigUs					AT %Q*	:	BOOL := FALSE;   // switches peripheral voltage on with a rising edge
+	ResetTrigUp					AT %Q*	:	BOOL := FALSE;  // resets peripheral voltage with a rising edge        
+END_VAR
+VAR_OUTPUT	
+	CurrentUs					AT %I*	:	INT;			// Actual Us current
+	CurrentUp					AT %I*	:	INT;			// Actual Up current
+	ErrorUs								:	BOOL := FALSE;	// TRUE when system voltage error occurs 
+	ErrorUp								:	BOOL := FALSE; 	// TRUE when peripheral voltage error occurs
+	WarningUs							:	BOOL := FALSE; 	// TRUE when system voltage warning occurs 
+	WarningUp							:	BOOL := FALSE; 	// TRUE when peripheral voltage warning occurs 
+	StatusUs							:	BOOL := FALSE; 	// TRUE when system voltage is on
+	StatusUp							:	BOOL := FALSE; 	// TRUE when peripheral voltage is on 
+	ChannelError						:	BOOL := FALSE; 	// TRUE when channel error occurs 
+	ErrorSumCurrent						:	BOOL;			// TRUE when SumCurrent Error occurs 
+	WarningSumCurrent					:	BOOL;			// TRUE when SumCurrent Warning occurs 
+	TxPDOState							:	BOOL;
+	TxPDOToggle							:	BOOL;
+END_VAR
+VAR
+{attribute 'displaymode':='binary'}
+	status						AT %I*	:	WORD;			// Statusword
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	
+							
+	ErrorUs			 					:= status.0;
+	ErrorUp             				:= status.1;
+	WarningUs            			   	:= status.2;		         	     			 			
+	WarningUp		 	    			:= status.3;
+	StatusUs 			       			:= status.4;
+	StatusUp 		        			:= status.5;
+	ChannelError						:= status.6;
+	ErrorSumCurrent						:= status.7;
+	WarningSumCurrent	    			:= status.8;
+	TxPDOState							:= status.9;
+	TxPDOToggle							:= status.10;]]></ST>
+    </Implementation>
+    <LineIds Name="EP9224_0037_CHANNEL">
+      <LineId Id="126" Count="11" />
+      <LineId Id="56" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,250 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="IOMotor" Id="{652201da-3ead-4c30-bab1-0ca4c35805c5}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK IOMotor IMPLEMENTS I_ActuatorOnOff
+VAR_INPUT
+	ResetTrig												:	BOOL := TRUE; //Confirm error
+	start													:	BOOL;
+	Feed													:	BOOL;
+	ProtSwitchOK											: 	FUSE;
+END_VAR                 							
+VAR_OUTPUT
+{attribute 'displaymode':='binary'}
+	Status													:	BYTE;              							
+	Q_Contactor										AT  %Q* :	BOOL; //Hardware output for main contactor to start motor	
+	Busy													:	BOOL;
+	Error													:	BOOL;
+END_VAR                 							
+VAR (* IO Internal *)   							
+
+                        	
+END_VAR                 	
+VAR                     	
+END_VAR                 	
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Com Motor IO 					 		V2.2		*)
+(********************************************************)
+
+(* Protection Switch *****************************************)
+	IF ResetTrig THEN reset(); END_IF
+
+	ProtSwitchOK();
+
+(* Enable ****************************************************)
+	IF Start THEN
+		switchOn();
+	ELSE
+		switchOff();
+	END_IF
+	
+(* HMI status *********************************************)
+	_writeStatus();
+	
+(********************************************************)
+
+
+	
+]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{279f1738-11a0-4557-bc76-03636caa0103}" />
+    <Folder Name="properties" Id="{cdc3a8c6-d9ab-45f4-9e58-29086c8f4ca8}" />
+    <Method Name="_writeStatus" Id="{d0bf2cdc-2033-4c95-8e81-e97f00465086}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PROTECTED _writeStatus : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	
+(* HmiStatus **************************************************)
+	Status.0												:= NOT Q_Contactor;
+	Status.1												:= Q_Contactor;
+	Status.2												:= FALSE;
+	Status.3												:= FALSE;
+	Status.4												:= FALSE;
+	Status.5												:= Feed ;
+	Status.6												:= NOT Error;
+	Status.7												:= Error;
+
+	(* Result *)
+	_writeStatus											:= TRUE;
+    												
+(**************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enable" Id="{60ee09d1-668d-4005-8dc1-fa67d9c98d07}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD enable : BOOL //Result value = successful execution of desired action 
+VAR_INPUT
+	IN							:	BOOL; //TRUE = Enable Pos/FWD/Up/Open/Left/Work FALSE = Opposite
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF in
+THEN
+	enable := switchOn();
+ELSE
+	enable := switchOff();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="inError" Id="{008b23aa-43f0-472b-b846-0fcdb8edec46}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public inError : bool]]></Declaration>
+      <Get Name="Get" Id="{85279bf0-3fcf-48a9-aa9d-ba31f3f1d85e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inError := Error;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isBusy" Id="{c381b8ab-23c8-4ba4-aa8b-2e00d6ad40c6}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isBusy : bool]]></Declaration>
+      <Get Name="Get" Id="{c94fec61-0c31-4feb-81d5-2e19603a09c7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy := Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOff" Id="{6a96a948-6245-40dd-970b-f1becfc150dc}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{db6bd55b-279f-4240-ac65-844e40d0f91e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOff := not Q_Contactor;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOn" Id="{91a4c22d-91e5-43bb-9e58-07c31a421aba}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a84d6782-4d21-4e27-9ea3-b4e5d4b05e92}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOn := Q_Contactor;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="noFeed" Id="{b9e49d17-a1ba-4898-a032-f85e6c443058}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY noFeed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{37404ba0-2f72-440b-b7c8-d66d0c4129e1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[noFeed := NOT Feed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ok" Id="{564e6699-e953-4c3f-bcf7-fc181aaa237e}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY ok : bool]]></Declaration>
+      <Get Name="Get" Id="{f8961047-3fab-4fa6-aa9c-a0b685ea5896}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ok := isBusy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{4671c25b-4e53-49f1-9393-a5cd4f8a4735}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC reset : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Error									:= FALSE;
+reset									:= ProtSwitchOK.reset();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOff" Id="{998f8b8e-c14f-4ee9-a6b5-29d807f55a97}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD public switchOff : BOOL  //True if motor is switched off
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start														:= FALSE;
+Q_Contactor 												:= FALSE;
+Busy														:= FALSE;
+Error														:= NOT ProtSwitchOK.Q;
+switchOff													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{aa9f363c-1580-4e6c-b4fb-8a1da6473523}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD public switchOn : BOOL  //True if motor is switched on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start														:= TRUE;
+Q_Contactor		 											:= ProtSwitchOK.Q AND Feed;
+switchOn													:= Q_Contactor;
+Busy														:= switchOn;
+Error														:= NOT ProtSwitchOK.Q;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="IOMotor">
+      <LineId Id="231" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor._writeStatus">
+      <LineId Id="19" Count="0" />
+      <LineId Id="6" Count="8" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.enable">
+      <LineId Id="6" Count="1" />
+      <LineId Id="9" Count="2" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.inError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.isOff.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.isOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.noFeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.ok.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.reset">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.switchOff">
+      <LineId Id="9" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotor.switchOn">
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="2" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorEnableDisable" Id="{5129998d-d586-4aab-ae89-8f8159dfea5a}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorEnableDisable EXTENDS I_ActuatorBase
+]]></Declaration>
+    <Property Name="isDisabled" Id="{5617a1b0-d471-4fc4-9ecb-6f6c3c9b6dd9}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{14facebd-60e7-43be-93b2-ffbde5517ab9}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isEnabled" Id="{24157986-6f8d-4387-ba9f-9dc726bd9e62}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isEnabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{93943023-dcbe-4c64-bcc8-6578590e63b4}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="setDisable" Id="{655253f9-38a5-410e-9595-a86e54d5afe9}">
+      <Declaration><![CDATA[METHOD public setDisable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="setEnable" Id="{008bd135-b8c7-4057-aea8-2b642a5b5247}">
+      <Declaration><![CDATA[METHOD public setEnable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

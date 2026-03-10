@@ -1,0 +1,259 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="AxCamming" Id="{308dbb57-03dc-4f84-a08f-6bae5b9cbe7d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Nc-axis camming (cam tabel) control
+//based on Tc2_MC2_Camming library
+FUNCTION_BLOCK AxCamming EXTENDS AxFbBase
+VAR_OUTPUT CONSTANT
+	FNC_CAM_OUT												:	INT := 0;
+	FNC_CAM_IN												:	INT := 1;
+END_VAR                     								
+VAR_INPUT                   								
+	Fnc														:	INT (FNC_CAM_OUT..FNC_CAM_IN) := FNC_CAM_OUT;
+	MasterOffset											:	LREAL		:= 0.0;
+	SlaveOffset												:	LREAL 	:= 0.0;
+	MasterScaling											:	LREAL 	:= 1.0;
+	SlaveScaling											:	LREAL 	:= 1.0;
+	MasterScalingMode										:	MC_CamScalingMode := MC_CAMSCALING_USERDEFINED;
+	SlaveScalingMode										:	MC_CamScalingMode := MC_CAMSCALING_USERDEFINED;
+	StartMode  												:	MC_StartMode := MC_STARTMODE_ABSOLUTE; 	(* StartMode determines whether the cam plate position is interpreted absolute OR relative TO the coupling position.StartMode can be relative OR absolute FOR master (X coordinate) AND slave (Y coordinate). *)
+	TableID  												:	MC_CAM_ID; 		(*ID der Kurvenscheibe mit der gekoppelt wird *)
+	ActivationMode											:	MC_CamActivationMode := MC_CAMACTIVATION_INSTANTANEOUS;
+	ActivationPosition										:	LREAL := 0.0;
+	InterpolationType										:	MC_InterpolationType := MC_INTERPOLATIONTYPE_LINEAR;
+
+	rMasterAxis												:	REFERENCE TO AXIS_REF := 0;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+(* cache *******************************************************************)
+	MemFnc													:	INT := -1;
+
+(* timer *)
+
+(* trigger *)
+
+(* MC-function-block instances *********************************************)
+	MC_CamIn												:	MC_CamIn;
+	MC_CamOut												:	MC_CamOut;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* NC axis cam table control														*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc ;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		CmdAborted											:= FALSE;
+		ErrorText											:= '';
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_CAM_OUT:
+		CamOut(Execute);
+
+	FNC_CAM_IN:
+		CamIn(Execute);
+
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			CmdAborted										:= FALSE;
+			ErrorText										:= '';
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+		CmdAborted											:= FALSE;
+		ErrorText											:= CONCAT('invalid parameter value(s) Fnc no: ' , INT_TO_STRING(MemFnc));
+	END_CASE
+
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="camIn" Id="{21896539-2ab6-4f89-a63f-86ad53c57b4d}">
+      <Declaration><![CDATA[METHOD PUBLIC camIn : BOOL //Return value = TRUE if busy
+//required parameter
+//rAxis
+//rMasterAxis
+//MasterOffset
+//SlaveOffset
+//MasterScaling
+//SlaveScaling
+//StartMode
+//CamTableID
+//Options
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MemFnc														:= FNC_CAM_IN;
+THIS^.Execute												:= Execute;
+	
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	Active													:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+ELSIF NOT __ISVALIDREF(rMasterAxis)
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference rMasterAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+	MC_CamIn.Options.ActivationMode							:= ActivationMode;
+	MC_CamIn.Options.ActivationPosition						:= ActivationPosition;
+	MC_CamIn.Options.MasterScalingMode						:= MasterScalingMode;
+	MC_CamIn.Options.SlaveScalingMode						:= SlaveScalingMode;
+	MC_CamIn.Options.InterpolationType						:= InterpolationType;
+
+	MC_CamIn(
+		Execute			:= Execute,
+		MasterOffset	:= MasterOffset,
+		SlaveOffset		:= SlaveOffset,
+		MasterScaling	:= MasterScaling,
+		SlaveScaling	:= SlaveScaling,
+		StartMode		:= StartMode,
+		CamTableID		:= TableID,
+		BufferMode		:= ,
+		Options			:= ,
+		Master			:= rMasterAxis,
+		Slave			:= rAxis,
+		InSync			=> Done,
+		Busy			=> Busy,
+		Active			=> Active,
+		CommandAborted	=> CmdAborted,
+		Error			=> Error,
+		ErrorID			=> ErrorID);
+
+	IF Error THEN
+		LastErrorId											:= ErrorId;
+		ErrorText 											:= CONCAT('MC_CamIn ID:' , UDINT_TO_STRING(ErrorId));
+	ELSE                    								
+		ErrorText 											:= '';
+	END_IF
+	IF NOT MC_CamIn.Execute AND NOT Busy
+	THEN
+		MemFnc												:= -1  ;
+	END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="camOut" Id="{3ba97a14-1043-4ebd-b441-2de92040b642}">
+      <Declaration><![CDATA[METHOD PUBLIC camOut : BOOL //Return value = TRUE if busy
+//required parameter
+//rAxis
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_CAM_OUT;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	Active													:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+	
+	MC_CamOut(
+		Execute	:= Execute,
+		Options	:= ,
+		Slave	:= rAxis,
+		Done	=> Done,
+		Busy	=> Busy,
+		Error	=> Error,
+		ErrorID	=> ErrorID);
+
+	Active													:= Busy;
+	CmdAborted												:= FALSE;
+
+	IF Error THEN
+		LastErrorId											:= ErrorId;
+		ErrorText 											:= CONCAT('MC_CamOut ID:' , UDINT_TO_STRING(ErrorId));
+	ELSE
+		ErrorText 											:= '';
+	END_IF
+
+	IF NOT Execute AND NOT Busy
+	THEN
+		MemFnc												:= -1;
+	END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxCamming">
+      <LineId Id="3" Count="45" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxCamming.camIn">
+      <LineId Id="3" Count="60" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxCamming.camOut">
+      <LineId Id="3" Count="40" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

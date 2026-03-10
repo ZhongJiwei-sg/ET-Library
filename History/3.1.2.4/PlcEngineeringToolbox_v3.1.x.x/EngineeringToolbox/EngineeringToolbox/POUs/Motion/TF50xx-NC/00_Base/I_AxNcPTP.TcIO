@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <Itf Name="I_AxNcPTP" Id="{6af4c0fd-4c07-496d-bf7d-220a250928a6}">
+    <Declaration><![CDATA[INTERFACE I_AxNcPTP EXTENDS I_AxNcBase
+]]></Declaration>
+    <Property Name="rMotion" Id="{43bd4e37-d02b-4aa0-a3d9-8fda7399a703}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rMotion : REFERENCE TO AxMotion]]></Declaration>
+      <Get Name="Get" Id="{9e3a6f80-e316-4d03-9846-77b8c73d0899}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

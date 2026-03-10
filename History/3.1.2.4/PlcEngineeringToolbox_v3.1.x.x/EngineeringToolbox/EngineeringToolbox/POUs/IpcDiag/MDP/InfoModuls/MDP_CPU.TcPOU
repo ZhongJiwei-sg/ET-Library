@@ -1,0 +1,227 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MDP_CPU" Id="{3df93825-ec94-4e62-8ff6-d8e032924b60}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Wrapper for available MDP_xxxx FBs of the lib, based on Beckhoff MDP - invalid values are reported via EventLogger 
+//based on Tc2_MDP.lib - please see Beckhoff documentation for further information about Tc2_MDP.lib (IPC diagnostics)
+FUNCTION_BLOCK MDP_CPU  EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	MIN_CPU													:	INT := 1;
+	MAX_CPU													:	INT := 8;
+END_VAR                 									
+VAR_INPUT               									
+	AmsNetId												: 	T_AmsNetId := '';				//AmsNetId as text
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;	//Ads timeout
+END_VAR                 									
+VAR_OUTPUT              									
+	Frequency												:  ARRAY[MIN_CPU..MAX_CPU] OF	UDINT;	//current CPU frequency
+	Usage													:	ARRAY[MIN_CPU..MAX_CPU] OF	UINT;	//current CPU usage in %
+	Temperature												:	ARRAY[MIN_CPU..MAX_CPU] OF	INT;	//current CPU temperature in °C
+	AverageFrequency 										:	UDINT;		//average CPU frequency
+	AverageUsage	 										:	UINT;		//average CPU usage in %
+	AverageTemperature										:	INT;		//average CPU temperature in °C
+	Count													:	INT; 		//number of CPUs
+	ErrorGrp												:	E_MDP_ErrGroup := eMDP_Err_NoError;
+END_VAR
+VAR
+	idx														:	INT := 1;
+	MDP_ScanModules											:	FB_MDP_ScanModules := ( nModuleType 	:= eMDP_ModT_CPU , iModIdx		:= 0);
+	MDP_Read												: 	FB_MDP_ReadModuleContent;
+	SplitErrorId											:	FB_MDP_SplitErrorID;
+	DstBuf													:	ARRAY[0..13] OF BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Read CPU Information 						V1.0		*)
+(************************************************************)
+
+(* Start Read ***********************************************)
+	IF Execute
+		AND state = 0
+	THEN
+		MEMSET(ADR(Frequency),0,SIZEOF(Frequency));
+		MEMSET(ADR(Usage),0,SIZEOF(Usage));
+		MEMSET(ADR(Temperature),0,SIZEOF(Temperature));
+		AverageFrequency									:= 0;
+		AverageUsage										:= 0;
+		AverageTemperature									:= 0;
+		Count												:= 0;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+		MDP_Read(bExecute := FALSE);
+		MDP_ScanModules(
+			bExecute		:= FALSE,
+			nModuleType		:= eMDP_ModT_CPU,
+			iModIdx			:= 0,
+			tTimeout		:= timeout,
+			sAmsNetId		:= AmsNetId,
+			bBusy			=> ,
+			bError			=> ,
+			nErrID			=> ,
+			nDynModuleId	=> ,
+			iModuleTypeCount=> ,
+			iModuleCount	=> );
+			
+		MDP_ScanModules(bExecute		:= TRUE);		
+		state												:= 1 ;
+		
+	ELSIF NOT Execute
+		AND State = 99
+	THEN
+		state												:= 0;
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+	END_IF
+
+
+	CASE state OF
+	0:
+		;
+	1:
+		MDP_ScanModules();
+		IF NOT MDP_ScanModules.bBusy
+		THEN
+			IF MDP_ScanModules.bError
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_ScanModules.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_ScanModules(bExecute := FALSE);
+			ELSE
+				Count										:= MDP_ScanModules.iModuleTypeCount;
+				MDP_Read.stMDP_DynAddr.nArea				:= 16#8;
+				MDP_Read.stMDP_DynAddr.nModuleId			:= MDP_ScanModules.nDynModuleId;
+				MDP_Read.stMDP_DynAddr.nSubIdx				:= 0;
+				MDP_Read.stMDP_DynAddr.nTableId				:= 1;
+				MDP_Read(bExecute := FALSE);
+				idx											:= 1;
+				IF Count = 0
+				THEN
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					ErrorId									:= MDP_Read.nErrID;
+					state									:= 99;
+				ELSE
+					MDP_Read(
+						bExecute		:= TRUE,
+						stMDP_DynAddr	:= ,
+						iSubIdxCount	:= 4,
+						pDstBuf			:= ADR(DstBuf),
+						cbDstBufLen		:= SIZEOF(DstBuf),
+						tTimeout		:= timeout,
+						sAmsNetId		:= AmsNetId,
+						bBusy			=> ,
+						bError			=> ,
+						nErrID			=> ,
+						iErrPos			=> ,
+						arrStartIdx		=> );
+					state									:= 2;
+				END_IF
+			END_IF
+
+		END_IF
+
+	2:
+		MDP_Read( pDstBuf := ADR(DstBuf), cbDstBufLen := SIZEOF(DstBuf));
+		
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.iErrPos <> 4 AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				(* copy freq *)
+				IF MDP_Read.arrStartIdx[1] >= 0
+				THEN
+					MEMCPY( ADR(Frequency[idx]) , ADR(DstBuf[MDP_Read.arrStartIdx[1]]) , SIZEOF(Frequency[idx]) );
+				END_IF
+				(* copy usage *)
+				IF MDP_Read.arrStartIdx[2] <> 0
+				THEN
+					MEMCPY(ADR(Usage[idx]) , ADR(DstBuf[MDP_Read.arrStartIdx[2]]) , SIZEOF(Usage[idx]) );
+				END_IF
+				(* copy temp in availible *)
+				IF MDP_Read.arrStartIdx[3] <> 0
+				THEN
+					MEMCPY(ADR(Temperature[idx]) , ADR(DstBuf[MDP_Read.arrStartIdx[3]]) , SIZEOF(Temperature[idx]) ) ;
+				END_IF
+
+				MDP_Read(bExecute := FALSE);
+				MDP_Read.stMDP_DynAddr.nModuleId := MDP_Read.stMDP_DynAddr.nModuleId + 1;
+				
+				idx 										:= idx + 1;
+				IF idx > Count AND Count > 0
+				THEN
+					FOR idx := 1 TO Count
+					DO
+						AverageFrequency 					:= AverageFrequency + Frequency[idx];
+						AverageUsage 						:= AverageUsage + Usage[idx];
+						AverageTemperature 					:= AverageTemperature + Temperature[idx];
+					END_FOR                         		
+                                                    		
+					AverageFrequency						:= AverageFrequency / INT_TO_UDINT(Count);
+					AverageUsage							:= AverageUsage / INT_TO_UINT(Count);
+					AverageTemperature						:=	AverageTemperature / INT_TO_SINT(Count);
+                                                        	
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 99;
+				ELSE
+					MDP_Read(bExecute := TRUE);
+				END_IF
+			END_IF
+		END_IF
+
+	99: ;
+
+	ELSE
+		;
+	END_CASE
+
+	(* reset state for next start *)
+	IF NOT Execute
+		AND state = 99
+	THEN
+		state												:= 0;
+	END_IF
+
+(****************************************************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MDP_CPU">
+      <LineId Id="3" Count="185" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0143" Id="{88f8c5d5-4e5d-464c-96f7-a3425b489a4b}">
+    <Declaration><![CDATA[TYPE AX5000_S_0143 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Sercos_interface_version:STRING(8);
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

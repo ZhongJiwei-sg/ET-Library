@@ -1,0 +1,698 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="NciCreateItpTableEntryTemplate" Id="{fccf1853-2d71-490e-be81-b1c06e08ccb7}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK NciCreateItpTableEntryTemplate
+VAR_INPUT
+	EndOfTables												: ST_NciEndOfTables;
+	GeoCirclePlane											: ST_NciGeoCirclePlane;
+	GeoCircleCIP											: ST_NciGeoCircleCIP;
+	GeoLine													: ST_NciGeoLine;
+	GeoBezier3												: ST_NciGeoBezier3;
+	GeoBezier5												: ST_NciGeoBezier5;	
+	GeoStart												: ST_NciGeoStart;
+	TangentialFollowingDesc									: ST_NciTangentialFollowingDesc;
+	MFuncHsk												: ST_NciMFuncHsk;
+	MFuncFast												: ST_NciMFuncFast;
+	MFuncResetAllFast										: ST_NciMFuncResetAllFast;
+	HParam													: ST_NciHParam;
+	SParam													: ST_NciSParam;
+	TParam													: ST_NciTParam;
+	DynOverride												: ST_NciDynOvr;
+	VertexSmoothing											: ST_NciVertexSmoothing;
+	PathDynamics											: ST_NciPathDynamics;
+	BaseFrame												: ST_NciBaseFrame;
+	SetCoordinateSystem										: ST_NciSetCoordinateSystem;
+	AxisDynamics											: ST_NciAxisDynamics;
+	DwellTime												: ST_NciDwellTime;
+END_VAR
+VAR_OUTPUT
+	FilledRows												: INT;
+	Error													: BOOL;
+{attribute 'displaymode':='hex'}
+	ErrorId													: UDINT;
+	ErrorText												: STRING(20);
+END_VAR                 									
+VAR                     									
+	TblPrep													: FB_NciFeedTablePreparation;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* NCI Table entry template				 	V2.0	*)
+(****************************************************)
+
+(******************************************************************************)
+;
+(******************************************************************************)
+]]></ST>
+    </Implementation>
+    <Method Name="insertAxisDynamics" Id="{77f8f3f2-288b-4cea-a599-50184bef3922}">
+      <Declaration><![CDATA[METHOD insertAxisDynamics : bool //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= AxisDynamics.nEntryType,
+		pEntry				:= ADR(AxisDynamics),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('AxisDynamics - JobNo. :',UDINT_TO_STRING(AxisDynamics.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertAxisDynamics									:= TRUE;
+	END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertBaseFrame" Id="{e41cc4d3-3747-4dc6-93c1-49d843f8dd5e}">
+      <Declaration><![CDATA[METHOD insertBaseFrame : bool //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType		:= BaseFrame.nEntryType,
+		pEntry			:= ADR(BaseFrame),
+		stFeedGroupTable:= Table,
+		nFilledRows		=> FilledRows,
+		bError			=> ,
+		nErrorId		=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('BaseFrame - JobNo. :',UDINT_TO_STRING(BaseFrame.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertBaseFrame										:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertDwellTime" Id="{af4d5201-f55f-499a-a1d8-a4246e6b483f}">
+      <Declaration><![CDATA[METHOD insertDwellTime : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType		:= DwellTime.nEntryType,
+		pEntry			:= ADR(DwellTime),
+		stFeedGroupTable:= Table,
+		nFilledRows		=> FilledRows,
+		bError			=> ,
+		nErrorId		=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('DwellTime - JobNo. :',UDINT_TO_STRING(DwellTime.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertDwellTime										:= TRUE;
+	END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertDynOverride" Id="{da6a063a-e111-4a37-adf9-aeb3c324daa7}">
+      <Declaration><![CDATA[METHOD insertDynOverride : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= DynOverride.nEntryType,
+		pEntry				:= ADR(DynOverride),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('DynOverride - JobNo. :',UDINT_TO_STRING(DynOverride.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertDynOverride									:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertEndOfTable" Id="{5c12ac94-4f50-401c-89cc-78e49895d1f4}">
+      <Declaration><![CDATA[METHOD insertEndOfTable : bool //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= EndOfTables.nEntryType,
+		pEntry				:= ADR(EndOfTables),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('EndOfTables - FilledRows :',INT_TO_STRING(FilledRows));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertEndOfTable									:= TRUE;
+	END_IF                      							]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertGeoBezier3" Id="{3cd64486-747e-461d-9318-5071694a2cfe}">
+      <Declaration><![CDATA[METHOD insertGeoBezier3 : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= GeoBezier3.nEntryType,
+		pEntry				:= ADR(GeoBezier3),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('GeoBezier3 - JobNo. :',UDINT_TO_STRING(GeoBezier3.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertGeoBezier3									:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertGeoBezier5" Id="{08bd9489-cbe2-4f48-b065-849f93f13222}">
+      <Declaration><![CDATA[METHOD insertGeoBezier5 : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= GeoBezier5.nEntryType,
+		pEntry				:= ADR(GeoBezier5),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('GeoBezier5 - JobNo. :',UDINT_TO_STRING(GeoBezier5.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertGeoBezier5									:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertGeoCircleCIP" Id="{706afb98-f952-4ce1-8ebc-f72c51abe9dd}">
+      <Declaration><![CDATA[METHOD insertGeoCircleCIP : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= GeoCircleCIP.nEntryType,
+		pEntry				:= ADR(GeoCircleCIP),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('GeoCircleCIP - JobNo. :',UDINT_TO_STRING(GeoCirclePlane.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertGeoCircleCIP									:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertGeoCirclePlane" Id="{58117120-f044-48bc-9052-e76a48416a35}">
+      <Declaration><![CDATA[METHOD insertGeoCirclePlane : BOOL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= GeoCirclePlane.nEntryType,
+		pEntry				:= ADR(GeoCirclePlane),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('GeoCirclePlane - JobNo. :',UDINT_TO_STRING(GeoCirclePlane.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertGeoCirclePlane								:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertGeoLine" Id="{b585d4eb-892a-4d63-bdc0-f346d1be52d9}">
+      <Declaration><![CDATA[METHOD insertGeoLine : boOL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= GeoLine.nEntryType,
+		pEntry				:= ADR(GeoLine),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('GeoLine - JobNo. :',UDINT_TO_STRING(GeoLine.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertGeoLine										:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertGeoStart" Id="{c058d05c-a687-49bd-a76e-4622157e4a66}">
+      <Declaration><![CDATA[METHOD insertGeoStart : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= GeoStart.nEntryType,
+		pEntry				:= ADR(GeoStart),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('GeoStart - FilledRows. :',INT_TO_STRING(FilledRows));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertGeoStart										:= TRUE;
+	END_IF                  								]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertHParam" Id="{dcb2aa3a-e400-4930-9118-a58bdf448e33}">
+      <Declaration><![CDATA[METHOD insertHParam : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= HParam.nEntryType,
+		pEntry				:= ADR(HParam),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('HParam - JobNo. :',UDINT_TO_STRING(HParam.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertHParam										:= TRUE;
+	END_IF                  								]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertMFuncFast" Id="{20418737-93c2-4604-b40c-8433e7f58894}">
+      <Declaration><![CDATA[METHOD insertMFuncFast : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= MFuncFast.nEntryType,
+		pEntry				:= ADR(MFuncFast),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('MFuncFastList - JobNo. :',UDINT_TO_STRING(MFuncFast.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertMFuncFast										:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertMFuncHsk" Id="{950104b9-2c65-47bd-bb17-9aceef23bba8}">
+      <Declaration><![CDATA[METHOD insertMFuncHsk : bool //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= MFuncHsk.nEntryType,
+		pEntry				:= ADR(MFuncHsk),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('MFuncHsk - JobNo. :',UDINT_TO_STRING(MFuncHsk.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertMFuncHsk										:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertMFuncResetAllFast" Id="{d75c4aca-5877-4f55-a92c-4f8c43b969ad}">
+      <Declaration><![CDATA[METHOD insertMFuncResetAllFast : bool //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= MFuncResetAllFast.nEntryType,
+		pEntry				:= ADR(MFuncResetAllFast),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('MFuncResetAllFast - JobNo. :',UDINT_TO_STRING(MFuncResetAllFast.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertMFuncResetAllFast								:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertPathDynamics" Id="{f7337ede-1505-409a-87b6-dabe16234f3e}">
+      <Declaration><![CDATA[METHOD insertPathDynamics : BOOL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= PathDynamics.nEntryType,
+		pEntry				:= ADR(PathDynamics),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('PathDynamics - JobNo. :',UDINT_TO_STRING(PathDynamics.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertPathDynamics									:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertSetCoordinateSystem" Id="{bc48db4e-afca-4b33-92a8-397b4de1ce25}">
+      <Declaration><![CDATA[METHOD insertSetCoordinateSystem : bool //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= SetCoordinateSystem.nEntryType,
+		pEntry				:= ADR(SetCoordinateSystem),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('SetCoordinateSystem - JobNo. :',UDINT_TO_STRING(SetCoordinateSystem.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertSetCoordinateSystem							:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertSParam" Id="{ab5058d6-7ea1-442b-987a-3b5f03716457}">
+      <Declaration><![CDATA[METHOD insertSParam : bool //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= SParam.nEntryType,
+		pEntry				:= ADR(SParam),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('SParam - JobNo. :',UDINT_TO_STRING(SParam.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertSParam										:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertTangFollowingDesc" Id="{db57c41e-83b5-45eb-a763-bd19c2fbadad}">
+      <Declaration><![CDATA[METHOD insertTangFollowingDesc : booL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= TangentialFollowingDesc.nEntryType,
+		pEntry				:= ADR(TangentialFollowingDesc),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('TangentialFollowingDesc - JobNo. :','~');
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertTangFollowingDesc								:= TRUE;
+	END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertTParam" Id="{4bda5edf-81e6-4b44-85fa-10a6365c2594}">
+      <Declaration><![CDATA[METHOD insertTParam : bool //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= TParam.nEntryType,
+		pEntry				:= ADR(TParam),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('TParam - JobNo. :',UDINT_TO_STRING(TParam.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertTParam										:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insertVertexSmoothing" Id="{023e1ee3-21e1-44fb-a362-914997eb3276}">
+      <Declaration><![CDATA[METHOD insertVertexSmoothing : BOOL //Return value = TRUE if executed succesful
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	TblPrep(
+		nEntryType			:= VertexSmoothing.nEntryType,
+		pEntry				:= ADR(VertexSmoothing),
+		stFeedGroupTable	:= Table,
+		nFilledRows			=> FilledRows,
+		bError				=> ,
+		nErrorId			=> );
+
+	IF TblPrep.bError 
+	THEN
+		Error												:= TRUE;
+		ErrorText											:= CONCAT('VertexSmoothing - JobNo. :',UDINT_TO_STRING(VertexSmoothing.nDisplayIndex));
+		ErrorId												:= TblPrep.nErrorId;
+	ELSE
+		insertVertexSmoothing								:= TRUE;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{9862b894-55ae-4cce-9e91-b82afc2807e5}">
+      <Declaration><![CDATA[METHOD reset : BOOL  //Return value = TRUE if execution finished
+VAR_IN_OUT
+	Table													: ST_NciFeedGroupTable;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TblPrep(
+	nEntryType			:= ,
+	pEntry				:= ,
+	bResetTable			:= TRUE,
+	bResetAll			:= TRUE,
+	stFeedGroupTable	:= Table,
+	nFilledRows			=> FilledRows,
+	bError				=> ,
+	nErrorId			=> );
+
+TblPrep.bResetTable											:= FALSE;
+TblPrep.bResetAll											:= FALSE;
+Error														:= FALSE;
+ErrorText													:= '';
+ErrorId														:= 0;
+Reset														:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciCreateItpTableEntryTemplate">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertAxisDynamics">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertBaseFrame">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertDwellTime">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertDynOverride">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertEndOfTable">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertGeoBezier3">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertGeoBezier5">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertGeoCircleCIP">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertGeoCirclePlane">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertGeoLine">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertGeoStart">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertHParam">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertMFuncFast">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertMFuncHsk">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertMFuncResetAllFast">
+      <LineId Id="22" Count="13" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertPathDynamics">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertSetCoordinateSystem">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertSParam">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertTangFollowingDesc">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertTParam">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.insertVertexSmoothing">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciCreateItpTableEntryTemplate.reset">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

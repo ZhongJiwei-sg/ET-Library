@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0065" Id="{84f5bcc8-3f46-4fd0-af50-d21f7f868e75}">
+    <Declaration><![CDATA[TYPE AX5000_P_0065 :
+STRUCT
+	Actual_temperature_sensor_resistance:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

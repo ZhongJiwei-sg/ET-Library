@@ -1,0 +1,224 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AxDriveCoE_wEvents" Id="{cea8dc09-6e0f-4167-b24f-c09086b4769c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Drive 
+FUNCTION_BLOCK AxDriveCoE_wEvents EXTENDS AxDriveCoE   
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}  
+	OPTION_DISABLE_INT_LIMIT_WARNING						:	BYTE := 2#0000_0001;
+{attribute 'displaymode':='binary'}  
+	OPTION_DISABLE_REMOTE_CNTR_NOT_ACTIVE					:	BYTE := 2#0000_0010;	
+END_VAR                  						
+VAR_INPUT                           						
+	EnableEvent												:	BOOL := TRUE;
+	{attribute 'displaymode':='binary'}  
+	Options													:	BYTE := 0;
+	ConfirmTrig												:	BOOL := FALSE; (* Reset event *)
+	SourceId												:	UDINT := 102200; //CoE Drive default multisource Id + Ax id
+	Name													:	STRING(30) := '';
+	ErrorLimitPos											:	BOOL := FALSE;
+	ErrorLimitNeg											:	BOOL := FALSE;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	EventStatus												:	DWORD;
+	NoOfActiveEvents										:	INT;
+END_VAR                             						
+VAR
+
+END_VAR
+VAR
+(* Cache *********************************************************************)
+	
+(* Timer ********************************************************************************)
+                                						
+(* Trigger ******************************************************************************)
+
+
+(* Function blocks ****************************************************************************)
+	
+	Event													: EventHandlingGrp10;
+	EventDiagMessage										: EventHandling;
+
+(* Dummy Speicher **********************************************************)
+	i														: INT := 0 ;
+
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* CoE Drive with diag and eventlogger implementation								*)
+	(************************************************************************************)
+
+(* call super ***********************************************************************)
+	SUPER^();
+
+(* trigger events ************************************************)
+	_callEvents();
+
+(*****************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="_callEvents" Id="{6a44d690-adcc-499c-baab-b29e725c593d}">
+      <Declaration><![CDATA[METHOD _callEvents : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Check if msg activ and init some parameter ***********************)
+	IF Event.no[1].Text2 <> Name AND Name <> '' OR Event.no[1].Text2 = '' AND rAxis.NcToPlc.AxisId <> 0
+	THEN
+		Event.no[1].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[3].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		Event.no[4].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_WARNING;
+		Event.no[5].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[6].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[7].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		
+		(* Init axisname *)
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+		(*	Event.no[i].Text1								:= '';*)
+			Event.no[i].Text2								:= SEL(LEN(name)>1,CONCAT('Axis id:',DWORD_TO_STRING(rAxis.NcToPlc.AxisId)),name);			
+		END_FOR
+		EventDiagMessage.Text2								:= Event.no[1].Text2;
+	END_IF
+
+(* workl Event Ctrl *************************************************)
+	Event(
+		ConfirmTrig 	:= ConfirmTrig,
+		Disable			:= rAxis.NcToPlc.AxisId = 0 OR NOT EnableEvent,
+		SourceId		:= SourceId + rAxis.NcToPlc.AxisId);
+		
+
+(* Event diag message ***************************************************)
+	CASE ReadCoEDiagMsg.MsgSeverity OF
+	0: // Info message
+		EventDiagMessage.eClass 								:= TCEVENTCLASS_MESSAGE;
+	1: // warning
+		EventDiagMessage.eClass 								:= TCEVENTCLASS_WARNING;
+	2: // error message
+		EventDiagMessage.eClass 								:= TCEVENTCLASS_ALARM;
+	ELSE // unknown type
+		EventDiagMessage.eClass 								:= TCEVENTCLASS_NONE;
+	END_CASE
+				
+	EventDiagMessage(
+		Flag			:= state = 0 AND ReadCoEDiagMsg.TextId <> 0 AND (Status.Fault OR Status.Warning) AND NOT Event.Disable,
+		ConfirmTrig 	:= ConfirmTrig OR NOT EventDiagMessage.Flag AND EventDiagMessage.State <> TCEVENTSTATE_INVALID,
+		MsgId			:= ReadCoEDiagMsg.TextId,
+		SourceId		:= Event.SourceId);
+		
+(* Event status ******************************************************)
+	NoOfActiveEvents										:= Event.NoOfActiveEvents + SEL(EventDiagMessage.Status.31 , 0, 1);
+ 	EventStatus												:= Event.Status OR EventDiagMessage.Status;
+
+		
+(* Set events at the end to allow set to false in inherited FBs ********************)
+	Event.no[1].Flag 										:= NOT Status.ReadyToSwitchOn; 
+	Event.no[2].Flag 										:= Status.Fault;
+	Event.no[3].Flag 										:= Status.Warning; 				
+	Event.no[4].Flag 										:= Status.InternalLimitActive AND NOT Options.0;
+	Event.no[5].Flag 										:= Status.SwitchOnDisabled;
+//	Event.no[6].Flag 										:= NOT Status.FollowCmdValue AND Status.SwitchedOn AND NOT options.1 AND NOT rAxis.Status.OpMode.SimulationAxis;
+	Event.no[7].Flag 										:= BrakeUnlock OR BrakeUnlocked; 	
+	Event.no[8].Flag 										:= ErrorLimitPos;
+	Event.no[9].Flag 										:= ErrorLimitNeg;
+	
+(************************************************************************)
+	_callEvents												:= TRUE;
+(******************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="confirm" Id="{272f6e2e-9488-4706-be49-696d6ba9bd16}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[confirm 								:= Event.confirm();]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optDisabledRemoteCntrNotActive" Id="{e1b94a77-6817-4db7-a6ba-fc66e851fece}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optDisabledRemoteCntrNotActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9673961d-1812-40f9-a133-18ea27cb0fe1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optDisabledRemoteCntrNotActive := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1f1ea1a7-09a0-4279-a28f-7616f93582aa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optDisabledRemoteCntrNotActive;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optDisableIntLimitWarning" Id="{81a132dc-5795-419e-85b9-011d1bc4bb2c}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optDisableIntLimitWarning : BOOL]]></Declaration>
+      <Get Name="Get" Id="{fca1f5ea-c209-4d4d-bbd7-c655720235b0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optDisableIntLimitWarning := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b51ca8c5-b8dc-4a1b-b70b-bcd6a6e04b8c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optDisableIntLimitWarning;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveCoE_wEvents">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_wEvents._callEvents">
+      <LineId Id="3" Count="60" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_wEvents.confirm">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_wEvents.optDisabledRemoteCntrNotActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_wEvents.optDisabledRemoteCntrNotActive.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_wEvents.optDisableIntLimitWarning.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveCoE_wEvents.optDisableIntLimitWarning.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,75 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SafetyIOsDiag" Id="{cda7ec17-1766-4c59-be67-7518ac4f2226}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK SafetyIOsDiag
+VAR CONSTANT
+	MIN_TERM												:	INT := 1;
+	MAX_TERM												:	INT := PARAM.SAFETY_IO_TERM_DIAG_MAX;
+END_VAR                     								
+VAR_INPUT                   								
+	Enable													:	BOOL;	//FB will be processed as long as enable is TRUE 
+	ConfirmTrig												:	BOOL;	//Resets error with rising edge 
+	SourceMultiId											:	UDINT := 100310;
+	EcMasterDevId											:	UINT;	//Map to EtherCAT Master DevId
+END_VAR                     								
+VAR_OUTPUT                  	
+	{attribute 'displaymode':='binary'}
+	Status													:	DWORD;	//Current status of all events
+	NoOfActiveEvents										:	INT;
+END_VAR
+VAR (* Events/Blocks/Var internal *)
+	DevNo													:	ARRAY [MIN_TERM..MAX_TERM] OF SafetyIODeviceDiag_wEvents;
+    tonStartupDelay											:	ton := (PT := T#200MS);                 								
+	i														:	INT := MIN_TERM;
+	StartCnt												:	BYTE := 0;
+                           	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EL Safety IO Terminal Diag							*)
+(********************************************************)
+
+(* start one after the other ***************************)
+	IF StartCnt < MAX_TERM 
+	THEN
+		tonStartupDelay(IN := TRUE);
+		IF tonStartupDelay.Q
+		THEN
+			tonStartupDelay(IN := FALSE);
+			StartCnt 										:= StartCnt + 1;
+			DevNo[StartCnt].SourceId						:= SourceMultiId + StartCnt;
+			DevNo[StartCnt].EcMasterDevId					:= EcMasterDevId;
+			
+		END_IF
+	END_IF
+
+(* terminal event ***************************************)
+	Status 													:= 0;
+	NoOfActiveEvents										:= 0;
+	FOR i := MIN_TERM TO MAX_TERM
+	DO
+		DevNo[i](
+			Enable			:= Enable AND StartCnt >= i,
+			ConfirmTrig		:= ConfirmTrig,
+			SourceId		:= ,
+			EcMasterDevId	:= ,
+			Status			=> );
+				
+		IF DevNo[i].Connected
+		THEN
+			IF DevNo[i].Status.31 THEN NoOfActiveEvents := NoOfActiveEvents + DevNo[i].NoOfActiveEvents ; END_IF
+			Status											:= Status OR DevNo[i].Status;
+		ELSE
+			EXIT; 
+		END_IF
+	END_FOR
+
+(*******************************************************)
+]]></ST>
+    </Implementation>
+    <LineIds Name="SafetyIOsDiag">
+      <LineId Id="220" Count="38" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

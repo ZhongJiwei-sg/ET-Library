@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0454" Id="{f1ba5488-207c-4f03-ab44-e80b414c0a55}">
+    <Declaration><![CDATA[TYPE AX5000_P_0454 :
+STRUCT
+	Effective_torque_command_value:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

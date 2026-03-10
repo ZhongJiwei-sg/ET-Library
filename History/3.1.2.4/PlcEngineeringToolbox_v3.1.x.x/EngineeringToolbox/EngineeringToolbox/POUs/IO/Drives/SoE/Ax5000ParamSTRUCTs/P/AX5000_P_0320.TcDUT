@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0320" Id="{85e6c5f2-7568-46db-b539-55918c4fcf1e}">
+    <Declaration><![CDATA[TYPE AX5000_P_0320 EXTENDS ST_AX5000_P_0320:
+STRUCT
+(*	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Firmware_version:UINT;
+	Firmware_build:UINT;
+	Bootloader_build:UINT;
+	MainDsp_compiler_version:UDINT;
+	FeedbackDsp_compiler_version:UDINT;
+	Option_card_firmware_version:UINT;
+	Option_card_firmware_build:UINT;
+	Option_card_interface:UINT;
+//	{attribute 'hide'}
+	Rsvd:UDINT;
+	Option_card_Dsp_compiler_version:UDINT;
+	Intf_Build_Version:UINT;
+//	{attribute 'hide'}
+	Rsvd2:UINT;
+//	{attribute 'hide'}
+	Rsvd3:UINT;
+*)
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

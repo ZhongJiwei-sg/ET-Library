@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="CANopenMasterIO" Id="{06710616-b06f-493c-aa01-cf9553ec3e39}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EL6751 CanOpen Master IOs
+FUNCTION_BLOCK CANopenMasterIO
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+(* Inputs *)
+	AdsAddr											AT %I*	:	AMSADDR;	//Terminal AMS Net Addr.
+	AmsNetIdStr												:	T_AmsNetId;	//AmsNetId String
+	EcMasterDevId									AT %I*	: 	UINT; 		//Map to EtherCAT Master DevId
+	
+	Error											AT %I*	:	USINT;		//Rising edge of Error informs that an error occurred during the execution of the Function Block 
+	CanState										AT %I*	:	UINT;		//State of Can Bus
+	RXErrorCounter									AT %I*	:	USINT;		//Rx error counter of the CAN controller
+	TxErrorCounter									AT %I*	:	USINT;		//Tx error counter of the CAN controller
+	DiagFlag										AT %I*	:	BOOL;		//Diag Flag of the last configured CANopen slave
+	Name													:	STRING(30) := '';
+END_VAR                         					
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR
+	IOF_GetBoxNameByAddr									:	IOF_GetBoxNameByAddr := (NETID := '', TMOUT := DEFAULT_ADS_TIMEOUT);
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* CANopen master IO diag										             	 		*)
+(********************************************************************************)
+
+(* Get name ******************************************************************************)
+IF Name = ''
+	AND AdsAddr.port <> 0 AND EcMasterDevId <> 0
+	OR IOF_GetBoxNameByAddr.BUSY
+	OR IOF_GetBoxNameByAddr.START
+THEN
+	AmsNetIdStr												:= F_CreateAmsNetId(nIds := AdsAddr.netId);
+		
+	IOF_GetBoxNameByAddr(
+		NETID		:=  , (* Local *)
+		DEVICEID	:= UINT_TO_UDINT(EcMasterDevId) ,
+		BOXADDR		:= AdsAddr.port ,
+		START		:= Name = '' AND NOT IOF_GetBoxNameByAddr.BUSY,
+		TMOUT		:= ,
+		BOXNAME		=> name);
+END_IF
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="setName" Id="{60acc484-8315-4e59-910b-9f11a3b05e21}">
+      <Declaration><![CDATA[PROPERTY PUBLIC setName : STRING //Set name if device is not an Ethercat terminal]]></Declaration>
+      <Set Name="Set" Id="{c01b5d55-82fa-4884-8a75-b9df69ee0ec4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Name := SetName;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="CANopenMasterIO">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="CANopenMasterIO.setName.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

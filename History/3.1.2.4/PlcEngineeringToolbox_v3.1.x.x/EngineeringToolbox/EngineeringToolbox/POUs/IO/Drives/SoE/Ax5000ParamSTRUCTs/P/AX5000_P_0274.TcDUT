@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0274" Id="{507485e6-a438-487e-8eab-a8a84fe94471}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}
+TYPE AX5000_P_0274 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Position_offset_feedback_1:UDINT;
+	Position_offset_feedback_2:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

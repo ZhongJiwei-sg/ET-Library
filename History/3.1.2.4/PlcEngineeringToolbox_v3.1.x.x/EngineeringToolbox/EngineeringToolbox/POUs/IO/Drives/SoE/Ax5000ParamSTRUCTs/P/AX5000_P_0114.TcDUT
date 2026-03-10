@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0114" Id="{43380027-8602-4d3e-9116-e0c256421967}">
+    <Declaration><![CDATA[TYPE AX5000_P_0114 :
+STRUCT
+	ASM_acceleration_control_integral_action_time:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

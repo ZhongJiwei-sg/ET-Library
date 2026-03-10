@@ -1,0 +1,103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="TONRecord" Id="{ec37b68b-ac23-47ac-ab27-d373190a8c23}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//TON with the possibility to accumulate the time value
+FUNCTION_BLOCK TONRecord
+VAR_INPUT
+	IN														: BOOL := FALSE;//Start time accumulation
+	ResetTrig												: BOOL := FALSE;//Reset function block
+	PT														: TIME := T#0MS;//time to pass, before Q is set TRUE
+	OFFSET													: TIME := T#0MS;//Start time offset 
+END_VAR                             						
+VAR_OUTPUT                          						
+	Q														: BOOL := FALSE;//TRUE if time is passed 
+	ET														: TIME;			//Elapsed time
+END_VAR                             						
+VAR                                 	
+	state													: INT := 0;
+	TimeDP2													: TON;
+	elapsedTime												: TIME;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF ResetTrig THEN
+	reset();
+ELSE
+	CASE state OF
+	0: //Wait for start timer
+		Q	 												:= FALSE;
+		IF IN THEN
+			elapsedTime 									:= T#0MS + OFFSET;
+			ET 												:= elapsedTime;
+			TimeDP2(IN := FALSE);
+			TimeDP2(IN := TRUE, PT := PT-elapsedTime);
+			State 											:= 20;
+		END_IF
+	20: //Run timer
+		TimeDP2();
+		ET 													:= elapsedTime + TimeDP2.ET;
+		IF NOT IN 
+		THEN
+			state 											:= 30;
+		ELSIF TimeDP2.q 
+		THEN
+			Q	 											:= TRUE;
+			state 											:= 99;
+		END_IF
+	30: //Restart timer
+		IF IN 
+		THEN
+			IF PT >= elapsedTime 
+			THEN 
+				TimeDP2(IN := FALSE);
+				TimeDP2(IN := TRUE, PT := PT-elapsedTime);
+				state 										:= 20;
+			ELSE        									
+				Q	 										:= TRUE;
+				state 										:= 99;
+			END_IF
+		END_IF
+	END_CASE
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{73bfd6f1-e244-400d-afab-355c6e8cf3b4}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : booL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[elapsedTime 												:= T#0MS + OFFSET;
+ET 															:= elapsedTime;
+TimeDP2(IN := FALSE);
+state 														:= 0;
+Q															:= FALSE;
+reset														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="TONRecord">
+      <LineId Id="75" Count="37" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TONRecord.reset">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

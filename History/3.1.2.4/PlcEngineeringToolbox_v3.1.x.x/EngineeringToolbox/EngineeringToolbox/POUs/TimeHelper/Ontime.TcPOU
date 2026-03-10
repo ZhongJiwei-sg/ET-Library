@@ -1,0 +1,134 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="Ontime" Id="{0975968a-6831-41ec-9a9d-3bb733785c0b}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Ontime with retain outputs - Attention, if the FB will be declared inside a FB or PRG poe, the whole poe will be part of the retain data too
+FUNCTION_BLOCK Ontime
+VAR_INPUT
+	IN 														: 	BOOL	:= FALSE;	//Start ontime counter
+	ReseTrig 												: 	BOOL	:= FALSE;	//Reset counter values
+END_VAR
+VAR_OUTPUT
+	MinAtThisCycle											:	UDINT;			//Ontime at current cycle in minutes
+END_VAR
+VAR_OUTPUT RETAIN 
+	Hours													:	UDINT;			//Recorded and accumulated total ontime in hours
+	Minutes													:	UDINT;			//Recorded and accumulated total ontime in minutes
+	Seconds													: 	UDINT;			//Recorded ontime in seconds
+	Cycles													: 	UDINT;			//Recorded and accumulated total start cycles 
+	PersistentSec											:	UDINT;			//Recorded and accumulated total ontime in seconds - not resetable
+END_VAR
+VAR
+	txSys													: 	TIME;
+	tx														:	DWORD;
+	last 													: 	DWORD;
+	ms														: 	DWORD;
+	edge 													: 	BOOL := FALSE;
+	init													:	BOOL := FALSE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* read system time *)
+txSys 														:= TIME();
+tx 															:= TIME_TO_DWORD(txSys);
+
+(* make sure the first cycle works correctly *)
+IF Resetrig 
+THEN
+	reset();
+ELSIF NOT init 
+THEN
+	init 													:= TRUE;
+	last 													:= tx;
+	ms 														:= 0;
+	edge													:= FALSE;
+ELSIF IN 
+THEN
+	(* add the current milliseconds *)
+	ms 														:= (tx - last) + ms;
+	IF ms >= 1000 
+	THEN
+		Seconds 											:= Seconds + 1;
+		PersistentSec										:= PersistentSec + 1;
+		ms 													:= ms - 1000;
+		IF Seconds >= 60 
+		THEN
+			Minutes											:= Minutes + 1;
+			MinAtThisCycle									:= MinAtThisCycle + 1;
+			Seconds											:= 0;
+			IF Minutes >= 60
+			THEN
+				Hours										:= Hours + 1;
+				Minutes										:= 0;
+			END_IF
+		END_IF	 
+	END_IF;
+	cycles 													:= cycles + BOOL_TO_UDINT(NOT edge);
+ELSE
+	MinAtThisCycle											:= 0;
+END_IF;
+
+edge														:= IN;
+last 														:= tx;]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{0ac103f1-c471-4285-b847-0db6554e5918}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	last 													:= tx;
+	ms 														:= 0;
+	tx														:= 0;
+	(* add the current milliseconds *)
+	ms 														:= (tx - last) + ms;
+	MinAtThisCycle											:= 0;
+	Hours													:= 0;
+	Minutes													:= 0;
+	Seconds													:= 0;
+	Cycles													:= 0;
+	
+	reset													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="POUImageProperty">
+            <n n="ImageData" />
+            <v n="TransparencyColor">"White"</v>
+            <v n="MakeTransparent">false</v>
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Boolean">System.Boolean</Type>
+          <Type n="POUImageProperty">{bb741845-1ec5-4be9-bb0d-2cf7058af574}</Type>
+          <Type n="String">System.String</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="Ontime">
+      <LineId Id="133" Count="40" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Ontime.reset">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="15" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

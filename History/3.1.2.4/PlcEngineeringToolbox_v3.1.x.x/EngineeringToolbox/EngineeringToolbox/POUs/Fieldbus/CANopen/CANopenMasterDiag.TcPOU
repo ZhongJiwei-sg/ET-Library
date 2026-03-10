@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="CANopenMasterDiag" Id="{a0408dee-794e-46d5-9cb1-f5765d4e1705}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EL6751 CanOpen Master via EtherCAT
+FUNCTION_BLOCK CANopenMasterDiag                   								
+VAR_INPUT                   								
+	Enable													:	BOOL := TRUE;		//FB will be processed as long as enable is TRUE 
+	ConfirmTrig												:	BOOL;               //Resets error with rising edge        								
+	SourceId												: 	UDINT :=  103010; 	//Multisource id 
+(* Components *)            								
+	IO														:	CanOpenMasterIO;
+END_VAR                     								
+VAR_OUTPUT                  								
+	MasterOK												:	BOOL;				//TRUE when Master Device is OK
+	FieldOK													:	BOOL;				//TRUE when Field Devices (Slaves) are OK
+END_VAR                     	
+VAR
+(* internal used variables ***********************************************)
+	Rx_ErrorCounter											:	USINT := 0;
+	Tx_ErrorCounter											: 	USINT := 0;
+
+(* events *********************************************************)
+	Event													:	EventHandlingGrp10 := (AutoConfirm	:= FALSE);
+	
+(* Dummys **********************************************************)
+	i														:	INT ;
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* CanOpen Master Diag Ctrl 					*)
+	(************************************************)
+
+(* Work IO *************************************************)
+	IO();
+
+(* Events **************************************************)
+	IF Event.no[1].Text1 <> IO.Name OR Event.no[1].Text1 <> ''
+	THEN
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+			Event.no[1].Text1								:= IO.Name;
+		END_FOR	
+	END_IF
+
+(* 
+  Bit 0: CAN-Controller is in BUS-OFF
+  Bit 1: CAN-Controller warning limit reached
+  Bit 2: Rx-Queue overrun
+  Bit 3: Hi-Prio Tx-Queue overrun
+  Bit 4: Lo-Prio Tx-Queue overrun
+  Bit 5: CAN-Send Error
+*)
+	Event.no[1].Flag 										:= IO.CanState.0;
+	Event.no[2].Flag 										:= IO.CanState.1;
+	Event.no[3].Flag 										:= IO.CanState.2;   
+	Event.no[4].Flag 										:= IO.CanState.3;   
+	Event.no[5].Flag 										:= IO.CanState.4; 	
+	Event.no[6].Flag 										:= IO.CanState.5;
+	
+	IF Rx_ErrorCounter <> IO.RXErrorCounter 
+	THEN
+		Rx_ErrorCounter 									:= IO.RXErrorCounter;
+		Event.no[7].Text1 									:= USINT_TO_STRING(Rx_ErrorCounter);
+		Event.no[7].Flag									:= TRUE;		
+	ELSIF ConfirmTrig
+	THEN
+		Event.no[7].Flag									:= FALSE;
+	END_IF
+
+	IF Tx_ErrorCounter <> IO.TxErrorCounter
+	THEN
+		Tx_ErrorCounter 									:= IO.TXErrorCounter;
+		Event.no[8].Text1 									:= USINT_TO_STRING(Tx_ErrorCounter);
+		Event.no[8].Flag									:= TRUE;		
+	ELSIF ConfirmTrig
+	THEN
+		Event.no[8].Flag 									:= FALSE;
+	END_IF	
+
+	Event.no[9].Flag 										:= FALSE;
+	Event.no[10].Flag 										:= FALSE;	
+	
+	Event(
+		ConfirmTrig := ConfirmTrig,
+		Disable		:= NOT Enable,
+		SourceId	:= SourceId);
+	
+
+(*******************************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="CANopenMasterDiag">
+      <LineId Id="192" Count="57" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

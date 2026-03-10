@@ -1,0 +1,219 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="NciChannel" Id="{f4611bde-fe62-4388-ab5c-b047a91b84fa}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK NciChannel EXTENDS NCI_REF
+VAR_INPUT
+	Admin													:	NciAdmin;
+	grp														:	NciGrp;
+	Itp														:	NciItp;
+	motion													:	NciMotion;
+                        								   
+	MFnc													: 	NciMFnc;
+	RPara													:	NciReadWriteRParam;
+                        	
+END_VAR                 	
+VAR_OUTPUT              	
+	ErrHdl													:	ERROR_HDL;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* NCI Control											*)
+	(********************************************************)
+
+(********************************************************************************)
+(* work admin ctrl																*)
+(********************************************************************************)
+	admin(
+		ResetAdmin				:= ,
+		Enable					:= ,
+		EStop					:= ,
+		SingleBlockMode			:= , 
+		InSingleBlockTrigNext	:= , 
+		GrpCnfg					:= ,
+		Override				:= ,
+		SpindleOvr				:= ,	
+		rNCIRef					:= THIS^,
+		InGroup					=> ,
+		Busy					=> ,
+		Done					=> ,
+		Error					=> ,
+		ErrorID					=> ,
+		ErrorText				=> );
+
+(********************************************************************************)
+(* work group ctrl																*)
+(********************************************************************************)
+	grp(
+		Execute				:= ,
+		Fnc					:= ,
+		XAxisId				:= ,
+		YAxisId				:= ,
+		ZAxisId				:= ,
+		Q1AxisId			:= ,
+		Q2AxisId			:= ,
+		Q3AxisId			:= ,
+		Q4AxisId			:= ,
+		Q5AxisId			:= ,
+		AxisIndex			:= ,
+		rNCIRef				:= THIS^, 
+		Busy				=> ,
+		Done				=> ,
+		Error				=> ,
+		ErrorID				=> ,
+		ErrorText			=> );
+
+(********************************************************************************)
+(* work interpolation ctrl														*)
+(********************************************************************************)
+	Itp(
+		Execute				:= ,
+		Fnc					:= ,
+		Prg					:= ,
+		rTable				:= ,
+		rNCIRef				:= THIS^,
+		StartPrgAfterLoading:= , 
+		LogFeederEntries	:= ,
+		Busy				=> ,
+		Done				=> ,
+		Error				=> ,
+		ErrorID				=> ,
+		ErrorText			=> );
+
+
+(********************************************************************************)
+(* work motion ctrl																*)
+(********************************************************************************)
+	motion(
+		Execute						:= ,
+		Fnc							:= ,
+		rNCIRef						:= THIS^,
+		FNC_ESTOP					=> ,
+		FNC_STEP_ON					=> ,
+		FNC_ENABLE_FEEDER_BACKUP	=> ,
+		FNC_DISABLE_FEEDER_BACKUP	=> ,
+		FNC_RETRACE_FWD				=> ,
+		FNC_RETRACE_BWD				=> ,
+		Busy						=> ,
+		Done						=> ,
+		Error						=> ,
+		ErrorId						=> ,
+		ErrorText					=> );
+
+(********************************************************************************)
+(* work R rarameter ctrl														*)
+(********************************************************************************)
+	RPara(
+		Execute						:= ,
+		Fnc							:= ,
+		pAddr						:= ,
+		Index						:= ,
+		Count						:= ,
+		rNCIRef						:= THIS^,
+		Done						=> ,
+		Busy						=> ,
+		Error						=> ,
+		ErrorId						=> );
+
+(********************************************************************************)
+(* work M function  ctrl														*)
+(********************************************************************************)
+	MFnc(
+		ConfirmHsk					:= ,
+		FastMFuncReset				:= ,
+		FastMFuncNo					:= ,
+		rNCIRef						:= THIS^);
+
+(********************************************************************************)
+(* collect errors																*)
+(********************************************************************************)
+	IF Admin.Error
+	THEN
+		ErrHdl.flag											:= Admin.Error;
+		ErrHdl.id											:= UDINT_TO_DINT(Admin.ErrorID);
+		ErrHdl.fnc											:= 'NciAdmin';
+		ErrHdl.text											:= Admin.ErrorText;
+                        									
+	ELSIF grp.Error     									
+	THEN                									
+		ErrHdl.flag											:= grp.Error;
+		ErrHdl.id											:= UDINT_TO_DINT(grp.ErrorID);
+		ErrHdl.fnc											:= 'NciGrp';
+		ErrHdl.text											:= grp.ErrorText;
+                        									
+	ELSIF itp.Error     									
+	THEN                									
+		ErrHdl.flag											:= Itp.Error;
+		ErrHdl.id											:= UDINT_TO_DINT(Itp.ErrorID);
+		ErrHdl.fnc											:= 'NciItp';
+		ErrHdl.text											:= Itp.ErrorText;
+                        									
+	ELSIF motion.Error  									
+	THEN                									
+		ErrHdl.flag											:= motion.Error;
+		ErrHdl.id											:= UDINT_TO_DINT(motion.ErrorID);
+		ErrHdl.fnc											:= 'NciMotion';
+		ErrHdl.text											:= motion.ErrorText;
+		
+	ELSIF RPara.Error  									
+	THEN                									
+		ErrHdl.flag											:= RPara.Error;
+		ErrHdl.id											:= UDINT_TO_DINT(RPara.ErrorID);
+		ErrHdl.fnc											:= 'RPara';
+		ErrHdl.text											:= CONCAT('Error RPara id: ',  UDINT_TO_STRING(RPara.Errorid));
+	ELSE
+		ErrHdl.Reset();
+	END_IF
+(******************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="noAction" Id="{df64c0ea-9c8a-43db-8378-c28d22b5f27e}">
+      <Declaration><![CDATA[METHOD PUBLIC noAction : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[grp.Execute													:= FALSE;
+itp.Execute													:= FALSE;
+Motion.Execute												:= FALSE;
+RPara.Execute												:= FALSE;
+
+NoAction 													:= NOT Grp.Busy and not Itp.Busy and not Motion.Busy and not RPara.Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{3dd0c91b-d075-4fb6-b726-af1c7c9ed2e0}">
+      <Declaration><![CDATA[METHOD reset : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[NoAction();
+reset 			:= Admin.reset(FALSE);
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciChannel">
+      <LineId Id="3" Count="1" />
+      <LineId Id="278" Count="0" />
+      <LineId Id="6" Count="100" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="255" Count="2" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="225" Count="26" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="260" Count="5" />
+      <LineId Id="253" Count="1" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciChannel.noAction">
+      <LineId Id="14" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciChannel.reset">
+      <LineId Id="24" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

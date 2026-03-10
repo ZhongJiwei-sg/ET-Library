@@ -1,0 +1,360 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FifoBase" Id="{38b700cf-70bf-4686-89f1-fc93ff177933}" SpecialFunc="None">
+    <Declaration><![CDATA[//Fifo basic control template with external memory 
+FUNCTION_BLOCK FifoBase
+VAR_INPUT
+	Overwrite												:	BOOL := FALSE; //Return value TRUE = overwrite oldest entry 
+END_VAR
+VAR_OUTPUT
+	Count													:	UDINT := 0; //Number of entrys	
+	Full													:	BOOL := FALSE; //Fifo is full
+	Empty													:	BOOL := TRUE;  //Fifo is empty
+END_VAR
+VAR
+	Interlock												:	BOOL; //Multitask interlock
+	MaxEntrys												:	UDINT := 0; //Maximum number of entrys based on size of data and size of memory
+	SizeOfEntry												:	UDINT := 0;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;
+
+]]></ST>
+    </Implementation>
+    <Method Name="_clear" Id="{96c121c1-aaba-4a58-b433-4e17cf414e69}">
+      <Declaration><![CDATA[//Clear out one entry from the Fifo buffer
+METHOD PROTECTED _clear : BOOL //TRUE if method was successful
+VAR_INPUT
+	EntryNo													:	UDINT;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR             										
+VAR                 										
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF EntryNo = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+THEN
+	_Clear													:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN	
+	IF Empty OR EntryNo > Count
+	THEN
+		_Clear												:=TRUE;
+	ELSE	                        						
+		MaxEntrys 											:= SizeOfMemory / SizeOfEntry;	
+		
+		//shift datasets
+		MEMMOVE(pMemory + ((EntryNo - 1) * SizeOfEntry) , pMemory + (EntryNo * SizeOfEntry)  , (Count - EntryNo) * SizeOfEntry);
+		
+		//delete last shifted dataset 
+		MEMSET(pMemory + ((Count - 1) * SizeOfEntry),0, SizeOfEntry);
+
+		Count 												:= MAX(0,Count - 1);
+		Full 												:= FALSE;
+		Empty 												:= Count = 0;
+		_Clear												:= TRUE;	
+	END_IF
+	Interlock												:= FALSE;
+ELSE
+	_Clear													:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_clearByDataSet" Id="{bb235464-f5ad-4327-a475-77f36698d927}">
+      <Declaration><![CDATA[//Clear out defined data set from the Fifo buffer
+METHOD PROTECTED _clearByDataSet : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;										
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR             										
+VAR         
+	i														:	UDINT;        										
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	pData = 0
+	OR SizeOfData = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+	OR Empty
+THEN
+	_ClearByDataSet											:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN
+	_ClearByDataSet											:= FALSE;
+	MaxEntrys 												:= SizeOfMemory / SizeOfData;	
+	FOR i := Count TO 1 BY -1
+	DO
+		
+		IF MEMCMP(pData,pMemory + ((i - 1) * SizeOfData), SizeOfData) = 0
+		THEN
+			IF TO_UDINT(i) >= MaxEntrys
+			THEN //Just delete the entry at the end of the list
+				MEMSET(pMemory + ((i - 1) * SizeOfData),0, SizeOfData);
+				Count 										:= MAX(0,Count - 1);
+			ELSE //Copy the other entrys over the found one and delte the left entry from the list
+				MEMMOVE(pMemory + ((i - 1) * SizeOfData),pMemory + (i * SizeOfData) , MIN(Count - i, MaxEntrys - 1) * SizeOfData);
+				MEMSET(pMemory + ((Count - 1 )* SizeOfData),0, SizeOfData);
+				Count 										:= MAX(0,Count - 1);
+			END_IF		
+			_ClearByDataSet									:= TRUE;
+			Full 											:= FALSE;
+			Empty 											:= Count = 0;		
+			IF Empty 
+			THEN
+				EXIT;
+			END_IF
+		END_IF
+	END_FOR
+	Interlock												:= FALSE;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_dequeue" Id="{019b1bc1-b8ea-4d1f-98ec-a943c8d93a6c}">
+      <Declaration><![CDATA[METHOD PROTECTED _dequeue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0; //pointer to destination of data
+	SizeOfData												: 	UDINT := 0; //Size of destination data
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	pData = 0
+	OR SizeOfData = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+	OR Empty
+THEN
+	_Dequeue												:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN	
+	(* copy dataset *)
+	MEMMOVE(pData,pMemory + (MAX(0, (Count - 1)) * SizeOfData),SizeOfData);
+	
+	(* delete dataset *)
+	MEMSET(pMemory + (MAX(0,(Count - 1)) * SizeOfData) ,0 ,SizeOfData);
+	Count 													:= MAX(0,Count - 1);
+	Full 													:= FALSE;
+	Empty 													:= Count = 0;
+	_Dequeue												:= TRUE;
+	Interlock												:= FALSE;
+ELSE
+	_Dequeue												:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_enqueue" Id="{696922ed-4a3d-4f59-be6f-6b8850e1c4d1}">
+      <Declaration><![CDATA[METHOD PROTECTED _enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pData = 0
+	OR SizeOfData = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+	OR Full AND NOT Overwrite
+THEN
+	_Enqueue												:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN	
+	_Enqueue												:= TRUE;
+		
+	(* maximum count *)
+	MaxEntrys 												:= SizeOfMemory / SizeOfData;
+	SizeOfEntry												:= SizeOfData;
+
+	(* copy datasets *)
+	MEMMOVE(pMemory + SizeOfData, pMemory, SEL(Full AND Overwrite,Count * SizeOfData , (Count - 1) * SizeOfData));
+	
+	(* copy datasets at the beginning *)
+	MEMCPY(pMemory,pData,SizeOfData);
+	Count													:= MIN(Count + 1, MaxEntrys);
+	Empty 													:= FALSE;
+	Full 													:= Count >= MaxEntrys;
+	Interlock												:= FALSE;
+ELSE
+	_Enqueue												:= FALSE;
+END_IF
+
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_isEnqueued" Id="{ba391edb-bf08-469b-8383-fce6c68d4daf}">
+      <Declaration><![CDATA[//Check wheter a value already exist
+METHOD PROTECTED _isEnqueued : UDINT //data exist in Fifo if reurn value <> 0, returns index of entry in buffer 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR	
+VAR
+	i 														: 	UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	pData = 0
+	OR SizeOfData = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+	OR Empty
+THEN
+	_IsEnqueued												:= 0;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN	
+	_IsEnqueued												:= 0;
+	MaxEntrys 												:= SizeOfMemory / SizeOfData;
+	FOR i := 1 TO Count
+	DO
+		IF MEMCMP(pData,pMemory + ((i - 1) * SizeOfData), SizeOfData) = 0
+		THEN
+			_isEnqueued										:= i;
+			EXIT;
+		END_IF
+	END_FOR
+	Interlock												:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_isNextEntry" Id="{0d212d89-60ff-45c5-a20e-a43ec7dde84f}">
+      <Declaration><![CDATA[//Check wheter a value will be the next output of the buffer
+METHOD PROTECTED _isNextEntry : BOOL //Inputs value is the next output 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_IsNextEntry 	:= 0 = MEMCMP(pData,pMemory +(TO_UDINT(Count -1) * SizeOfData), SizeOfData) and NOT Empty;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_readEntry" Id="{db28ea31-1287-4f92-83d6-29b768c567ee}">
+      <Declaration><![CDATA[METHOD PROTECTED _readEntry : BOOL //TRUE if method was successful
+VAR_INPUT
+	idx														:	UDINT;
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	pData = 0
+	OR SizeOfData = 0
+	OR pMemory = 0
+	OR SizeOfMemory = 0
+	OR Empty
+THEN
+	_ReadEntry												:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN	
+	MaxEntrys 												:= SizeOfMemory / SizeOfData;
+	IF idx < 1 OR idx > MIN(Count,MaxEntrys)
+	THEN
+		_ReadEntry											:= FALSE;
+	ELSE
+		MEMCPY(pData,pMemory + ((idx - 1) * SizeOfData), SizeOfData);
+		_ReadEntry											:= TRUE;					
+	END_IF
+	Interlock												:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_reset" Id="{372e4eb2-eeeb-419e-92db-b72e1b0591f7}">
+      <Declaration><![CDATA[//Reset complete Fifo
+METHOD PROTECTED _reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pMemory = 0
+	OR SizeOfMemory = 0
+THEN
+	_reset													:= FALSE;
+	RETURN;
+ELSIF TestAndSet(Interlock)
+THEN
+	(* delete *)
+	MEMSET(pMemory,0,SizeOfMemory);
+	Empty 													:= TRUE;
+	Full 													:= FALSE;
+	Count 													:= 0;
+	_reset													:= TRUE;
+	Interlock												:= FALSE;
+ELSE
+	_reset													:= TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FifoBase">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoBase._clear">
+      <LineId Id="3" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoBase._clearByDataSet">
+      <LineId Id="3" Count="37" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoBase._dequeue">
+      <LineId Id="3" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoBase._enqueue">
+      <LineId Id="3" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoBase._isEnqueued">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoBase._isNextEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoBase._readEntry">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoBase._reset">
+      <LineId Id="3" Count="7" />
+      <LineId Id="12" Count="3" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="16" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="TCPDeviceCom_SendRecString" Id="{5cae3e83-bed0-4864-b20c-ad6a9b0802cb}" SpecialFunc="None">
+    <Declaration><![CDATA[//FB sends a "command" out and waits for response of the connected device (handshake mode)
+//By changing the Fnc the FB mode can be switched into only send or only receive
+FUNCTION_BLOCK TCPDeviceCom_SendRecString EXTENDS fbBase
+VAR_OUTPUT CONSTANT
+	FNC_SEND_REC											:	INT := 0; //Send command and wait for response
+	FNC_SEND												:	INT := 1; //Send only
+	FNC_REC													:	INT := 2; //Receive only
+END_VAR
+VAR_INPUT
+	Fnc														:	INT(FNC_SEND_REC..FNC_SEND_REC):= FNC_SEND_REC;
+	hSocket													: T_HSOCKET;
+	ClrComBuffer											: BOOL := TRUE; //TRUE Clears com buffer before start
+	Command													: T_MaxString;
+	Suffix													: STRING(5) := '$R'; //Will be added to send data and removed from response
+END_VAR
+VAR_OUTPUT
+	ResponseLen												: UDINT;
+	Response												: T_MaxString;
+	WinsockErrorId											: E_WinsockError;
+END_VAR
+VAR
+	SendRecBytes											:	TCPDeviceCom_SendRecBytes;
+	tmpString												:	T_MaxString;
+END_VAR
+VAR CONSTANT
+END_VAR
+	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	IF Execute
+		AND NOT SendRecBytes.Execute
+	THEN 
+		tmpString											:= CONCAT(Command,Suffix);
+	END_IF
+	
+	SendRecBytes(
+		Execute:= Execute, 
+		hSocket:= hSocket, 
+		ClrComBuffer := ClrComBuffer,
+		cbSrcLen:= TO_UDINT(LEN(tmpString)), 
+		pSrc:= SEL(Command[0] = 0 OR Fnc = FNC_REC , ADR(tmpString),0),
+		cbDestLen:= SIZEOF(Response)-1, 
+		pDest:= SEL(Fnc = FNC_SEND , ADR(Response),0), 
+		Busy=> Busy, 
+		Done=> Done, 
+		RecBytes=> , 
+		Error=> Error, 
+		ErrorId=> ErrorId, 
+		WinsockErrorId=> WinsockErrorId);
+		
+	IF SendRecBytes.Done
+	THEN
+		tmpString											:= ReadStrToSeperator(Suffix,Response);
+		IF tmpString[0] <> 0 
+		THEN
+			Response										:= tmpString;
+			ResponseLen										:= TO_UDINT(LEN(Response));
+		ELSE
+			ResponseLen										:= SendRecBytes.RecBytes;
+		END_IF
+	END_IF
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="TCPDeviceCom_SendRecString">
+      <LineId Id="895" Count="1" />
+      <LineId Id="898" Count="0" />
+      <LineId Id="901" Count="0" />
+      <LineId Id="900" Count="0" />
+      <LineId Id="902" Count="0" />
+      <LineId Id="831" Count="1" />
+      <LineId Id="939" Count="0" />
+      <LineId Id="833" Count="9" />
+      <LineId Id="830" Count="0" />
+      <LineId Id="903" Count="2" />
+      <LineId Id="907" Count="2" />
+      <LineId Id="966" Count="2" />
+      <LineId Id="911" Count="0" />
+      <LineId Id="910" Count="0" />
+      <LineId Id="906" Count="0" />
+      <LineId Id="853" Count="0" />
+      <LineId Id="849" Count="0" />
+      <LineId Id="81" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0098_beckhoff" Id="{44c7dd21-cb9d-4fa3-8aaf-44340a683f4c}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'} //Ensures 1-byte-alignmend
+TYPE AX5000_P_0098_beckhoff :
+STRUCT
+	Actual_lenght : UINT := 16#80;
+	Max_lenght : UINT := 16#80;
+	Name_plate_type: E_AX5000_P_0150_DigitalNamePlate;
+//	{attribute 'hide'}
+	Rsvd1:ARRAY[0..0] OF UINT;
+	Id_prat_1:UDINT;
+	Id_prat_2:UDINT;
+	Version_no:UINT;
+	Motor_vendor:UINT;
+	Serial_number:UDINT;
+	Motor_type:STRING(29);
+	Feedback_typ:STRING(29);
+//	{attribute 'hide'}
+	Rsvd2:UINT;
+	Add_motor_parameter_description:UINT;
+	Nominal_current:UDINT;
+	Nominal_voltage:UINT;
+	Nominal_frequenz:UINT;
+	Nominal_speed:UINT;
+	Maximun_speed:UINT;
+	Cos_phi:UINT;
+	Maximum_feedback_speed:UINT;
+//	{attribute 'hide'}
+	Rsvd3:ARRAY[0..5] OF UINT;	
+//	{attribute 'hide'}
+	Rsvd4:UINT;
+	Checksum:UINT;
+	Position_offset:UDINT;
+	Number_of_adjustments:UINT;
+	
+	Additional_mech_position_offset:UDINT;
+	Checksum2:UINT;
+(*
+	Vendor:STRING(29);
+	Order_code:STRING(29);
+	Electric_type:STRING(29);
+	Serial_no:STRING(10);
+	 {attribute 'hide'}
+	rsvd5:ARRAY[0..9] OF UINT;
+	Mechanical_commutation_offset:UDINT;
+	Generic:ARRAY[0..61] OF UINT;*)
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

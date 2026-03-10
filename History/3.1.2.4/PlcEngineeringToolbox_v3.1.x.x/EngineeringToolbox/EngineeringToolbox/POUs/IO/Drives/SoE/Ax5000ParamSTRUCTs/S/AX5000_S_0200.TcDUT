@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0200" Id="{60f75eda-be0e-446b-87fb-4b6b2086a1d3}">
+    <Declaration><![CDATA[TYPE AX5000_S_0200 :
+STRUCT
+	Amplifier_warning_temperature:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

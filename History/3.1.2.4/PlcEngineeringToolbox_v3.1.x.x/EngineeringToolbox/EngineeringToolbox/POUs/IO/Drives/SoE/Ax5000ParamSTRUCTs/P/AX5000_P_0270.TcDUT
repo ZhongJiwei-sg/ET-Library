@@ -1,0 +1,77 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0270" Id="{1740f64d-d38d-491d-98ec-b56423c3c263}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0270 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Feedback1:STRING(29);
+//	{attribute 'hide'}
+	Rsvd1:UINT;
+	Serial_number_feedback1:ARRAY[0..1] OF UDINT;
+	Feedback2:STRING(29);
+//	{attribute 'hide'}
+	Rsvd2:UINT;
+	Serial_number_feedback2:ARRAY[0..1] OF UDINT;
+	Modulo_value:UDINT;
+
+(*Data read from file*)
+
+(*data[0][0]*)
+	Feedback_number1:UINT;
+	Data_set1:UINT;
+	Feedback_position1:UDINT;
+	Modulo_position1:UDINT;
+	Crc1:UDINT;
+(*data[0][1]*)
+	Feedback_number2:UINT;
+	Data_se2t:UINT;
+	Feedback_position2:UDINT;
+	Modulo_position2:UDINT;
+	Crc2:UDINT;
+(*data[1][0]*)
+	Feedback_number3:UINT;
+	Data_set3:UINT;
+	Feedback_position3:UDINT;
+	Modulo_position3:UDINT;
+	Crc3:UDINT;
+(*data[1][1]*)
+	Feedback_number4:UINT;
+	Data_set4:UINT;
+	Feedback_position4:UDINT;
+	Modulo_position4:UDINT;
+	Crc4:UDINT;
+
+
+(*Current Data*)
+
+
+(*data[0][0]*)
+	Feedback_number5:UINT;
+	Data_set5:UINT;
+	Feedback_position5:UDINT;
+	Modulo_position5:UDINT;
+	Crc5:UDINT;
+(*data[0][1]*)
+	Feedback_number6:UINT;
+	Data_se6t:UINT;
+	Feedback_position6:UDINT;
+	Modulo_position:UDINT;
+	Crc6:UDINT;
+(*data[1][0]*)
+	Feedback_number7:UINT;
+	Data_set7:UINT;
+	Feedback_position7:UDINT;
+	Modulo_position7:UDINT;
+	Crc7:UDINT;
+(*data[1][1]*)
+	Feedback_number8:UINT;
+	Data_set8:UINT;
+	Feedback_position8:UDINT;
+	Modulo_position8:UDINT;
+	Crc8:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

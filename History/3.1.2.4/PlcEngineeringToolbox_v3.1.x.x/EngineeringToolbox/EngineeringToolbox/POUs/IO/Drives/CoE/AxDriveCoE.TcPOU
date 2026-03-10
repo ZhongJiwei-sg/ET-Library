@@ -1,0 +1,175 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AxDriveCoE" Id="{76d9aed7-c480-4791-8c94-5c669719993f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//CoE Drive status and diagnosis
+//Attention: "SwitchedOn" will be only true if bit 12 "FollowCmdValue" of statusword is used by drive
+FUNCTION_BLOCK AxDriveCoE EXTENDS AxDriveBase     
+VAR CONSTANT								
+END_VAR                  						
+VAR_INPUT                           						
+	BrakeUnlock												:	BOOL := FALSE;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	BrakeUnlocked											:	BOOL;
+	Status													:	CiA_DS402Statusword;	
+	InfoData1										AT %I*	:	UINT;
+	InfoData2										AT %I*	:	UINT;
+END_VAR                             						
+VAR
+END_VAR
+VAR
+(* Cache *********************************************************************)
+
+	// CoE Diagmessage
+	StatusTrig												: BYTE;
+	MemStatusTrig											: BYTE;
+	
+(* Timer ********************************************************************************)
+  	readDiagDelay											: TON := (PT := T#50MS);
+                                  						
+(* Trigger ******************************************************************************)
+
+
+(* Function blocks ****************************************************************************)
+	ReadCoEDiagMsg											: EcCoEReadNewestDiagMsg := (Timeout := DEFAULT_ADS_TIMEOUT);	
+	CoEWrite												: FB_EcCoeSdoWriteEx := (tTimeout := DEFAULT_ADS_TIMEOUT);	
+
+(* Dummy Speicher **********************************************************)
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* CoE Drive																		*)
+	(************************************************************************************)
+
+(* abort function-call if the reference is invalid *****************************)
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Fault													:= TRUE;
+	SwitchedOn												:= FALSE;
+	Ready													:= FALSE;
+	RETURN;         										
+END_IF
+
+(* Call super class ****************************************************)
+	SUPER^(); 
+	
+(* Read Statusword ********************************************************)	
+	IF rAxis.Status.OpMode.SimulationAxis
+	THEN
+		IF rAxis.PlcToNc.ControlDWord.0
+		THEN
+			Status.readStatusword(TO_UINT(eCiA_DS402_STATUS_STATE.OPERATION_ENABLED));
+		ELSE
+			Status.readStatusword(TO_UINT(eCiA_DS402_STATUS_STATE.SWITCHED_ON));	
+		END_IF
+	ELSE
+		Status.readStatusword(Statusword);
+	END_IF			
+	
+	(* EL72xx DS402 Statusword
+		Bit 0 : Ready to switch on
+		Bit 1 : Switched on
+		Bit 2 : Operation enabled
+		Bit 3 : Fault
+		Bit 4 : reserved
+		Bit 5 : Quick stop (inverse)
+		Bit 6 : Switch on disabled
+		Bit 7 : Warning
+		Bit 8 + 9 : reserved
+		Bit 10 : TxPDOToggle (An-/Abwahl über 0x60DA)
+		Bit 11 : Internal limit active
+		Bit 12 : (drive follows command value)
+		Bit 13 - 15 : reserved *)
+		
+(* DriveStatusBits ***********************************************)
+	Fault													:= Status.Fault
+																OR rAxis.NcToPlc.StateDWord.28 (* DriveDeviceError *)
+																OR rAxis.NcToPlc.StateDWord.30; (* IODataInvalid *)
+            												
+	Ready 													:= NOT Fault
+																AND(Status.ReadyToSwitchOn OR Status.SwitchedOn);
+
+	SwitchedOn												:= Status.SwitchedOn AND NOT Fault;
+
+	
+(* manual override break ********************************************************)
+	IF (BrakeUnlock XOR BrakeUnlocked)
+		OR CoEWrite.bBusy
+	THEN
+		BrakeUnlocked										:= BrakeUnlock;
+		CoEWrite(
+			bExecute	:= NOT CoEWrite.bBusy AND NOT rAxis.NcToPlc.StateDWord.30 AND AdsAddr.port > 0 AND NOT rAxis.Status.OpMode.SimulationAxis,
+			sNetId		:= F_CreateAmsNetId(nIds :=AdsAddr.netId),
+			nSlaveAddr	:= AdsAddr.port, 
+			nIndex		:= 16#8012, 
+			nSubIndex	:= 16#1, 
+			pSrcBuf		:= ADR(BrakeUnlocked), 
+			cbBufLen	:= SIZEOF(BrakeUnlocked));
+	END_IF
+	
+(* Read diagnoses ***********************************************************)
+	StatusTrig.0											:= NOT Status.ReadyToSwitchOn;
+	StatusTrig.1											:= Status.Fault;
+	StatusTrig.2											:= Status.Warning AND NOT Status.Fault;
+	
+	CASE state OF
+	0: // Read subindex of the newest diagnosis message
+		
+		readDiagDelay(IN := StatusTrig <> MemStatusTrig AND NOT rAxis.Status.OpMode.SimulationAxis AND AdsAddr.port > 0);
+	
+		IF readDiagDelay.Q
+		THEN
+			ReadCoEDiagMsg( Execute:= FALSE,  AdsAddr:= AdsAddr);
+				
+			IF NOT ReadCoEDiagMsg.Busy
+			THEN
+				MemStatusTrig 								:= StatusTrig; 
+				readDiagDelay(IN := FALSE);			
+				state 										:= state + 1;
+			END_IF
+		END_IF
+	1: // read newest message
+		ReadCoEDiagMsg( Execute:= TRUE,  AdsAddr:= AdsAddr);
+		IF NOT ReadCoEDiagMsg.Busy
+		THEN
+			IF ReadCoEDiagMsg.Error
+			THEN
+				state										:= 0;
+			ELSE	
+				state										:= 0;			
+			END_IF
+			ReadCoEDiagMsg(Execute := FALSE);		
+		END_IF
+		
+	END_CASE
+	
+(******************************************************************************)]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveCoE">
+      <LineId Id="333" Count="104" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

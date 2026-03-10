@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EAP_PUB_VAR" Id="{04dd49ad-caf7-4506-9575-9e5dd17759ca}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Default IOs of a Publisher network variable 
+FUNCTION_BLOCK EAP_PUB_VAR 
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT
+	VarId						AT %Q*:	UINT;
+	{attribute 'displaymode':='hex'}
+	VarCtrl						AT %Q*:	UINT;
+END_VAR		
+VAR_OUTPUT	
+	{attribute 'displaymode':='hex'}
+	VarState					AT %I*:	UINT;
+	
+	NotSentVarSkipped					:	BOOL;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* IOs 									*)
+	(****************************************)
+
+NotSentVarSkipped							:= VarState.0;]]></ST>
+    </Implementation>
+    <Property Name="disablePublishing" Id="{f4b8d7e0-0241-483a-a4a4-479c23d84699}">
+      <Declaration><![CDATA[PROPERTY PUBLIC disablePublishing : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9c3f7f8a-66aa-4dea-a347-fd719c92840e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[disablePublishing		:= VarCtrl.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1add8aae-11f4-4ca8-93d2-72e497741520}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[VarCtrl.0				:= disablePublishing;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="EAP_PUB_VAR">
+      <LineId Id="3" Count="1" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_PUB_VAR.disablePublishing.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_PUB_VAR.disablePublishing.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

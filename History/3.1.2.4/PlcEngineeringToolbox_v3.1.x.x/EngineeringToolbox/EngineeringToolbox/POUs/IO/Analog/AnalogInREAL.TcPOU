@@ -1,0 +1,210 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="AnalogInREAL" Id="{3c8146b7-b009-4d8e-b324-0bfa5d735887}" SpecialFunc="None">
+    <Declaration><![CDATA[// AnalogInReal FB to read and scale a single REAL input
+// Set bit 3 (Options.3) to true to enable scaling based on +/-7812500 instead of legacy range values +/-838860x
+// NoOfDigits per default set to 3... 
+FUNCTION_BLOCK AnalogInREAL EXTENDS EcSlaveInfoDataExt
+VAR_INPUT
+	Offset													:	LREAL 		:= 0.0;
+	MinValue												: 	LREAL 		:= 0.0;
+	MaxValue												: 	LREAL 		:= 0.0;
+	NoOfDigits												: 	INT(0..10)	:= 0; //number of decimal digits of scaled Q variable 
+	OutOnError												:	LREAL 		:= 0.000000000000000001;
+{attribute 'displaymode':='binary'}     	            	
+	Options													:	BYTE  		:= 2#0000_0000;
+END_VAR                 									
+VAR                        
+END_VAR                                 	            	
+VAR_OUTPUT                              	            	                                       	
+	Q														:	LREAL;//scaled result value
+	In											AT  %I* 	: 	REAL; //Hardware Input
+	{attribute 'displaymode':='binary'}     	            	
+	Status										AT  %I*		:	WORD := 2#00000000_00000000;	//Terminal status (2 bytes)
+END_VAR                                 	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Read single REAL value from terminal and scale to user units				*)
+(****************************************************************************)
+
+(* Scaling ******************************************************************)
+	IF MaxValue <> MinValue 
+	THEN			
+		IF NOT Options.3
+		THEN
+			Q 	 											:= Offset + Scale(TO_LREAL(In), -8388608.0, 8388607.0, MinValue , MaxValue);
+		ELSE
+			Q 	 											:= Offset + Scale(TO_LREAL(In),  -7812500.0, 7812500.0, MinValue , MaxValue);		
+		END_IF	
+		
+		IF NoOfDigits > 0
+		THEN
+			Q												:= TO_FMLREAL(Q,NoOfDigits);
+		END_IF
+	
+	ELSIF NoOfDigits > 0 (* Bsp PT100 *)
+	THEN
+		Q													:= Offset + TO_FMLREAL(In,NoOfDigits);
+		
+	ELSE  													
+		Q 													:= 0.0;
+	END_IF
+
+(****************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="Error" Id="{ca453eed-6a9f-4737-960b-d2f3d15a46de}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Error : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2ba81606-cdb6-44cc-b1a5-04dc9879ca77}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Error					:= Status.6 OR MinValue = MaxValue AND NoOfDigits = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Limit_1" Id="{501e4239-6301-4fc9-8bef-9bf3dfafa22c}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Limit_1 : BYTE]]></Declaration>
+      <Get Name="Get" Id="{847b48ef-7ae0-46be-a39a-5101853c5ec3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Limit_1.0					:= Status.2;
+Limit_1.1					:= Status.3;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Limit_2" Id="{6224c693-1743-4d90-92f9-92dd613e5c4b}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Limit_2 : BYTE]]></Declaration>
+      <Get Name="Get" Id="{fca64313-61cf-4140-9263-f24d9d11df48}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Limit_2.0					:= Status.4;
+Limit_2.1					:= Status.5;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="optEnableScaleExtRangeMode" Id="{c7d501b6-cf7a-4a92-a5b5-9de8a39da864}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableScaleExtRangeMode : bool]]></Declaration>
+      <Get Name="Get" Id="{79270da5-3e35-4d20-83ee-eb362bed1779}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableScaleExtRangeMode := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ba1ed693-72fb-489a-86b4-df7ffd35f0fe}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optEnableScaleExtRangeMode;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="Overrange" Id="{61228141-9164-4268-a087-01a4d0b69bd2}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Overrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4314db14-2e15-4d9b-8bac-e543be1e4d74}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Overrange 			:= Status.1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="TareActive" Id="{8eb79860-5ee9-45b4-92dd-50fbaffe8b5d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC TareActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4e00d335-8bd8-4e2b-8d42-d1219f9c9a57}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[TareActive					:= Status.11;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="TxPDOState" Id="{421ee044-bb0d-40be-8fa5-14cca3f8664a}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC TxPDOState : BOOL]]></Declaration>
+      <Get Name="Get" Id="{28fb0f06-1441-43b4-876b-5a6134a8d2e5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[TxPDOState					:= Status.14; //True if not valid
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="TxPDOToggle" Id="{bce3c13d-5bf4-4b53-82e4-56e171f5645e}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC TxPDOToggle : BOOL]]></Declaration>
+      <Get Name="Get" Id="{029cd1fa-10ea-4e61-847c-e831bc596d48}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[TxPDOToggle							:= Status.15;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Underrange" Id="{4c21e517-afa9-4645-b002-c95d7ea9356a}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Underrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{859565e4-2188-4706-9d53-d7975233fd3f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Underrange 			:= Status.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="AnalogInREAL">
+      <LineId Id="3" Count="25" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.Error.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.Limit_1.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.Limit_2.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.optEnableScaleExtRangeMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.optEnableScaleExtRangeMode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.Overrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.TareActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.TxPDOState.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.TxPDOToggle.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogInREAL.Underrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

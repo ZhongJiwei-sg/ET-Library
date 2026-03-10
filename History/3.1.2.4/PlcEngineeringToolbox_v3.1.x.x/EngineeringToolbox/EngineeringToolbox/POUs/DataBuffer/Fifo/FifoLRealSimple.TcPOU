@@ -1,0 +1,149 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FifoLRealSimple" Id="{e1afd5da-1320-4e33-abe2-b86069564770}" SpecialFunc="None">
+    <Declaration><![CDATA[//Fifo with a internal Lreal array for a simple num list implementation
+FUNCTION_BLOCK FifoLRealSimple EXTENDS FifoBase
+VAR_OUTPUT CONSTANT
+	MIN_BUFFER												:	DINT := 1; //Fifo buffer start index 
+	MAX_BUFFER												:	DINT := PARAM.FIFO_LREAL_SIMPEL_MAX_BUFFER; //Fifo buffer end index - see library parameter to customize parameter
+END_VAR   
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	Buffer													:	ARRAY[MIN_BUFFER..MAX_BUFFER] OF LREAL; //Lreal Fifo buffer 
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="clear" Id="{c4f10046-e7e5-4de4-92ca-e27e14966c25}">
+      <Declaration><![CDATA[ //Clear out one entry from the Fifo buffer
+METHOD PUBLIC clear : BOOL //TRUE if method was successful
+VAR_INPUT
+	EntryNo													:	UDINT;
+END_VAR             										
+VAR                 										
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Clear := super^._Clear(EntryNo,ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="clearByDataSet" Id="{01a789c3-6eed-4542-9323-443f3b5b14a9}">
+      <Declaration><![CDATA[//Clear out defined data set from the Fifo buffer
+METHOD PUBLIC clearByDataSet : BOOL //TRUE if method was successful
+VAR_INPUT
+	Value													:	LREAL;
+END_VAR             										
+VAR                 										
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ClearByDataSet := super^._ClearByDataSet(ADR(Value),SIZEOF(Value),ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeue" Id="{5e1c09f6-7701-426f-8f6a-c09a2e717366}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeue : BOOL //TRUE if method was successful
+VAR_IN_OUT
+	Value													:	LREAL;	
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Dequeue := SUPER^._Dequeue(ADR(Value),SIZEOF(Value),ADR(Buffer),SIZEOF(Buffer));
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueue" Id="{372cdcf8-6d24-4e19-9ed7-f66f46eb2778}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	Value													:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enqueue := SUPER^._Enqueue(ADR(Value),SIZEOF(Value),ADR(Buffer),SIZEOF(Buffer));
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isEnqueued" Id="{033b652e-fb3c-462a-a907-731b86af7249}">
+      <Declaration><![CDATA[//Check wheter a value already exist
+METHOD PUBLIC isEnqueued : uDINT //In Value exist in Fifo at idx as return value  
+VAR_INPUT
+	Value													:	LREAL;
+END_VAR	
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsEnqueued := SUPER^._IsEnqueued(ADR(Value),SIZEOF(Value),ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isNextEntry" Id="{c5a5bd6f-a896-46ae-babe-2b4879d27e31}">
+      <Declaration><![CDATA[//Check wheter a value will be the next output of the buffer
+METHOD PUBLIC isNextEntry : BOOL //Inputs value is the next output 
+VAR_INPUT
+	Value													: LREAL;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsNextEntry := SUPER^._IsNextEntry(ADR(Value),SIZEOF(Value),ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readEntry" Id="{457287b1-8da4-4262-8080-7c7a0a193732}">
+      <Declaration><![CDATA[METHOD PUBLIC readEntry : BOOL //TRUE if method was successful
+VAR_INPUT
+	idx														:	uDINT;
+END_VAR
+VAR_IN_OUT
+	value													: LREAL;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ReadEntry := SUPER^._ReadEntry(idx,ADR(Value),SIZEOF(Value),ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{4c1429a2-09d1-4def-a7c0-047cb72670f9}">
+      <Declaration><![CDATA[//Reset complete Fifo
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset := SUPER^._reset(ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FifoLRealSimple">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoLRealSimple.clear">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoLRealSimple.clearByDataSet">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoLRealSimple.dequeue">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoLRealSimple.enqueue">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoLRealSimple.isEnqueued">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoLRealSimple.isNextEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoLRealSimple.readEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FifoLRealSimple.reset">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

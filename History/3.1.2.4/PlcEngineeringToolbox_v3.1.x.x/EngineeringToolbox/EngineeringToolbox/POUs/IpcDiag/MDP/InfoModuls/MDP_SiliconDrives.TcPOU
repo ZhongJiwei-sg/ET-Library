@@ -1,0 +1,220 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MDP_SiliconDrives" Id="{3835b9f7-8eb6-479a-b3c7-1cf0f6142d27}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK MDP_SiliconDrives  EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	MIN_DRIVES												:	INT := 1;
+	MAX_DRIVES												:	INT := 4;
+END_VAR                 									
+VAR_INPUT               									
+	AmsNetId												: 	T_AmsNetId := '';	//AmsNetId as text
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;	//Ads timeout
+END_VAR                 									
+VAR_OUTPUT              									
+	TotEraseCounts											:  ARRAY[MIN_DRIVES..MAX_DRIVES] OF	T_LARGE_INTEGER;	//total number erase operations
+	Usage													:	ARRAY[MIN_DRIVES..MAX_DRIVES] OF	UINT;	//usage of drive in %
+	NoOfSpares												:	ARRAY[MIN_DRIVES..MAX_DRIVES] OF	UINT;	//number of partitions
+	SparedUsed												:	ARRAY[MIN_DRIVES..MAX_DRIVES] OF	UINT;	//usage of partitions
+	Count													:	INT; 	//number of drives
+	NoSiliconDrives											:	BOOL := FALSE;	//should be TRUE if there is no SSD drive in use
+	ErrorGrp												:	E_MDP_ErrGroup := eMDP_Err_NoError;
+END_VAR
+VAR
+	idx														:	INT := 1;
+	MDP_ScanModules											:	FB_MDP_ScanModules := ( nModuleType 	:= eMDP_ModT_SiliconDrive , iModIdx		:= 0);
+	MDP_Read												: 	FB_MDP_ReadModuleContent;
+	SplitErrorId											:	FB_MDP_SplitErrorID;
+	DstBuf													:	ARRAY[0..8] OF BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read CPU Information 					V1.0	*)
+	(****************************************************)
+
+(* Start Read *******************************************************)
+	IF Execute
+		AND state = 0
+	THEN
+		MEMSET(ADR(TotEraseCounts),0,SIZEOF(TotEraseCounts));
+		MEMSET(ADR(Usage),0,SIZEOF(Usage));
+		MEMSET(ADR(NoOfSpares),0,SIZEOF(NoOfSpares));
+		MEMSET(ADR(SparedUsed),0,SIZEOF(SparedUsed));
+	
+		NoSiliconDrives										:= FALSE;
+		Count												:= 0;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+		MDP_Read(bExecute := FALSE);
+		MDP_ScanModules(
+			bExecute		:= NOT MDP_ScanModules.bExecute,
+			nModuleType		:= eMDP_ModT_SiliconDrive,
+			iModIdx			:= 0,
+			tTimeout		:= timeout,
+			sAmsNetId		:= AmsNetId,
+			bBusy			=> ,
+			bError			=> ,
+			nErrID			=> ,
+			nDynModuleId	=> ,
+			iModuleTypeCount=> ,
+			iModuleCount	=> );
+		MDP_ScanModules(bExecute := TRUE);
+		
+		state												:= 1;
+	ELSIF NOT Execute
+		AND State = 99
+	THEN
+		state												:= 0;
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+	END_IF
+
+
+	CASE state OF
+	0:
+		;
+	1:
+		MDP_ScanModules();
+		IF NOT MDP_ScanModules.bBusy
+		THEN
+			IF MDP_ScanModules.bError
+			THEN
+				IF MDP_ScanModules.nErrID = 16#EC800002
+				THEN
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					NoSiliconDrives							:= TRUE;
+				ELSE
+
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					SplitErrorId(
+						nErrID		:= MDP_ScanModules.nErrID,
+						eErrGroup	=> ErrorGrp ,
+						nErrCode	=> ErrorId);
+				END_IF
+				state										:= 99;
+				MDP_ScanModules(bExecute := FALSE);
+			ELSE
+				Count										:= MDP_ScanModules.iModuleTypeCount;
+				MDP_Read.stMDP_DynAddr.nArea				:= 16#8;
+				MDP_Read.stMDP_DynAddr.nModuleId			:= MDP_ScanModules.nDynModuleId;
+				MDP_Read.stMDP_DynAddr.nSubIdx				:= 0;
+				MDP_Read.stMDP_DynAddr.nTableId				:= 1;
+				MDP_Read(bExecute := FALSE);
+				idx											:= 1;
+				
+				IF Count <= 0
+				THEN
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 99;
+				ELSE
+					state									:= 2;
+				END_IF
+			END_IF
+
+		END_IF
+
+	2:
+		MDP_Read( pDstBuf:= ADR(DstBuf), cbDstBufLen:= SIZEOF(DstBuf));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				MDP_Read(bExecute := FALSE);
+				CASE MDP_Read.stMDP_DynAddr.nSubIdx OF
+				0:
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 1;
+
+				1:
+					MEMCPY(ADR(TotEraseCounts[idx]), ADR(DstBuf), MIN(MDP_Read.nCount, SIZEOF(TotEraseCounts[MIN_DRIVES])));
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 2;
+
+				2:
+					MEMCPY(ADR(Usage[idx]), ADR(DstBuf), SIZEOF(Usage[MIN_DRIVES]));
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 3;
+
+				3:
+					MEMCPY(ADR(NoOfSpares[idx]), ADR(DstBuf), SIZEOF(NoOfSpares[MIN_DRIVES]));
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 4;
+
+				4:
+					MEMCPY(ADR(SparedUsed[idx]), ADR(DstBuf), SIZEOF(SparedUsed[MIN_DRIVES]));
+					MDP_Read.stMDP_DynAddr.nModuleId		:= MDP_Read.stMDP_DynAddr.nModuleId + 1;
+					idx										:= idx + 1;
+					MDP_Read.stMDP_DynAddr.nSubIdx			:= 1;
+					IF idx > Count
+						OR idx > MAX_DRIVES
+					THEN
+						Busy								:= FALSE;
+						Done								:= TRUE;
+						state								:= 99;
+					END_IF
+				END_CASE
+
+				MDP_Read(
+					stMDP_DynAddr	:= ,		(* address to request subindex Count of AdressList *)
+					pDstBuf			:= ADR(DstBuf),
+					cbDstBufLen		:= SIZEOF(DstBuf),
+					bExecute		:= NOT MDP_Read.bBusy AND state = 2,
+					tTimeout		:= Timeout,
+					sAmsNetId		:= AmsNetId,
+					bBusy			=> ,
+					bError			=> ,
+					nErrId			=> );
+
+			END_IF
+		END_IF
+
+	99: ;
+
+	ELSE
+		;
+	END_CASE
+
+	(* reset state for next start *)
+	IF NOT Execute
+		AND state = 99
+	THEN
+		state												:= 0;
+	END_IF
+
+(****************************************************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MDP_SiliconDrives">
+      <LineId Id="3" Count="181" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
