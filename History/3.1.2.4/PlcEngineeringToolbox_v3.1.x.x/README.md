@@ -12,6 +12,7 @@
 ### Added
 - _Miscellaneous/
 	Added new function "scale2", which is not limiting the In value (like "scale") and provides a scaled value even if In value is outside InLow/InHigh 
+	Conversions/ added TO_FMREAL function
 	
 ### Fixed	
 - IO/FreqConv/Fb IOFcCom	
