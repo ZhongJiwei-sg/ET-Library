@@ -14,6 +14,9 @@
 	Added new function "scale2", which is not limiting the In value (like "scale") and provides a scaled value even if In value is outside InLow/InHigh 
 	Conversions/ added TO_FMREAL function
 	
+- StringHelper/
+	Added new functions, CHR_TO_STR() , STR_TO_ASC() and stringCmp()
+	
 ### Fixed	
 - IO/FreqConv/Fb IOFcCom	
 	- Fixed swapped start forward/reverse when stared via FB input variabels 

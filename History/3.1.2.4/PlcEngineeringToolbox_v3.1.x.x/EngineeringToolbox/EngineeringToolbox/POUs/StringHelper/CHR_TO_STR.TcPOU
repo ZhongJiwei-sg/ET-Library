@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
+  <POU Name="CHR_TO_STR" Id="{82f58534-52b3-4474-a6f5-678a3df401e1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION CHR_TO_STR : STRING
+VAR_INPUT
+	c : BYTE;
+END_VAR
+VAR
+	str1: STRING(1);
+	pChar : POINTER TO BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	str1 		:= '@'; (* initialization with any character *)
+	pChar 		:= ADR(str1);	(* get string pointer *)
+	pChar^ 		:= c; (* overwrite first character with c *)
+	CHR_TO_STR 	:= str1; (* return c as string *)
+]]></ST>
+    </Implementation>
+    <LineIds Name="CHR_TO_STR">
+      <LineId Id="21" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

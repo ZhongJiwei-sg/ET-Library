@@ -15,7 +15,7 @@
     <Implicit_Jitter_Distribution>{7948cd54-4b7b-47cd-afaf-23aceda9c908}</Implicit_Jitter_Distribution>
     <LibraryReferences>{bc84946c-93e7-431f-a8f1-34ecb4f712f3}</LibraryReferences>
     <Company>Beckhoff Electronics Mfg</Company>
-    <Released>true</Released>
+    <Released>false</Released>
     <Title>EngineeringToolbox</Title>
     <DefaultNamespace>ET</DefaultNamespace>
     <Placeholder>ET</Placeholder>
@@ -2005,6 +2005,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
     <Compile Include="POUs\Safety\Diag\SafetyLogicAndIOTerminalDiag.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\StringHelper\CHR_TO_STR.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="POUs\StringHelper\cutStrNumberToSeperator.TcPOU">
       <SubType>Code</SubType>
     </Compile>
@@ -2012,6 +2015,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\StringHelper\replaceUmlauts.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\stringCmp.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\StringHelper\STR_TO_ASC.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\System\SystemInfo.TcPOU">

@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
+  <POU Name="stringCmp" Id="{594e733b-1b5c-4aae-854c-ba52e0f2610a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION stringCmp : BOOL
+VAR_INPUT
+	ptStr1 : POINTER TO BYTE;
+	ptStr2 : POINTER TO BYTE;
+	MaxStringLen	:	UDINT;
+END_VAR
+VAR
+	i				:	UDINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[StringCmp			:= FALSE;
+FOR i := 0 TO MaxStringLen 
+DO
+   	IF (ptStr1^ <> ptStr2^) 
+	THEN  // If two characters are unequal, return FALSE 
+      StringCmp 	:= FALSE;
+      RETURN;
+   	ELSIF ((ptStr1^ = 0) AND (ptStr2^ = 0)) 
+	THEN   // If both strings have reached the NULL TERMINATOR at the same place, the strings are identical 
+      StringCmp 	:= TRUE;
+      RETURN;
+   	ELSE						// If the two characters were equal, but were not NULL TERMINATORS, increment to check next character 
+      ptStr1 		:= ptStr1 + 1;
+      ptStr2 		:= ptStr2 + 1;
+   	END_IF
+END_FOR]]></ST>
+    </Implementation>
+    <LineIds Name="stringCmp">
+      <LineId Id="29" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="5" Count="2" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="8" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
