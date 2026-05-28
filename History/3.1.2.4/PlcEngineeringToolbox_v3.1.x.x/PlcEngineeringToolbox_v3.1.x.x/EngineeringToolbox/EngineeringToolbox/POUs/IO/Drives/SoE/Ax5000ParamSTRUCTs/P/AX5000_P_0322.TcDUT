@@ -1,0 +1,92 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0322" Id="{eb52ee2c-4130-446d-adfc-cab15e090ace}">
+    <Declaration><![CDATA[//	{attribute 'hide'}
+TYPE AX5000_P_0322 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+
+
+	PCB_ID_version:UINT;
+	Hwld1:UINT;
+	Hwld2:UINT;
+	Hwld3:UINT;
+	Manufacturing_Data:UINT;
+	Serial_number_low:UINT;
+	Serial_number_high:UINT;
+	Checksum:UINT;
+
+
+	PCB_ID_version1:UINT;
+	Hwld4:UINT;
+	Hwld5:UINT;
+	Hwld6:UINT;
+	Manufacturing_Data1:UINT;
+	Serial_number_low1:UINT;
+	Serial_number_high1:UINT;
+	Checksum1:UINT;
+
+
+	PCB_ID_version2:UINT;
+	Hwld7:UINT;
+	Hwld8:UINT;
+	Hwld9:UINT;
+	Manufacturing_Data2:UINT;
+	Serial_number_low2:UINT;
+	Serial_number_high2:UINT;
+	Checksum2:UINT;
+
+
+	PCB_ID_version3:UINT;
+	Hwld10:UINT;
+	Hwld11:UINT;
+	Hwld12:UINT;
+	Manufacturing_Data3:UINT;
+	Serial_number_low3:UINT;
+	Serial_number_high3:UINT;
+	Checksum3:UINT;
+
+
+	PCB_ID_version4:UINT;
+	Hwld13:UINT;
+	Hwld14:UINT;
+	Hwld15:UINT;
+	Manufacturing_Data4:UINT;
+	Serial_number_low4:UINT;
+	Serial_number_high4:UINT;
+	Checksum4:UINT;
+
+
+	PCB_ID_version5:UINT;
+	Hwld16:UINT;
+	Hwld17:UINT;
+	Hwld18:UINT;
+	Manufacturing_Data5:UINT;
+	Serial_number_low5:UINT;
+	Serial_number_high5:UINT;
+	Checksum5:UINT;
+
+
+	Control_Pcb_Id_valid:UINT;
+	Power_Pcb_Id_valid:UINT;
+	Driver_Pcb_Id_valid:UINT;
+	Front_Pcb_Id_valid:UINT;
+	OptionSlot_Pcb_Id_valid:UINT;
+	SafetySlot_Id_valid:UINT;
+	Dsp_Revidion:UINT;
+	Dsp_Id_Xint_Revision:UINT;
+	Feedback_Dsp_Id:UINT;
+	Feedback_Dsp_Revision:UINT;
+	Esc_Revision:UINT;
+	Esc_build:UINT;
+	Esc_type:UINT;
+	FPGA_device_Type:UINT;
+	FPGA_device_Subtype:UINT;
+	FPGA_version_number:UINT;
+	FPGA_build_number:UINT;
+	Option_slot_FPGA:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,1556 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="Statemodel" Id="{557917b0-5284-42ca-8906-d21af7844662}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Mode-Statemodel controller - inspired by OMAC statemodel
+//FB is able to synchronize subordinate statemodel instances as well to be a subordinate instance at the same time 
+//
+//				(Line control SM)
+//				I				I
+//			(Feeder)			(Stacker)
+//			I	 	I			I		I					
+//		(XYAxis) (Belts)	(XYAxis) (Belts)		
+//
+{attribute 'reflection'} 
+FUNCTION_BLOCK Statemodel IMPLEMENTS I_Statemodel
+VAR_OUTPUT CONSTANT         								
+	VERSION													:	STRING(5) := 'V7';
+	MIN_SLAVE												:	INT := 1;	 
+	MAX_SLAVE												:	INT := PARAM.STATEMODEL_CTRL_MAX_SLAVE; //see library parameter to customize parameter	
+                     
+//Statemodel error codes       								
+	ERROR_MACHINE											:	INT := 1;	(* Error requested in reason of fatal machine error, all subs in then same unit change their state to Stopping with error *)
+	ERROR_LOCAL												:	INT := 2; 	(* Error requested from this sub *)
+	ERROR_EXTERNAL											:	INT := 3; 	(* Error requested by Unit in reason of fatal machine error in other Sub *)
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_MODE_SWITCH_TO_IDLE						:	BYTE := 2#0000_0001; //Mode switched to Idle automatically if state Aborted/Stopped reached - as default the mode will not change
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_MODE_CHANGE_IN_EXECUTE					:	BYTE := 2#0000_0010; //Mode change in state Execute, FALSE = mode change over state stopping
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_EXTERNAL_STATE_COMPLETE					:	BYTE := 2#0000_0100; //Default:Enable external use of method "StateComplete"! even if instance is controlling subs as well
+{attribute 'displaymode':='binary'}	
+	OPTION_DISABLE_LOCAL_ESTOP								:	BYTE := 2#0000_1000; //Disable local EStop signals, if sub ist remote controlled 
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_MASCHINE_ERROR_TO_MASTER					:	BYTE := 2#0001_0000; //Default:Machine error to remote master - With FALSE, a machine error  will not further up reported to the master
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_MODE_CHANGE_VIA_STATE_COMPL				:	BYTE := 2#0010_0000; //Default:Mode change over state Completing - The statemodel switches to state "Completing" as an reaction of a new SetMode
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_EXPLICIT_ERROR_RESET						:	BYTE := 2#0100_0000; //Default:Hold state Stopped until error is eplicit reseted with reset - instance stays at Stopped until error will be reset, even if the remote master change into reset 
+{attribute 'displaymode':='binary'}	
+	OPTION_ENABLE_SET_ACT_STATE								:	BYTE := 2#1000_0000; //Enables to set actual state by property. Use with care and do not write state cyclic
+END_VAR
+VAR_INPUT                   							
+    {attribute 'instance-path'} 
+    {attribute 'noinit'} 	
+	Name													:	STRING;
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 	2#0000_0000
+																		//	OR OPTION_ENABLE_MODE_SWITCH_TO_IDLE		//Mode switched to Idle automatically if state Aborted/Stopped reached - as default the mode will not change
+																		//	OR OPTION_ENABLE_MODE_CHANGE_IN_EXECUTE		//Mode change in state Execute, FALSE = mode change over state stopping
+																			OR OPTION_ENABLE_EXTERNAL_STATE_COMPLETE	//Default:Enable external use of method "StateComplete"! even if instance is controlling subs as well
+																		//	OR OPTION_DISABLE_LOCAL_ESTOP				//Disable local EStop signals, if sub ist remote controlled 
+																			OR OPTION_ENABLE_MASCHINE_ERROR_TO_MASTER	//Default:Machine error to remote master - With FALSE, a machine error  will not further up reported to the master
+																			OR OPTION_ENABLE_MODE_CHANGE_VIA_STATE_COMPL//Default:Mode change over state Completing - The statemodel switches to state "Completing" as an reaction of a new SetMode
+																			OR OPTION_ENABLE_EXPLICIT_ERROR_RESET		//Default:Hold state Stopped until error is eplicit reseted with reset - instance stays at Stopped until error will be reset, even if the remote master change into reset 
+																		//	OR OPTION_ENABLE_SET_ACT_STATE				//Enables to set actual state by property. Use with care and do not write state cyclic
+																			;		
+(* Unit Safety Signals *)   								
+	EStopDirectOK											:	BOOL := TRUE; (* -> Aborting *)
+	EStopDelayOK											:	BOOL := TRUE; (* -> Aborted *)
+	EStopOK													:	BOOL := TRUE; (* -> Clearing after EStop/Circuit OK *)
+                            								
+(* Signals *)               								
+	ResetTrig												:	BOOL := FALSE; //Acknowledge/reset error - send also to subordinate instances  
+	SetMode													:	eMODE := eMODE.IDLE; //Requested mode if instance is not a subordinate instance (RemotCtrlEnable = FALSE)
+                            								
+(* Remote UnitCtrl *)       								
+	RemoteCtrlEnable										:	BOOL := TRUE;	//Statemodel follows remote master 
+																						                           	
+(* Sub Units - RemoteData from slave units *)
+	ipSlave													:	ARRAY[MIN_SLAVE..MAX_SLAVE] OF I_Statemodel; (* RemoteData from slave units - WRITE THE ADRESS CYCLIC!! *)
+END_VAR
+VAR_OUTPUT
+	Id														:	INT; //Unique Id for each statemodel instance
+	IdRemoteMaster											:	INT; //Id of remote master 
+	Info													:	STRING(30) := 'eSTATE.STARTUP'; //State name as string
+	Busy													:	BOOL := TRUE; //Will be set to true as a result of a state change - set to false with method "StateComplete" to 
+	SlavesInSync											:	BOOL; //local statemodel and subordinate (external) subs state are equel 
+	SlavesBusy												:	BOOL; //minimum one sub is still busy - not complete
+	NoOfBusySlaves											:	INT;	
+	Mode													:	eMODE := eMODE.IDLE ;  //Active mode 
+	State													:	eSTATE := eSTATE.STARTUP;//Active state
+	EStopStartupOK											:	BOOL;	//EStop/Circuit is ok (clearing done)
+	RT_StateChanged 										:	BOOL; //Rising flag to signal a state change
+	(* StateBits *)         								
+	InStartup												:	BOOL := TRUE; 	
+	InIdle													:	BOOL ;
+	InStarting												:	BOOL ;
+	InStarted												:	BOOL ;
+	InExecute												:	BOOL ;
+	InCompleting											:	BOOL ;
+	InComplete												:	BOOL ;
+	InAborting												:	BOOL ;
+	InAborted												:	BOOL ;
+	InClearing												:	BOOL ;
+	InStopping												:	BOOL ;
+	InStopped												:	BOOL ;
+	InResetting												:	BOOL ;
+                            								   
+(* optional not in use  										
+	InHolding												:	BOOL := False;
+	InHeld													:	BOOL := False;
+	InUnholding												:	BOOL := False;
+	InSuspending											:	BOOL := False;
+	InSuspended												:	BOOL := False;
+	InUnsuspending											:	BOOL := False;
+*)       
+	ErrHdl													:	ERROR_HDL;
+                   								
+END_VAR                     								
+VAR
+(* cache ********************************************)
+	LastState												:	eSTATE := eSTATE.STARTUP;
+	GoToAborting											:	BOOL ;
+	Localreset												:	BOOL ;
+	Remotereset												:	BOOL ;
+	BusyIntern												:	BOOL := TRUE;
+                          								
+	(* Remote Data *)       								
+	MasterCmdMode											:	eMODE; //Mode commanded from Master through remote data property
+	MasterCmdState											:	eSTATE; //State commanded from Master through remote data property
+	MasterCmdInfo											:	WORD; (* Info data from master through remote data property
+																		Bit 0-7 = Options																	
+																		Bit 8 = RemoteCtrlEnable
+																		Bit 9 = Ack 
+																		Bit 10 = Busy
+																		Bit 11 = ErrorMaschine
+																		Bit 12 = ErrorLocal 
+																		Bit 13 = ErrorExternal 
+																		Bit 14 = EStopOK
+																		Bit 15 = EStopDelayOK *) 
+   	RemoteDataToSlaves										:	U_64BIT_DATATYPE;
+   	RemoteDataFromSlave										:	U_64BIT_DATATYPE;
+																			
+ 	(* Sync Sub Status *)   								
+	NoSlavesConnected										:	BOOL ; (* no external subs (Pointer) in use *)
+	SlavesState												:	eSTATE := eSTATE.STARTUP; (* summary states from SubCtrls *)
+ 
+(* function-blocks ******************************************************)
+	GetTaskIndex 											: 	GETCURTASKINDEX;
+
+(* internal used variables **********************************************)                       								
+	i														: INT := 0 ;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Unit mode model - statemachine			- view constant -	*)
+(****************************************************************)
+
+(*******************************************************'********)
+(* Init Pointer in First Cycle 									*)
+(****************************************************************)
+
+(* Init state model instance **************************************)
+	IF GetTaskIndex.index = 0 THEN GetTaskIndex();  END_IF
+	IF TwinCAT_SystemInfoVarList._TaskInfo[GetTaskIndex.Index].FirstCycle 
+	THEN
+		RETURN;		
+	END_IF
+		
+(* Set Local ack *********************************************)
+	RemoteReset 											:= MasterCmdInfo.9;
+	LocalReset 												:= ResetTrig OR RemoteReset OR LocalReset;
+
+(* work Busy if no external subs in use ****************************************)
+	IF NoSlavesConnected AND NOT Options.2 
+	THEN 
+		BusyIntern 											:= FALSE; 
+	END_IF (* no subs and no external StateCompl *)
+	
+	IF NoSlavesConnected AND NOT BusyIntern 
+	THEN 
+		Busy 												:= NOT EStopOK AND NOT Options.3 AND InClearing; 
+	END_IF
+
+(* Signals ************************************************)
+	GoToAborting											:=(	NOT RemoteCtrlEnable OR NOT Options.3)
+																AND (NOT EStopDirectOK OR NOT EStopDelayOK)
+																OR
+																RemoteCtrlEnable
+																AND (MasterCmdState = eSTATE.ABORTING OR MasterCmdState = eSTATE.ABORTED);
+
+(* Local State Machine ****************************************************)
+	CASE State OF
+	{region "STARTUP"} 
+	eSTATE.STARTUP: info 									:= TO_STRING(eSTATE.STARTUP);
+	
+		IF NOT Busy 
+		THEN (* Busy initalisation is TRUE *)
+			Busy := BusyIntern 								:= TRUE;
+			state 											:= eSTATE.ABORTING;
+		ELSE
+			; (* Wait for Startup End*)
+		END_IF
+	{endregion} 		
+	{region "IDLE"} 
+	eSTATE.IDLE:
+		info 												:= TO_STRING(eSTATE.IDLE);
+		
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+		ELSIF RemoteCtrlEnable AND MasterCmdState = eSTATE.STOPPING 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.STOPPING;
+		ELSIF NOT RemoteCtrlEnable AND SetMode <> eMODE.IDLE
+			OR 
+			RemoteCtrlEnable
+			AND MasterCmdState <> eSTATE.IDLE
+			AND MasterCmdState <> eSTATE.RESETTING
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			Mode 											:= SEL(RemoteCtrlEnable,SetMode,MasterCmdMode);
+			State 											:= eSTATE.STARTING;
+		ELSE
+			Mode 											:= eMODE.IDLE;
+		END_IF
+	{endregion} 
+	{region "STARTING"} 	
+	eSTATE.STARTING: info 									:= TO_STRING(eSTATE.STARTING);
+	
+		IF GoToAborting 
+		THEN
+			state 											:= eSTATE.ABORTING;
+			Busy := BusyIntern 								:= TRUE;
+
+		ELSIF RemoteCtrlEnable
+			AND(
+			MasterCmdState = eSTATE.STOPPING
+			OR (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			NOT RemoteDataToSlaves._WORDS[2].8 AND Mode <> MasterCmdMode)
+		THEN
+			state 											:= eSTATE.STOPPING;
+			Busy := BusyIntern 								:= TRUE;
+		ELSIF NOT Busy 
+		THEN
+			state 											:= eSTATE.STARTED;			
+		END_IF
+	{endregion} 		
+	{region "STARTED"} 	
+	eSTATE.STARTED: info 									:= TO_STRING(eSTATE.STARTED);
+		
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+		ELSIF RemoteCtrlEnable
+			AND NOT RemoteDataToSlaves._WORDS[2].8 
+			AND Mode <> MasterCmdMode
+		THEN (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.STOPPING;
+		ELSIF NOT RemoteCtrlEnable
+			OR 	
+			RemoteCtrlEnable
+			AND MasterCmdState <> eSTATE.STARTED
+			AND MasterCmdState <> eSTATE.STARTING
+		THEN
+			IF RemoteCtrlEnable AND MasterCmdState = eSTATE.EXECUTE
+				OR NOT RemoteCtrlEnable
+			THEN
+				Busy := BusyIntern 							:= TRUE; 
+				state 										:= eSTATE.EXECUTE;
+			ELSIF RemoteCtrlEnable AND Options.5 //Compl. aktiviert
+				AND(MasterCmdState = eSTATE.COMPLETING OR	MasterCmdState = eSTATE.COMPLETE)
+			THEN
+				Busy := BusyIntern 							:= TRUE; 
+				state 										:= eSTATE.COMPLETING;
+			ELSE
+				Busy := BusyIntern 							:= TRUE; 
+				state 										:= eSTATE.STOPPING;
+			END_IF
+		END_IF
+	{endregion} 	
+	{region "EXECUTE"} 
+	eSTATE.EXECUTE: info 									:= TO_STRING(eSTATE.EXECUTE);
+	
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+
+		ELSIF SetMode <> Mode
+			AND NOT RemoteCtrlEnable
+			AND NOT Options.1  (* Modewechsel ueber Stopping/Completing wenn Options.1 nicht gesetzt *)
+			OR	
+			NOT RemoteCtrlEnable
+			AND SetMode = eMODE.IDLE
+			OR	
+			RemoteCtrlEnable
+			AND MasterCmdState <> eSTATE.EXECUTE
+			AND MasterCmdState <> eSTATE.STARTING
+			AND MasterCmdState <> eSTATE.STARTED
+			OR (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			RemoteCtrlEnable
+			AND NOT RemoteDataToSlaves._WORDS[2].8 AND Mode <> MasterCmdMode
+		THEN
+			IF Options.5 (* Mode change over Completing *)
+				AND(MasterCmdState = eSTATE.COMPLETING
+				AND RemoteCtrlEnable
+				OR	
+				NOT RemoteCtrlEnable)
+			THEN
+				Busy := BusyIntern 							:= TRUE; 
+				state 										:= eSTATE.COMPLETING;
+			ELSE      						
+				Busy := BusyIntern 							:= TRUE; 				
+				state 										:= eSTATE.STOPPING;
+			END_IF
+
+		ELSIF Options.1  (* Modewechsel in Execute *)
+			AND(
+			SetMode <> Mode AND NOT RemoteCtrlEnable
+			OR	
+			MasterCmdMode <> Mode AND RemoteCtrlEnable)
+		THEN
+			Mode 											:= SEL(RemoteCtrlEnable,SetMode,MasterCmdMode);
+
+		ELSIF RemoteCtrlEnable
+			AND(
+			MasterCmdState = eSTATE.HOLDING 
+			OR MasterCmdState = eSTATE.HELD) 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.HOLDING;
+		ELSIF RemoteCtrlEnable
+			AND(
+			MasterCmdState = eSTATE.SUSPENDING 
+			OR MasterCmdState = eSTATE.SUSPENDED) 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.SUSPENDING;
+		END_IF
+	{endregion} 	
+	{region "SUSPENDING"} 
+	eSTATE.SUSPENDING: 	info 								:= TO_STRING(eSTATE.SUSPENDING);	
+		
+		IF GoToAborting 
+		THEN
+			state 											:= eSTATE.ABORTING;
+			Busy := BusyIntern 								:= TRUE;
+
+		ELSIF RemoteCtrlEnable
+			AND(
+			MasterCmdState = eSTATE.STOPPING
+			OR (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			NOT RemoteDataToSlaves._WORDS[2].8 AND Mode <> MasterCmdMode)
+		THEN
+			state 											:= eSTATE.STOPPING;
+			Busy := BusyIntern 								:= TRUE;
+		ELSIF NOT Busy 
+		THEN
+			state 											:= eSTATE.SUSPENDED;		
+		END_IF	
+	{endregion} 	
+	{region "SUSPENDED"} 
+	eSTATE.SUSPENDED:	info 								:= TO_STRING(eSTATE.SUSPENDED);	
+	
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+		ELSIF RemoteCtrlEnable
+			AND NOT RemoteDataToSlaves._WORDS[2].8 
+			AND Mode <> MasterCmdMode
+		THEN (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.STOPPING;
+		ELSIF NOT RemoteCtrlEnable
+			OR 	
+			RemoteCtrlEnable
+			AND MasterCmdState <> eSTATE.SUSPENDED
+			AND MasterCmdState <> eSTATE.SUSPENDING
+		THEN
+			IF RemoteCtrlEnable 
+				AND(MasterCmdState = eSTATE.UNSUSPENDING OR MasterCmdState = eSTATE.EXECUTE OR MasterCmdState = eSTATE.COMPLETING)
+				OR NOT RemoteCtrlEnable
+			THEN
+				Busy := BusyIntern 							:= TRUE; 
+				state 										:= eSTATE.UNSUSPENDING;	
+			ELSE
+				Busy := BusyIntern 							:= TRUE; 
+				state 										:= eSTATE.STOPPING;
+			END_IF
+		END_IF
+	{endregion} 	
+	{region "UNSUSPENDING"}	
+	eSTATE.UNSUSPENDING: info 								:= TO_STRING(eSTATE.UNSUSPENDING);
+	
+		IF GoToAborting 
+		THEN
+			state 											:= eSTATE.ABORTING;
+			Busy := BusyIntern 								:= TRUE;
+
+		ELSIF RemoteCtrlEnable
+			AND(
+			MasterCmdState = eSTATE.STOPPING
+			OR (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			NOT RemoteDataToSlaves._WORDS[2].8 AND Mode <> MasterCmdMode)
+		THEN
+			state 											:= eSTATE.STOPPING;
+			Busy := BusyIntern 								:= TRUE;
+		ELSIF NOT Busy 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state											:= eSTATE.EXECUTE;
+		END_IF
+	{endregion} 	
+	{region "HOLDING"}	
+	eSTATE.HOLDING:		info 								:= TO_STRING(eSTATE.HOLDING);
+	
+		IF GoToAborting 
+		THEN
+			state 											:= eSTATE.ABORTING;
+			Busy := BusyIntern 								:= TRUE;
+
+		ELSIF RemoteCtrlEnable
+			AND(
+			MasterCmdState = eSTATE.STOPPING
+			OR (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			NOT RemoteDataToSlaves._WORDS[2].8 AND Mode <> MasterCmdMode)
+		THEN
+			state 											:= eSTATE.STOPPING;
+			Busy := BusyIntern 								:= TRUE;
+		ELSIF NOT Busy 
+		THEN
+			state 											:= eSTATE.HELD;		
+		END_IF	
+	{endregion} 	
+	{region "HELD"}	
+	eSTATE.HELD:		info 								:= TO_STRING(eSTATE.HELD);
+	
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+		ELSIF RemoteCtrlEnable
+			AND NOT RemoteDataToSlaves._WORDS[2].8 
+			AND Mode <> MasterCmdMode
+		THEN (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.STOPPING;
+		ELSIF NOT RemoteCtrlEnable
+			OR 	
+			RemoteCtrlEnable
+			AND MasterCmdState <> eSTATE.HELD
+			AND MasterCmdState <> eSTATE.HOLDING
+		THEN
+			IF RemoteCtrlEnable 
+				AND(MasterCmdState = eSTATE.EXECUTE OR MasterCmdState = eSTATE.UNHOLDING OR MasterCmdState = eSTATE.COMPLETING)
+				OR NOT RemoteCtrlEnable
+			THEN
+				Busy := BusyIntern 							:= TRUE; 
+				state 										:= eSTATE.UNHOLDING;	
+			ELSE
+				Busy := BusyIntern 							:= TRUE; 
+				state 										:= eSTATE.STOPPING;
+			END_IF
+		END_IF
+	{endregion} 	
+	{region "UNHOLDING"}	
+	eSTATE.UNHOLDING: 	info 								:= TO_STRING(eSTATE.UNHOLDING);
+	
+		IF GoToAborting 
+		THEN
+			state 											:= eSTATE.ABORTING;
+			Busy := BusyIntern 								:= TRUE;
+
+		ELSIF RemoteCtrlEnable
+			AND(
+			MasterCmdState = eSTATE.STOPPING
+			OR (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			NOT RemoteDataToSlaves._WORDS[2].8 AND Mode <> MasterCmdMode)
+		THEN
+			state 											:= eSTATE.STOPPING;
+			Busy := BusyIntern 								:= TRUE;
+		ELSIF NOT Busy 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state											:= eSTATE.EXECUTE;
+		END_IF
+	{endregion} 	
+	{region "COMPLETING"}	
+	eSTATE.COMPLETING: info 								:= TO_STRING(eSTATE.COMPLETING);
+	
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+
+		ELSIF RemoteCtrlEnable
+			AND( (* Betriebsartenwechsel ueber RemoteCtrl ein *)
+			MasterCmdState = eSTATE.STOPPING
+			OR 
+			NOT RemoteDataToSlaves._WORDS[2].8  AND Mode <> MasterCmdMode)
+			OR	
+			NOT RemoteCtrlEnable AND NOT Options.5 (* Cancel Completing *)
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.STOPPING;
+
+		ELSIF NOT Busy
+		THEN
+			state 											:= eSTATE.COMPLETE;
+		END_IF
+	{endregion} 	
+	{region "COMPLETE"}	
+	eSTATE.COMPLETE: info 									:= TO_STRING(eSTATE.COMPLETE);
+		
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+
+		ELSIF NOT RemoteCtrlEnable
+			OR	
+			RemoteCtrlEnable
+			AND MasterCmdState <> eSTATE.COMPLETE
+			AND MasterCmdState <> eSTATE.COMPLETING
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.STOPPING;
+		END_IF
+	{endregion} 	
+	{region "ABORTING"}	
+	eSTATE.ABORTING: info 									:= TO_STRING(eSTATE.ABORTING);
+		IF NOT Busy
+			OR NOT EStopDelayOK
+			OR RemoteCtrlEnable AND NOT MasterCmdInfo.15 AND(Options.3 OR EStopDirectOK)(* Master EStop Delay False and local Safety inputs disabled or not triggered *)
+		THEN
+			StateComplete(); (* Ueber Hardware vorgegeben *)
+			state 											:= eSTATE.ABORTED;
+		END_IF
+			 
+		(* Set SubCtrl Busy if state changing *)
+		IF state <> eSTATE.ABORTING AND state <> eSTATE.ABORTED 
+		THEN 
+			Busy := BusyIntern 								:= TRUE; 
+		END_IF
+			 
+	{endregion} 	
+	{region "ABORTED"}	
+	eSTATE.ABORTED: info 									:= TO_STRING(eSTATE.ABORTED);
+		
+		IF NOT RemoteCtrlEnable AND EStopDirectOK AND EStopDelayOK
+			OR 	
+			RemoteCtrlEnable
+			AND(EStopDirectOK AND EStopDelayOK OR Options.3)
+			AND MasterCmdState <> eSTATE.ABORTED
+			AND MasterCmdState <> eSTATE.ABORTING
+			AND MasterCmdState <> eSTATE.STARTUP
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.CLEARING;
+		ELSE			
+			(* Ack error in aborted *)
+			IF LocalReset
+			THEN
+		 		ErrHdl.reset();
+			END_IF
+		END_IF
+		
+		(* set Mode *)
+		IF Options.0
+		THEN
+			Mode 											:= eMODE.IDLE;
+		ELSE (* take the current mode back *)
+			Mode 											:= SEL(RemoteCtrlEnable,SetMode,MasterCmdMode);
+		END_IF
+	{endregion} 	
+	{region "CLEARING"}	
+	eSTATE.CLEARING: info 									:= TO_STRING(eSTATE.CLEARING);
+		
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+		ELSIF NOT Busy
+			AND(EStopOK OR Options.3) (* Local EStop Disabled *)
+			AND(MasterCmdInfo.14 OR NOT RemoteCtrlEnable) (* RemoteCtrl EStop OK *)
+		THEN
+			state 											:= eSTATE.STOPPED;
+		END_IF
+	{endregion} 	
+	{region "STOPPING"}	
+	eSTATE.STOPPING: Info									:= TO_STRING(eSTATE.STOPPING);
+		
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+		ELSIF NOT Busy 
+		THEN
+			state 											:= eSTATE.STOPPED;
+		END_IF
+	{endregion} 	
+	{region "STOPPED"}	
+	eSTATE.STOPPED: info 									:= TO_STRING(eSTATE.STOPPED);
+		
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+		ELSIF LocalReset AND ErrHdl.flag
+			AND(NOT RemoteCtrlEnable OR MasterCmdState <> eSTATE.STOPPED) (* Weiter ueber Quitt im Fehlerfall *)
+			AND(ErrHdl.id <> ERROR_MACHINE OR NOT Options.4)
+			OR 
+			NOT RemoteCtrlEnable
+			AND(NOT ErrHdl.flag OR NOT Options.6 AND ErrHdl.id <> ERROR_EXTERNAL) (* Automatisch weiter wenn kein Fehler, oder ACK nicht erforderlich und Fehler nicht Extern (Quittierung erfolgt dort)*)
+			OR	
+			RemoteCtrlEnable (* Weiter wenn Remote Unit nicht in Stopped/Completing und nicht in Fehler *)
+			AND MasterCmdState <> eSTATE.STOPPED
+			AND MasterCmdState <> eSTATE.STOPPING
+			AND MasterCmdState <> eSTATE.CLEARING
+			AND MasterCmdState <> eSTATE.COMPLETING 
+			AND MasterCmdState <> eSTATE.COMPLETE
+			AND(NOT ErrHdl.flag OR NOT Options.6)
+			OR 
+			RemoteCtrlEnable (* Weiter wenn Maschinenfehler resetet wird *)
+			AND MasterCmdState = eSTATE.RESETTING
+			AND ErrHdl.flag //(MasterCmdInfo.11 or MasterCmdInfo.12 OR MasterCmdInfo.13) //OR ErrHdl.id = ERROR_MACHINE ist Bit 12)
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			ErrHdl.reset();
+			state 											:= eSTATE.RESETTING;
+		END_IF
+	
+		(* set Mode *)
+		IF Options.0 
+		THEN
+			Mode 											:= eMODE.IDLE;
+		ELSE (* take the current mode back *)
+			Mode 											:= SEL(RemoteCtrlEnable,SetMode,MasterCmdMode);
+		END_IF
+	{endregion} 	
+	{region "RESETTING"}	
+	eSTATE.RESETTING: info 									:= TO_STRING(eSTATE.RESETTING);
+		
+		IF GoToAborting 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.ABORTING;
+		ELSIF MasterCmdState = eSTATE.STOPPING 
+			AND RemoteCtrlEnable 
+		THEN
+			Busy := BusyIntern 								:= TRUE; 
+			state 											:= eSTATE.STOPPING;
+		ELSIF NOT Busy 
+		THEN
+			state 											:= eSTATE.IDLE;
+		END_IF
+	{endregion} 	
+
+	ELSE
+		info 												:= CONCAT('ERROR unkown state ', TO_STRING(state));
+		ErrHdl.flag 										:= TRUE;
+		ErrHdl.fnc 											:= 'SubCtrl';
+		ErrHdl.id											:= 99;
+		ErrHdl.state										:= state;
+		ErrHdl.text 										:= CONCAT('unkown state:',DINT_TO_STRING(ErrHdl.state));
+		SetLocalError();
+	END_CASE
+		 
+(* State Check *************************************************)
+	RT_StateChanged 										:= LastState <> State;
+	LastState 												:= State;
+	
+(* Statebits ***********************************************************************************)
+	InStartup												:= state = eSTATE.STARTUP;
+	InIdle													:= state = eSTATE.IDLE;
+	InStarting												:= state = eSTATE.STARTING;
+	InStarted												:= state = eSTATE.STARTED;
+	InExecute												:= state = eSTATE.EXECUTE;
+	InCompleting											:= state = eSTATE.COMPLETING;
+	InComplete												:= state = eSTATE.COMPLETE;
+	InAborting												:= state = eSTATE.ABORTING;
+	InAborted												:= state = eSTATE.ABORTED;
+	InClearing												:= state = eSTATE.CLEARING;
+	InStopping												:= state = eSTATE.STOPPING;
+	InStopped												:= state = eSTATE.STOPPED;
+	InResetting												:= state = eSTATE.RESETTING;
+
+	EStopStartupOK											:= 	NOT InAborted 
+																AND(
+																EStopStartupOK 
+																OR 
+																NOT InAborting AND NOT InClearing 
+																AND NOT InStartup AND NOT InStopped );
+                    										
+(* optional
+	InSuspending	:= state = eSTATE.SUSPENDING;
+	InSuspended		:= state = eSTATE.SUSPENDED;
+	InUnsuspending	:= state = eSTATE.UNSUSPENDING;
+
+	InHolding		:= state = eSTATE.HOLDING;
+	InHeld			:= state = eSTATE.HELD;
+	InUnholding		:= state = eSTATE.UNHOLDING;
+*)
+
+(***************************************************************)
+(* Read Subs Status and synchronize							   *)
+(***************************************************************)		
+{region "Check slave states and send command"}	
+	(* Init Flag, all Subs in same state *)
+	NoSlavesConnected										:= TRUE;
+	SlavesInSync 											:= NOT RT_StateChanged;
+	SlavesBusy    											:= FALSE;
+	NoOfBusySlaves											:= 0;
+	(* Init remote command data to slaves  *)
+	RemoteDataToSlaves._INTs[0]								:= Mode;
+	RemoteDataToSlaves._WORDS[2]							:= TO_WORD(Options);
+	RemoteDataToSlaves._WORDS[2].8							:= RemoteCtrlEnable;
+	RemoteDataToSlaves._WORDS[2].9							:= LocalReset;	
+	RemoteDataToSlaves._WORDS[2].14							:= EStopOK OR Options.3;
+	RemoteDataToSlaves._WORDS[2].15							:= EStopDelayOK OR Options.3;	
+	RemoteDataToSlaves._INTs[3]								:= Id;
+		
+	(* read Subs state an send cmd to all subs *)
+	FOR i := MIN_SLAVE TO MAX_SLAVE DO
+		IF ipSlave[i] <> 0 
+		THEN 
+			NoSlavesConnected 								:= FALSE;(* pointer is used *)
+			RemoteDataFromSlave								:= ipSlave[i].remoteData; //Read remote status data from slaves
+			IF RemoteDataFromSlave._WORDS[2].8 
+			THEN (* External Sub is Remote-Controlled *)
+				(* Check the status from then external subs *)
+				IF((RemoteDataFromSlave._WORDS[2].11 OR RemoteDataFromSlave._WORDS[2].13) 
+					AND RemoteDataFromSlave._WORDS[2].4)(* Maschine to Remotesystem if Enabled, or External Error *)
+					AND NOT ErrHdl.flag
+					AND NOT InStartup AND NOT InResetting
+					AND NOT InAborting AND NOT InAborted
+				THEN (* external sub has fatal error *)
+					(* external subs send fatal machine error -> bring local sub in Stopping with error *)
+					ErrHdl.flag								:= TRUE;
+					ErrHdl.state							:= state;
+					ErrHdl.fnc 								:= name;
+					ErrHdl.id								:= ERROR_EXTERNAL;
+					ErrHdl.text 							:= CONCAT('Fatal machine error in Sub index no.:',INT_TO_STRING(i));
+					Busy									:= state <> eSTATE.STOPPING;
+					state 									:= eSTATE.STOPPING;
+					SlavesInSync 							:= FALSE;
+				ELSE (* external sub has no error *)
+					IF SlavesState = RemoteDataFromSlave._INTs[1]
+					THEN (* Check if sub is in sync with other subs *)
+						SlavesState 						:= RemoteDataFromSlave._INTs[1];
+					ELSE (* external sub is not in sync with other subs *)
+						IF (RemoteDataFromSlave._INTs[1] = eSTATE.ABORTED OR RemoteDataFromSlave._INTs[1] = eSTATE.ABORTING)
+							AND NOT InAborted 
+							AND NOT InAborting
+							AND NOT RemoteDataFromSlave._WORDS[2].3 (* Local EStop-Signals Disable *)
+							OR RemoteDataFromSlave._WORDS[2].11 (* Maschine Error *)
+							OR RemoteDataFromSlave._WORDS[2].12 (* Local Error  *)
+							OR RemoteDataFromSlave._WORDS[2].13 (* External Error  *)
+							OR (* comleting at sub disabled *)
+							NOT RemoteDataFromSlave._WORDS[2].5 
+							AND(InCompleting OR InComplete)
+							AND(RemoteDataFromSlave._INTs[1] = eSTATE.STOPPING OR RemoteDataFromSlave._INTs[1] = eSTATE.STOPPED)
+						THEN
+							; (* ignore cause sub use local EStop-signals, or error in stopped *)
+						ELSE
+							SlavesState						:= RemoteDataFromSlave._INTs[1];
+							SlavesInSync 					:= FALSE;
+						END_IF
+					END_IF
+
+					(* subs busy *)
+					IF (RemoteDataFromSlave._INTs[1] = eSTATE.ABORTED OR RemoteDataFromSlave._INTs[1] = eSTATE.ABORTING )
+						AND NOT InAborted 
+						AND NOT InAborting
+						AND NOT RemoteDataFromSlave._WORDS[2].3 (* Local EStop-Signals Disable *)
+						OR RemoteDataFromSlave._WORDS[2].12 (* Local Error *)
+						OR 
+						SlavesState = eSTATE.EXECUTE AND NOT InExecute
+					THEN
+						; (* ignore cause sub is in error or use local EStop-Signals *)
+					ELSIF RemoteDataFromSlave._WORDS[2].10 
+					THEN
+						SlavesBusy 							:= TRUE;
+						NoOfBusySlaves						:= NoOfBusySlaves + 1;
+					END_IF
+
+				END_IF
+			ELSE (* external Sub is not in RemoteCtrl, but still check for error if enabled *)
+				IF((RemoteDataFromSlave._WORDS[2].11 OR RemoteDataFromSlave._WORDS[2].13) //Error active
+					AND RemoteDataFromSlave._WORDS[2].4)(* Maschine to Remotesystem if Enabled, or External Error *)
+					AND NOT ErrHdl.flag
+					AND NOT InStartup AND NOT InResetting
+					AND NOT InAborting AND NOT InAborted
+				THEN (* external sub has fatal error *)
+					(* external subs send fatal machine error -> bring local sub in Stopping with error *)
+					ErrHdl.flag								:= TRUE;
+					ErrHdl.state							:= state;
+					ErrHdl.fnc 								:= name;
+					ErrHdl.id								:= ERROR_EXTERNAL;
+					ErrHdl.text 							:= CONCAT('Fatal machine error in Sub index no.:',INT_TO_STRING(i));
+					Busy									:= state <> eSTATE.STOPPING;
+					state 									:= eSTATE.STOPPING;
+					SlavesInSync 							:= FALSE;
+				END_IF				
+			END_IF
+
+			(* Write latest command data   *)
+			RemoteDataToSlaves._INTs[1]						:= State;
+			RemoteDataToSlaves._WORDS[2].10					:= Busy;
+			RemoteDataToSlaves._WORDS[2].11					:= ErrHdl.id = ERROR_MACHINE;
+			RemoteDataToSlaves._WORDS[2].12					:= ErrHdl.id = ERROR_LOCAL;
+			RemoteDataToSlaves._WORDS[2].13					:= ErrHdl.id = ERROR_EXTERNAL;
+
+			(* set slave command data *)
+			ipSlave[i].remoteData							:= RemoteDataToSlaves; //Write data as command to every slave
+		ELSE
+			EXIT; (* pointer not used -> Exit for *)
+		END_IF
+	END_FOR
+
+	(* Set state complete only if all Subs in the same state or current state is Execute *)
+	IF SlavesInSync AND NOT NoSlavesConnected 
+	THEN //Subs in sync
+		IF SlavesBusy 
+			OR (BusyIntern AND Options.2) 
+			OR (NOT EStopOK AND NOT Options.3 AND InClearing) (* Solange Busy halten, biss durch EStopOK aus Clearing gegangen werden kann *)
+		THEN
+			; (* al least one sub is busy or not StateComplete *)
+		ELSIF Busy 
+		THEN
+			Busy := BusyIntern 								:= FALSE; (* All subs not StateComplete (NOT Busy) set UnitSub StateComplete *)
+		END_IF
+	END_IF
+{endregion}
+	 
+(* Set Status RemoteData for master to check ************************************************************)
+	RemoteDataToSlaves._INTs[0] 							:= Mode;
+	RemoteDataToSlaves._INTs[1]								:= State;
+	RemoteDataToSlaves._WORDs[2]							:= TO_WORD(Options);
+	RemoteDataToSlaves._WORDs[2].8							:= RemoteCtrlEnable;
+	RemoteDataToSlaves._WORDs[2].9							:= LocalReset;
+	RemoteDataToSlaves._WORDs[2].10							:= Busy;
+	RemoteDataToSlaves._WORDs[2].11							:= ErrHdl.id = ERROR_MACHINE;
+	RemoteDataToSlaves._WORDs[2].12							:= ErrHdl.id = ERROR_LOCAL;
+	RemoteDataToSlaves._WORDs[2].13							:= ErrHdl.id = ERROR_EXTERNAL;
+	RemoteDataToSlaves._WORDs[2].14							:= EStopOK OR Options.3;
+	RemoteDataToSlaves._WORDs[2].15							:= EStopDelayOK OR Options.3;
+	RemoteDataToSlaves._INTs[3]								:= Id;
+	
+
+(* Reset LocalAck ******************************************************************************)
+	Localreset												:= FALSE;
+
+(***********************************************************************************************)]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{ca57f5ff-f361-475a-ba4c-243dab7047e4}" />
+    <Folder Name="properties" Id="{970b9a6a-52ac-446e-9741-153ad74b7d05}">
+      <Folder Name="options" Id="{64462b25-a4a4-44f0-bf1d-a224088ccae4}" />
+    </Folder>
+    <Method Name="_createID" Id="{5d7cbf38-8708-433d-8951-bf8afa3daddf}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PRIVATE FINAL _createID : INT
+VAR_STAT //Value is stored for each instance
+	IdCnt													: INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IdCnt														:= IdCnt + 1;
+_CreateID 													:= IdCnt;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="actMode" Id="{a51e2037-06fd-4294-b8c2-07bcffbff010}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public actMode : eMODE]]></Declaration>
+      <Get Name="Get" Id="{087acafc-8dd0-44aa-a973-8491d5b21d48}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[actMode := Mode;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="actState" Id="{b745c52e-903e-45f7-a07a-f4f4ffa1d0b9}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+//Actual state enum, only read access by default, check options for further information 
+PROPERTY public actState : eSTATE]]></Declaration>
+      <Get Name="Get" Id="{55df360b-53cb-45c5-bff0-cd9a9a40064c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[actState := state;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f8b927b1-c8f9-4e0d-9c88-967cf7c3f6a1}">
+        <Declaration><![CDATA[PUBLIC //Use with care!! 
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF Options.7  //OPTION_ENABLE_SET_ACT_STATE
+THEN
+	IF actState <> State
+	THEN
+		state 													:= actState;
+		Busy := BusyIntern 										:= TRUE;	
+	END_IF
+ELSE	
+	ErrHdl.flag 												:= TRUE;
+	ErrHdl.state												:= state;
+	ErrHdl.fnc													:= name;
+	ErrHdl.id													:= ERROR_LOCAL;
+	ErrHdl.text 												:= 'Write "actState" not allowed, use OPTION_ENABLE_SET_ACT_STATE to enable set actState';
+	Busy														:= state <> eSTATE.STOPPING;
+	state 														:= eSTATE.STOPPING;
+END_IF
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="addSlave" Id="{73bcd217-e157-4480-9ff0-8c9abba5f6ee}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC FINAL addSlave : BOOL
+VAR_INPUT
+	ipSlave													:	I_Statemodel;
+END_VAR
+VAR
+	i														:	INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[addSlave													:= FALSE;	
+IF ipSlave <> 0	
+then
+	FOR i := MIN_SLAVE TO MAX_SLAVE
+	DO 
+		IF ipSlave = THIS^.ipSlave[i] THEN
+			addSlave										:= TRUE;
+			EXIT;
+		ELSIF THIS^.ipSlave[i] = 0
+		THEN								
+			THIS^.ipSlave[i]								:= ipSlave;
+			addSlave										:= TRUE;
+			EXIT;
+		END_IF
+	END_FOR
+	IF i > MAX_SLAVE THEN
+		ADSLOGSTR(ADSLOG_MSGTYPE_ERROR, 'Statemodel.addSlave(ipSlave) failed, only %s slaves are allowd, increase MAX_SLAVE const.', TO_STRING(MAX_SLAVE)); 		
+	END_IF 
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_init" Id="{feeb7dde-0e10-4aa8-ae6b-5ac5b134912b}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Generate ID ****************************************************)
+	IF Id = 0 
+	THEN 
+		id 													:= _CreateID(); 
+		IF Name = '' 
+		THEN 
+			Name 											:= CONCAT('Statemodel Id ',TO_STRING(Id)); 
+		ELSE
+			Name 											:= CONCAT(Name , CONCAT(' Id ', TO_STRING(Id))); 
+		END_IF
+	END_IF	
+(***********************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="goToStopping" Id="{79f2af7f-1dd4-476d-aa4c-82ce7965fa1e}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC goToStopping : BOOL //TRUE = stopping activated
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+CASE State OF
+eSTATE.IDLE,
+eSTATE.STARTING,
+eSTATE.STARTED,	
+eSTATE.EXECUTE,
+eSTATE.SUSPENDING,
+eSTATE.SUSPENDED,
+eSTATE.UNSUSPENDING,	
+eSTATE.HOLDING,
+eSTATE.HELD,
+eSTATE.UNHOLDING,	
+eSTATE.COMPLETING,
+eSTATE.COMPLETE,
+eSTATE.STOPPING,
+eSTATE.STOPPED,
+eSTATE.RESETTING:
+	state 													:= eSTATE.STOPPING;
+	Busy := BusyIntern 										:= TRUE;
+	goToStopping											:= TRUE;
+ELSE
+(*	
+	eSTATE.STARTUP,
+	eSTATE.ABORTING,
+	eSTATE.ABORTED,
+	eSTATE.CLEARING:
+*)	
+	goToStopping											:= FALSE;
+END_CASE
+
+		 ]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="ipMasterUnit" Id="{c5ea95de-f979-4628-8862-389607567263}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC ipMasterUnit : I_Statemodel //The slave will add his interface pointer into the master through this propertiy]]></Declaration>
+      <Set Name="Set" Id="{f8fddd27-a276-40b2-97ab-f09ef4178a99}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF IdRemoteMaster = 0 AND_THEN ipMasterUnit <> 0
+THEN
+	RemoteDataToSlaves									:= ipMasterUnit.remoteData;	
+	IF IdRemoteMaster <> RemoteDataToSlaves._INTs[3] 
+	THEN
+		IF ipMasterUnit.addSlave(THIS^)
+		THEN					
+			remoteData 									:= RemoteDataToSlaves; 
+		END_IF
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="isBusy" Id="{8f28df66-0f22-4992-82ea-4d4b64922d1a}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY isBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0a2bc412-2e16-4a6b-8783-4f40c1540a13}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isBusy := Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="isModeActive" Id="{49b3b15b-8e49-43b0-b899-a6d13154d032}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC isModeActive : BOOL
+VAR_INPUT
+	Mode													: eMODE;				
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsModeActive := Mode = THIS^.Mode AND(InExecute OR InCompleting);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isStateActive" Id="{02718716-8d05-4cc5-a658-45608cede34f}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC isStateActive : BOOL
+VAR_INPUT
+	state								: eSTATE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsStateActive := state = This^.State;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optDisableSafetyInputs" Id="{6d577ec2-0b52-4fc9-9664-6b886219954f}" FolderPath="properties\options\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optDisableSafetyInputs : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f4b5f978-169a-489d-b6e0-bb07a3e10c28}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optDisableSafetyInputs := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1122d4dd-ec20-4a01-bf64-c22121faaaf5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optDisableSafetyInputs;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableAutoChangeModeToIdle" Id="{c156ad41-e26a-4cd6-b5c3-ee642b99efc3}" FolderPath="properties\options\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optEnableAutoChangeModeToIdle : BOOL]]></Declaration>
+      <Get Name="Get" Id="{180d78fb-60ab-4ebc-98e4-de5f847620bf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableAutoChangeModeToIdle := Options.0;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{5987c1aa-2a5d-4ee6-ac45-a25ecaf771dd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableAutoChangeModeToIdle;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableExplicitReset" Id="{1cd02e57-abed-4e7b-9395-4242ea8adf76}" FolderPath="properties\options\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optEnableExplicitReset : BOOL]]></Declaration>
+      <Get Name="Get" Id="{69f7fce1-35cb-410b-a407-866194add8fd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableExplicitReset := Options.6;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{efb617e0-a385-4167-ad39-2f382e4f227d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.6 := optEnableExplicitReset;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableExternalStateComplete" Id="{efb5445f-9415-42f8-945e-4b6be376fafe}" FolderPath="properties\options\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optEnableExternalStateComplete : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ddc1bb69-9bfc-46cd-a2d1-64ec5ea82063}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableExternalStateComplete := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{34425999-e880-45bb-a374-7f0a1814fb21}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.2 := optEnableExternalStateComplete;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableFwdMachineErrorToMaster" Id="{1b77ede5-30c3-4be4-88da-77900500b6e6}" FolderPath="properties\options\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optEnableFwdMachineErrorToMaster : BOOL]]></Declaration>
+      <Get Name="Get" Id="{fd3ea7b1-8d1c-474b-b51e-5417997ff054}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableFwdMachineErrorToMaster := Options.4;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{de8b119d-cecd-42a6-92d1-ecaff67eb240}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.4 := optEnableFwdMachineErrorToMaster;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableModeChangeInExecute" Id="{04e3dcd6-24ac-4621-89c3-8bcf737e0bb1}" FolderPath="properties\options\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optEnableModeChangeInExecute : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c8212131-e746-407c-a25a-81dadd9500b4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableModeChangeInExecute := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{dd93c060-d173-4c62-954c-6d101421344d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optEnableModeChangeInExecute;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableModeChangeViaStateCompl" Id="{0ce53d6e-4b0f-453a-85f7-8d44ccb86ae7}" FolderPath="properties\options\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optEnableModeChangeViaStateCompl : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4a4090d1-0b41-4971-bdc1-d1ff03e6a06a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableModeChangeViaStateCompl := Options.5;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{83137355-4899-427f-9892-11166f43f3b9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.5 := optEnableModeChangeViaStateCompl;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableSetActState" Id="{ebb90a95-39b3-4fc9-aa4d-a05d69c57327}" FolderPath="properties\options\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optEnableSetActState : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ccb27ffc-301b-4473-80e2-bac7a97766a4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableSetActState := Options.7;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d597c5ed-98f1-42d1-be1b-7eaf00719488}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.7 := optEnableSetActState;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="remoteData" Id="{22155f55-53e5-4150-932e-5de9e5a4c5ed}" FolderPath="properties\">
+      <Declaration><![CDATA[PROPERTY public remoteData : U_64BIT_DATATYPE]]></Declaration>
+      <Get Name="Get" Id="{4b518770-743e-418f-b3c7-f6cb209051e6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//statis of sub
+remoteData := RemoteDataToSlaves;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{7c28169e-6652-46c5-bb8e-d2fe51d8d74a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Cmd to sub
+MasterCmdMode 	:= remoteData._INTs[0];
+MasterCmdState := remoteData._INTs[1];
+MasterCmdInfo 	:= remoteData._WORDS[2];
+IdRemoteMaster := remoteData._INts[3];]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="rErrHdl" Id="{a0e0c064-cc1b-4acf-9792-239d19c7c4d1}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC rErrHdl : REFERENCE to ERROR_HDL]]></Declaration>
+      <Get Name="Get" Id="{3ca6ac38-8eac-45c7-89a7-115ce9e4374f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rErrHdl REF= Errhdl;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{22a676d0-f2e2-4752-8528-19780d9281d3}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC reset : boOL //Result = TRUE if Resetting finished - ErrHdl.Flag = FALSE
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[LocalReset													:= TRUE;
+reset														:= NOT ErrHdl.flag; 	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setLocalError" Id="{241d0177-26b8-4c09-9e21-b18f002f7428}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setLocalError : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT ErrHdl.flag
+	AND state <> eSTATE.ABORTING
+	AND state <> eSTATE.ABORTED
+	AND state <> eSTATE.CLEARING
+	and state <> eSTATE.RESETTING
+THEN
+	ErrHdl.flag 											:= TRUE;
+	ErrHdl.state											:= state;
+	ErrHdl.fnc												:= name;
+	ErrHdl.id												:= ERROR_LOCAL;
+	ErrHdl.text 											:= 'Local ctrl error';
+	Busy													:= state <> eSTATE.STOPPING;
+	state 													:= eSTATE.STOPPING;
+	SetLocalError											:= TRUE;
+ELSE
+	SetLocalError											:= ErrHdl.id = ERROR_LOCAL;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setMachineError" Id="{3f6a3ac6-f892-4a67-bb07-d77a5a68284a}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC setMachineError : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT ErrHdl.flag
+	AND state <> eSTATE.ABORTING
+	AND state <> eSTATE.ABORTED
+	AND state <> eSTATE.CLEARING
+	AND state <> eSTATE.RESETTING
+THEN
+	ErrHdl.flag												:= TRUE;
+	ErrHdl.state											:= state;
+	ErrHdl.fnc												:= name;
+	ErrHdl.id												:= ERROR_MACHINE;
+	ErrHdl.text 											:= 'Fatal machine error';
+	Busy													:= state <> eSTATE.STOPPING;
+	state 													:= eSTATE.STOPPING;
+	SetMachineError											:= TRUE;
+ELSE
+	SetMachineError											:= ErrHdl.id = ERROR_MACHINE;;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="setStateComplete" Id="{1458d627-6f9c-45fc-845a-3cabd8d42dc2}" FolderPath="properties\">
+      <Declaration><![CDATA[PROPERTY PUBLIC setStateComplete : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4fe7fba2-a68c-4f9e-ab17-8a2590f426be}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SetStateComplete := not BusyIntern and not Busy;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2e53a7b2-be89-4462-82d1-2ab3cae53d3c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF SetStateComplete AND BusyIntern
+THEN
+	StateComplete();
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="stateComplete" Id="{255732a9-9365-480a-acd5-ef325b947cbe}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC FINAL stateComplete : BOOL //Result = TRUE if state completed (BusyIntern=FALSE)
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[BusyIntern 													:= FALSE;
+StateComplete												:= NOT BusyIntern AND NOT Busy; ]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Statemodel">
+      <LineId Id="19889" Count="12" />
+      <LineId Id="19912" Count="368" />
+      <LineId Id="20282" Count="6" />
+      <LineId Id="20722" Count="0" />
+      <LineId Id="20724" Count="3" />
+      <LineId Id="20723" Count="0" />
+      <LineId Id="20729" Count="0" />
+      <LineId Id="20289" Count="242" />
+      <LineId Id="20869" Count="13" />
+      <LineId Id="20532" Count="0" />
+      <LineId Id="20883" Count="0" />
+      <LineId Id="20533" Count="48" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel._createID">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.actMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.actState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.actState.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="49" Count="6" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.addSlave">
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="6" Count="1" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="26" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.FB_init">
+      <LineId Id="8" Count="8" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="18" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.goToStopping">
+      <LineId Id="502" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="503" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="147" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="242" Count="0" />
+      <LineId Id="273" Count="0" />
+      <LineId Id="295" Count="0" />
+      <LineId Id="319" Count="0" />
+      <LineId Id="474" Count="0" />
+      <LineId Id="409" Count="0" />
+      <LineId Id="448" Count="0" />
+      <LineId Id="516" Count="0" />
+      <LineId Id="515" Count="0" />
+      <LineId Id="522" Count="0" />
+      <LineId Id="510" Count="0" />
+      <LineId Id="517" Count="0" />
+      <LineId Id="521" Count="0" />
+      <LineId Id="518" Count="1" />
+      <LineId Id="511" Count="0" />
+      <LineId Id="520" Count="0" />
+      <LineId Id="513" Count="0" />
+      <LineId Id="512" Count="0" />
+      <LineId Id="481" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.ipMasterUnit.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.isBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.isModeActive">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.isStateActive">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optDisableSafetyInputs.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optDisableSafetyInputs.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableAutoChangeModeToIdle.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableAutoChangeModeToIdle.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableExplicitReset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableExplicitReset.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableExternalStateComplete.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableExternalStateComplete.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableFwdMachineErrorToMaster.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableFwdMachineErrorToMaster.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableModeChangeInExecute.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableModeChangeInExecute.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableModeChangeViaStateCompl.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableModeChangeViaStateCompl.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableSetActState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.optEnableSetActState.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.remoteData.Get">
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.remoteData.Set">
+      <LineId Id="9" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.rErrHdl.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.reset">
+      <LineId Id="10" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.setLocalError">
+      <LineId Id="3" Count="2" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="6" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.setMachineError">
+      <LineId Id="3" Count="2" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="6" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.setStateComplete.Get">
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.setStateComplete.Set">
+      <LineId Id="5" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel.stateComplete">
+      <LineId Id="2" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

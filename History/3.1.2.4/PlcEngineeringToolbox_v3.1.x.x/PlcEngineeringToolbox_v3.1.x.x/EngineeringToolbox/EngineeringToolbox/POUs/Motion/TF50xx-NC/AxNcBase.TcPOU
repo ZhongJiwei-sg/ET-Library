@@ -1,0 +1,264 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="AxNcBase" Id="{61e8901a-7eca-40fa-ab0f-44c83ae04a17}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxNcBase EXTENDS AXIS_REF IMPLEMENTS I_AxNcBase(* See Tc2_MC2 *)
+VAR_OUTPUT CONSTANT
+	OPTION_EN_CMD_ABORTED_ERROR								: 	BYTE := 2#1000_0000; //Default: .7 = xxx.CmdAborted is treaded as error
+END_VAR
+VAR_INPUT
+{attribute 'displaymode':='binary'}
+	Options													: 	BYTE  := OPTION_EN_CMD_ABORTED_ERROR; //See output constant for Options mask
+	
+(* Axis *)
+	Admin													: 	AxAdmin;
+	Para													: 	AxPara;
+
+	Home													:	AxHoming;
+	Event													:	AxEventHandling;                                                   
+END_VAR                                             	
+VAR_OUTPUT                                          	
+	ErrHdl													:	ERROR_HDL;
+END_VAR
+VAR
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Axis 																*)
+	(************************************************************************)
+
+	
+(********************************************************************************)
+(* Error NC																		*)
+(********************************************************************************)
+	Event(
+		Enable		:= Admin.EnableOK OR Event.NoOfActiveEvents > 0,
+		ConfirmTrig	:= Admin.ResetTrig,
+		Name		:= para.Name,
+		SourceId	:= (* Default *) ,
+		rAxis		:= THIS^,
+		ErrorId		:= TO_UDINT(ErrHdl.Id),
+		Status		=> );
+		
+	(* Init ErrHdl *)
+	ErrHdl.Reset();
+
+(********************************************************************************)
+(* work Admin ctrl 																*)
+(********************************************************************************)
+	Admin(rAxis		:= THIS^);
+	IF Admin.Error
+	THEN
+		ErrHdl.id 											:= UDINT_TO_DINT(Admin.ErrorId);
+		ErrHdl.fnc											:= 'Admin';
+		ErrHdl.text											:= Admin.ErrorText;
+		ErrHdl.flag											:= TRUE;
+	END_IF
+	
+(********************************************************************************)
+(* Parameter																	*)
+(********************************************************************************)
+	para(Axisid := NcToPlc.AxisId);
+		
+(********************************************************************************)
+(* work homing ctrl 															*)
+(********************************************************************************)
+	Home(rAxis := THIS^ );
+	errorCheck(AxBase := Home);
+	
+
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="errorCheck" Id="{f8f22759-68e0-4765-b610-10cb45292022}">
+      <Declaration><![CDATA[METHOD PROTECTED errorCheck : BOOL
+VAR_IN_OUT
+	AxBase									:	AxFbBase;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF AxBase.Error
+THEN
+	ErrHdl.flag									:= TRUE;
+	ErrHdl.fnc									:= 'AxNcPtP';
+	ErrHdl.id									:= TO_DINT(AxBase.ErrorID);
+	ErrHdl.text									:= AxBase.ErrorText;
+	errorCheck									:= TRUE;
+ELSIF AxBase.CmdAborted AND Options.7
+THEN
+	ErrHdl.id 									:= 19200;
+	ErrHdl.fnc									:= 'AxNcPtP';
+	ErrHdl.text									:= 'command aborted';
+	ErrHdl.flag									:= TRUE;		
+ELSE
+	errorCheck									:= FALSE;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="noAction" Id="{a9df60fd-f631-4d39-95ec-02d095e7fbd6}">
+      <Declaration><![CDATA[METHOD PUBLIC noAction : BOOL //Return value = TRUE if busy of home and motion 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[home.Execute	:= FALSE;
+
+
+NoAction 		:= 	NOT home.Busy ;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optEnableCmdAbortedAsError" Id="{01a1bb21-4932-49c1-a59d-dbe572bc353a}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableCmdAbortedAsError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{da5c2807-3c8e-4b40-bcb6-741edc96881b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableCmdAbortedAsError := Options.7;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6563f52a-daed-4802-b20d-e29eb21a86d0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.7 := optEnableCmdAbortedAsError;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="rAdmin" Id="{bf4db85d-ec3c-48a1-aa3a-01d697fd5ef1}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rAdmin : REFERENCE to AxAdmin]]></Declaration>
+      <Get Name="Get" Id="{3dd4eae1-1b75-4bba-a927-05fc74220bda}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rAdmin REF= Admin;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="rAxisRef" Id="{f4b3e486-c961-443d-a2a2-f5915fed4496}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rAxisRef : REFERENCE TO AXIS_REF]]></Declaration>
+      <Get Name="Get" Id="{a92ddb80-6d05-41f7-b3f2-21e74a88898f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rAxisRef REF= THIS^;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="rErrHdl" Id="{c33aea8f-a71c-444e-847f-b17b5636a03d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC rErrHdl : REFERENCE to ERROR_HDL]]></Declaration>
+      <Get Name="Get" Id="{a1a208d1-48b9-4fc2-b0ef-dd3abf946472}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rErrHdl REF= ErrHdl;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0c95fa12-6e58-42a6-9d7d-1b27998f2c76}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ErrHdl := rErrHdl;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="reset" Id="{d6bd3a00-bbf7-457a-861b-56380c5828a0}">
+      <Declaration><![CDATA[METHOD reset : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[NoAction();
+reset 			:= ErrHdl.flag OR Admin.reset(FALSE);
+Event.confirm();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="rHome" Id="{c4d153dc-43d7-4560-9c71-6458b14e863c}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rHome : REFERENCE To AxHoming]]></Declaration>
+      <Get Name="Get" Id="{c095806c-9a9a-4862-8a5b-ba5301864f1d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rHome REF= Home;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="rPara" Id="{c1bd0681-1257-4dbe-9de2-94650bc5ec35}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY rPara : REFERENCE TO AxPara]]></Declaration>
+      <Get Name="Get" Id="{523820c8-f9c1-4cb4-971a-124def1f3152}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rPara REF= Para;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="AxNcBase">
+      <LineId Id="226" Count="41" />
+      <LineId Id="273" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.errorCheck">
+      <LineId Id="7" Count="1" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="21" Count="4" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.noAction">
+      <LineId Id="13" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.optEnableCmdAbortedAsError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.optEnableCmdAbortedAsError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.rAdmin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.rAxisRef.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.rErrHdl.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.rErrHdl.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.reset">
+      <LineId Id="6" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.rHome.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxNcBase.rPara.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

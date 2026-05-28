@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0092" Id="{74d34b98-21ff-4008-b1dc-2b068fd5ac2f}">
+    <Declaration><![CDATA[TYPE AX5000_S_0092 :
+STRUCT
+	Bipolar_torqu_limit_value:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

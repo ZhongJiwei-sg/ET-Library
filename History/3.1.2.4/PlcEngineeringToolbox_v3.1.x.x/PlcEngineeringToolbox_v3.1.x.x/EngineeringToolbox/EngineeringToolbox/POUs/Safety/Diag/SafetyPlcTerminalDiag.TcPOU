@@ -1,0 +1,142 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="SafetyPlcTerminalDiag" Id="{83dcd024-6b92-40e7-b02a-5a93141c6d92}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK SafetyPlcTerminalDiag // EL6900
+VAR CONSTANT
+	MIN_FB													:	INT := 1;
+	MAX_FB													:	INT := PARAM.SAFETY_PLC_TERM_DIAG_MAX_FB;
+END_VAR                 									
+VAR_INPUT               									
+	Enable													:	BOOL := TRUE;	//FB will be processed as long as enable is TRUE 
+	SourceId												:	UDINT := 100300;//Multisource id 
+	Quit													:	BOOL;			//Resets error with rising edge 
+	IO														:	EL69xx;			
+END_VAR
+VAR_OUTPUT
+	{attribute 'displaymode':='binary'}
+	Status													:	DWORD; 			//current sttus of all events
+	NoOfActiveEvents										:	INT;
+END_VAR
+VAR (* FunctionBlock Status *)
+	FBInfoDataDiag	 								AT %I*	:	ARRAY [MIN_FB..MAX_FB] OF UINT; //Safety FB diagnostic information
+END_VAR
+VAR (* Events/Blocks/Var internal *)
+	EventInputSizeMism										: EventHandling := (SourceId := SourceId, MsgId:= 1); //Msg id 1
+	EventOutputSizeMism										: EventHandling := (SourceId := SourceId, MsgId:= 2); //Msg id 2
+	EventInvalidCRC											: EventHandling := (SourceId := SourceId, MsgId:= 3); //Msg id 3
+	
+	EventFBError											:	ARRAY [MIN_FB..MAX_FB] OF EventHandling; //MsgId from 11 to MAX_FB + 10
+                        									                        	
+	i														:	INT := MIN_FB;
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EL6900 Safety Terminal Diag					*)
+(************************************************)
+
+(* call IO *************************************************************)
+	IO();
+	
+(* Event 1-10 Size Mismatch ********************************************)
+	EventInputSizeMism(
+		Flag		:= IO.InputSizeMismatch AND Enable,
+		ConfirmTrig	:= Quit OR NOT Enable AND EventInputSizeMism.State <> TCEVENTSTATE_INVALID ,
+		MsgId		:= ,
+		SourceId	:= ,
+		eClass		:= ,
+		format		:= ,
+		Text1		:= ,
+		Text2		:= ,
+		pText3		:= ,
+		State		=> );
+
+	EventOutputSizeMism(
+		Flag		:= IO.OutputSizeMismatch AND Enable,
+		ConfirmTrig	:= Quit OR NOT Enable AND EventOutputSizeMism.State <> TCEVENTSTATE_INVALID ,
+		MsgId		:= ,
+		SourceId	:= ,
+		eClass		:=,
+		format		:= ,
+		Text1		:= ,
+		Text2		:= ,
+		pText3		:= ,
+		State		=> );
+		
+	EventInvalidCRC(
+		Flag		:= IO.ProjectCRC = 0 AND_THEN NOT IO.WcState AND IO.InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP AND Enable,
+		ConfirmTrig	:= Quit OR NOT Enable AND EventInvalidCRC.State <> TCEVENTSTATE_INVALID ,
+		MsgId		:= ,
+		SourceId	:= ,
+		eClass		:=,
+		format		:= ,
+		Text1		:= ,
+		Text2		:= ,
+		pText3		:= ,
+		State		=> );
+
+	
+(* Events 11-n FB Error *******************************************)
+	NoOfActiveEvents										:= 0;
+	Status													:= EventInputSizeMism.Status OR EventOutputSizeMism.Status OR EventInvalidCRC.Status; 
+
+	FOR i := MIN_FB TO MAX_FB 
+	DO
+		IF FBInfoDataDiag[i] <> 0 AND Enable
+			OR EventFBError[i].State <> TCEVENTSTATE_INVALID
+		THEN
+			EventFBError[i](
+				Flag		:= FBInfoDataDiag[i] <> 0 AND Enable,
+				ConfirmTrig	:= Quit OR NOT Enable AND EventFBError[i].State <> TCEVENTSTATE_INVALID ,
+				MsgId		:= ,
+				SourceId	:= ,
+				eClass		:= ,
+				format		:= ,
+				Text1		:= ,
+				Text2		:= DWORD_TO_BINSTR(UINT_TO_DWORD(FBInfoDataDiag[i]),16),
+				pText3		:= ,
+				State		=> );
+			NoOfActiveEvents								:= NoOfActiveEvents + 1;
+		END_IF	
+		Status												:= Status OR EventFBError[i].Status;
+	END_FOR
+
+(*********************************************************)
+]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{7bd3df3e-3779-4c8c-aab3-6696de6dda78}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+	FOR i := MIN_FB TO MAX_FB 
+	DO
+		EventFBError[i].MsgId		:= TO_UINT(i + 10);
+		EventFBError[i].SourceId	:= SourceId;
+		EventFBError[i].Text1		:= INT_TO_STRING(i);	
+		EventFBError[i].pText3		:= ADR(IO.DevName);
+	END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="SafetyPlcTerminalDiag">
+      <LineId Id="3" Count="42" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="49" Count="14" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="64" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyPlcTerminalDiag.FB_init">
+      <LineId Id="15" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

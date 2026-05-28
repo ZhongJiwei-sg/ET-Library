@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <DUT Name="U_64BIT_DATATYPE" Id="{a67dba86-a190-4860-b006-8260bd92c681}">
+    <Declaration><![CDATA[TYPE U_64BIT_DATATYPE : //Union datatype of 64 bit size datatypes 
+UNION
+//Native 64bit data types
+	_LREAL													:	LREAL; 
+	_LINT													:	LINT;
+	_ULINT													:	ULINT;
+	_LTIME													:	LTIME;
+	{attribute 'displaymode':='hex'}                         	
+	_LWORD													:	LWORD;	
+	                    
+//Alternative 64bit size variables as arrays of smaller datatypes                                     	
+	_DINTs				 									:	ARRAY[0..1] OF DINT; //Array 0..1 of DINT
+	_UDINTs													:	ARRAY[0..1] OF UDINT; //Array 0..1 of UDINT
+	_INTs													: 	ARRAY[0..3] OF INT;	//Array 0..3 of INT
+	_UINTs													: 	ARRAY[0..3] OF UINT;//Array 0..3 of UINT 
+	_SINTs													: 	ARRAY[0..7] OF SINT;//Array 0..7 of SINT (signed 8bit)
+	{attribute 'displaymode':='hex'}	                     	
+	_BYTEs													:	ARRAY[0..7] OF BYTE; //Array 0..7 of BYTE
+	{attribute 'displaymode':='hex'}	                     	
+	_WORDs													:	ARRAY[0..3] OF WORD; //Array 0..3 of WORD
+	{attribute 'displaymode':='hex'}	                     	
+	_DWORDs													:	ARRAY[0..1] OF DWORD; //Array 0..1 of DWORD
+END_UNION
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

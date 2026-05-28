@@ -1,0 +1,150 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxEventHandling" Id="{7c5cb6ca-9282-47e9-8400-452d4eeb6dc3}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EventHandlingGrp10 instance use inside
+FUNCTION_BLOCK AxEventHandling
+VAR CONSTANT
+END_VAR                     								
+VAR_INPUT                   								
+	Enable													:	BOOL := TRUE; (* Show alarm message, warnings or hint. always reported !!! *)
+	ConfirmTrig												:	BOOL := FALSE;
+	SourceId												:	UDINT := 101000; //TwinCat-NC axis default multisource Id + Ax id
+	ErrorId													:	UDINT := 0;
+	Name													:	STRING(30) := '';
+	rAxis													:	REFERENCE TO AXIS_REF := 0;
+END_VAR
+VAR_OUTPUT
+{attribute 'displaymode':='binary'}
+	Status													:	DWORD;
+	NoOfActiveEvents										:	INT;
+END_VAR
+VAR
+(* Zwischenspeicher ***********************************************)
+	QuitInternal 											: BOOL;
+
+(* Timer **********************************************************)
+
+(* Trigger ********************************************************)
+
+(* Bausteine ******************************************************)
+	Event													:	EventHandlingGrp10 := (
+																	AutoConfirm			:= FALSE, 
+																	SetClass 			:= TC2_SYSTEM.TCEVENTCLASS_ALARM );
+	AxNcEvent												:	AxNcEventHandling;
+
+(* Dummy Speicher *************************************************)
+	i														:	INT ;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Error message axis to EventLogger 			V3.0	DS	*)
+(***********************************************************)
+
+(* Sequence **************************************************************)
+IF __ISVALIDREF(rAxis) 
+THEN
+	(* get Quit signal **************************************************)
+	IF ConfirmTrig 
+	THEN 
+		QuitInternal 										:= TRUE; 
+	END_IF (* set false see below *)
+
+(* Event Logger Meldungen *****************************************************)
+	Event.no[1].Flag 										:= rAxis.Status.IoDataInvalid;
+	Event.no[2].Flag 										:= rAxis.Status.DriveDeviceError;
+	Event.no[3].Flag 										:= rAxis.Status.Homing;   
+	Event.no[4].Flag 										:= rAxis.Status.SoftLimitMinExceeded AND rAxis.Status.Homed AND NOT rAxis.Status.InTargetPosition; //Show msg only if SW is reached without active movement   
+	Event.no[5].Flag 										:= rAxis.Status.SoftLimitMaxExceeded AND rAxis.Status.Homed AND NOT rAxis.Status.InTargetPosition; 	//Show msg only if SW is reached without active movement   
+(*
+	Event.no[6].Flag 										:= FALSE;
+	Event.no[7].Flag 										:= FALSE;
+	Event.no[8].Flag 										:= FALSE;
+	Event.no[9].Flag 										:= FALSE;
+	Event.no[10].Flag 										:= FALSE;
+*)
+(* workl Event Ctrl *************************************************)
+	IF Event.no[1].Text2 <> Name AND Name <> '' OR Event.no[1].Text2 = '' AND AxisId <> 0
+	THEN
+		//Init EventClass
+		Event.no[3].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_HINT;
+		Event.no[4].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+		Event.no[5].eClass 									:= TC2_SYSTEM.TCEVENTCLASS_STATEINFO;
+
+		(* Init Name *)
+		FOR i := Event.MIN_EVENT TO Event.MAX_EVENT DO
+			Event.no[i].Text2								:= SEL(LEN(name)>1,CONCAT('Axis id:',DWORD_TO_STRING(rAxis.NcToPlc.AxisId)),name);
+		END_FOR
+	END_IF
+
+	Event(
+		ConfirmTrig := ConfirmTrig,
+		Disable		:= NOT Enable,
+		SourceId	:= SourceId + rAxis.NcToPlc.AxisId,
+		Status	 	=> );	
+
+(* Send ErrorId Message Text **********************************)
+	AxNcEvent(
+		ConfirmTrig	:= NOT Enable OR QuitInternal OR ErrorId = 0 AND AxNcEvent.State <> 0,
+		Name		:= name,
+		AxisId		:= rAxis.NcToPlc.AxisId,
+		SourceId	:= SourceId,
+		Flag		:= ErrorId > 0 AND Enable,
+		ErrorID		:= ErrorId,
+		State		=> );
+
+(* EventStatus *************************************************)
+	Status													:= AxNcEvent.Status OR Event.Status;
+	NoOfActiveEvents										:= Event.NoOfActiveEvents + SEL(AxNcEvent.Status.31 , 0, 1);
+
+(* Error unkonw pointer or axis id *****************************)
+ELSE
+	NoOfActiveEvents										:= 0;
+	AxNcEvent(Flag := FALSE, ConfirmTrig := AxNcEvent.State <> 0);
+	Event(Disable := TRUE, Status =>  ); 
+	Status													:= AxNcEvent.Status OR Event.Status;
+END_IF
+
+(* Default reset Quit Internal *******************************)
+	QuitInternal 											:= FALSE;
+
+(**************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="confirm" Id="{130f1986-386f-4d5e-a2cc-6abff0691611}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : bool //Return value = TRUE if execution finished 
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[QuitInternal 												:= TRUE;
+confirm													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxEventHandling">
+      <LineId Id="3" Count="69" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxEventHandling.confirm">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

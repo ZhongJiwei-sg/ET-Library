@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <DUT Name="KIN_POSITIONS_ACS_DUT" Id="{fbb6b555-ebeb-45da-b137-1b8733287974}">
+    <Declaration><![CDATA[TYPE KIN_POSITIONS_ACS_DUT :
+STRUCT
+	A1					: LREAL; //Joint axis 1
+	A2					: LREAL; //Joint axis 2
+	A3					: LREAL; //Joint axis 3
+	A4					: LREAL; //Joint axis 4
+	A5					: LREAL; //Joint axis 5
+	A6					: LREAL; //Joint axis 6
+	Q1					: LREAL; //Auxiliary joint axis 1
+	Q2					: LREAL; //Auxiliary joint axis 2 	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

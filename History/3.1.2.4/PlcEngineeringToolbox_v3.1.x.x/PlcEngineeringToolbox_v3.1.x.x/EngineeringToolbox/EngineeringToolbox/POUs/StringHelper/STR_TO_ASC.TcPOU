@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
+  <POU Name="STR_TO_ASC" Id="{eff02e5a-eb22-4acd-8922-0575f7d4a76e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION STR_TO_ASC : BYTE
+VAR_INPUT
+	str : STRING;
+END_VAR
+VAR
+	pChar : POINTER TO BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	pChar 		:= ADR(str);
+	STR_TO_ASC 	:= pChar^;
+]]></ST>
+    </Implementation>
+    <LineIds Name="STR_TO_ASC">
+      <LineId Id="17" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

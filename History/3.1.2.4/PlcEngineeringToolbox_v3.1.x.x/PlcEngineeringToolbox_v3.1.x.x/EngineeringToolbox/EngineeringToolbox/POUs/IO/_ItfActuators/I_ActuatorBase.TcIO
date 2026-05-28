@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorBase" Id="{46dad2fc-156d-45ec-93cd-344afa0e6051}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorBase EXTENDS __System.IQueryInterface
+]]></Declaration>
+    <Property Name="inError" Id="{d2f5904c-cc87-4105-a9ee-d5febb327cf7}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public inError : bool]]></Declaration>
+      <Get Name="Get" Id="{f7ebf349-22c4-4344-9d9f-bbc02e053d44}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isBusy" Id="{b869e0fc-662e-4f15-91cc-14948c70232d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isBusy : bool]]></Declaration>
+      <Get Name="Get" Id="{14abb90e-d9ee-4282-9ae1-3b596128d2c7}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="isOff" Id="{31bd977b-7f66-404d-a919-f85ff3bd7c66}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{56c493d5-9a94-40a7-9b0c-b47bb6e395df}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="noFeed" Id="{042ef271-dd59-4c9f-bf93-8dcb09222e48}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public noFeed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0e95e137-8fcb-41b8-8897-ab3694c157a4}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="ok" Id="{831fa375-e8a7-4c6b-affd-d8044e891d10}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public ok : bool]]></Declaration>
+      <Get Name="Get" Id="{1a37b8a3-e8e4-49bc-8b96-6f5f7181c205}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{b89a9eb2-a357-408f-8267-532cdc90d8e2}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="switchOff" Id="{de37676c-e8e3-41b4-b62d-9df26640547f}">
+      <Declaration><![CDATA[METHOD public switchOff : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

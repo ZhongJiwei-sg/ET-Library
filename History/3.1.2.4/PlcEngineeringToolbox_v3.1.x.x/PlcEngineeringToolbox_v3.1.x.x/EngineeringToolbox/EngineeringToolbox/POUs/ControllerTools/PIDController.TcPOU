@@ -1,0 +1,327 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="PIDController" Id="{ad6b5a01-747e-4a5a-af43-5db4ec6cc64e}" SpecialFunc="None">
+    <Declaration><![CDATA[//Base PID controller with manual 
+FUNCTION_BLOCK PIDController 
+VAR_INPUT
+	Enable													: BOOL := FALSE;	// FB will be processed as long as enable is TRUE 
+	ResetTrig												: BOOL := FALSE;	// The function block will get reseted with a rising edge 
+	ManualOn												: BOOL := FALSE;	// set Q to ManualValue 
+	Sync													: BOOL := FALSE;	// synchronization flag for bumpless initialisation
+	// controller input (deviation)   					
+	SetValue												: LREAL := 0.0;		// Setpoint value										
+	ActValue												: LREAL := 0.0;		// Actual value											
+	
+	MinOutput												: LREAL := 0.0;		// controller minimum output (min. limit)				
+	MaxOutput												: LREAL := 0.0;		// controller maximum output (max. limit)				
+	SyncValue												: LREAL := 0.0;		// syncronization value for bumpless init.				
+	ManualValue												: LREAL := 0.0;		// manual value *)
+	// controller values             					
+	CycleTime												: LREAL := 0.0;		// controller cycle time in seconds [s]					
+	Kp														: LREAL := 0.0;		// proportional gain Kp	(P)								
+	Tn														: LREAL := 0.0;		// integral gain Tn (I) [s]								
+	Tv														: LREAL := 0.0;		// derivative gain Tv (D-T1) [s]						
+	Td														: LREAL := 0.0;		// derivative damping time Td (D-T1) [s]				
+	InnerWindow												: LREAL := 0.0;		// inner window for reduced I-part (dE-window)			
+	OuterWindow												: LREAL := 0.0;		// outer window for disabling I-part (dE-window)		
+END_VAR
+VAR_OUTPUT
+	Q														: LREAL := 0;		// controller output command							
+	Deviation												: LREAL := 0.0;		// Setpoint deviation									
+	MinLimit												: BOOL := FALSE;	// minimum limiting active ? [TRUE/FALSE] -> ARW		
+	MaxLimit												: BOOL := FALSE;	// maximum limiting active ? [TRUE/FALSE] -> ARW		
+	ARWActive												: BOOL := FALSE;	// ARW actice ? [TRUE/FALSE] -> freeze I-part			
+	Error													: BOOL := FALSE;	// Rising edge of Error informs that an error occurred during the execution of the Function Block 							
+	ErrorId													: UDINT := 0;		// Error identification 		
+END_VAR                         							
+VAR_OUTPUT CONSTANT                   							
+	ERR_NOERROR												: UDINT := 0;		// no error												
+	ERR_NOINIT												: UDINT := 1;		// no initialization done								
+	ERR_INVALIDPARAM										: UDINT := 2;		// invalid parameter								
+	ERR_INVALIDCYCLETIME									: UDINT := 3;		// invalid cycle time									
+END_VAR
+VAR
+	// STATIC VARIABLE
+	// Internal Variable
+	fE														: LREAL := 0.0;		// error input											
+	fE_1													: LREAL := 0.0;		// error input z^(-1)									
+	fY														: LREAL := 0.0;		// control output										
+	fY_1													: LREAL := 0.0;		// control output  z^(-1)								
+	fYP														: LREAL := 0.0;		// P-part												
+	fYI														: LREAL := 0.0;		// I-part												
+	fYI_1													: LREAL := 0.0;		// I-part  z^(-1)										
+	fYD														: LREAL := 0.0;		// D-T1-part										
+	fYD_1													: LREAL := 0.0;		// D-T1-part  z^(-1)									
+	// Internal Parameter
+	bIsInitDone												: BOOL	:= FALSE;	// is controller init done ?							
+	bInitMem												: BOOL	:= FALSE;	// reset flag											
+	bIsIPart												: BOOL	:= FALSE;	// I-part active ?										
+	bIsDPart												: BOOL	:= FALSE;	// D-part active ?										
+	bIsDAutoScaling											: BOOL	:= FALSE;	// autoscaling for D-part done ?						
+	bIsOuterWnd												: BOOL	:= FALSE;	// I-part active and outer window unequal zero ?		
+                                							
+	fDi														: LREAL	:= 0.0;		// internal I param										
+	fDd														: LREAL	:= 0.0;		// internal D param										
+	fCd														: LREAL	:= 0.0;		// internal D param										
+	fCycleTime												: LREAL	:= 0.0;		// controller cycle time [s]
+	MemSyncValue											: LREAL	:= 0.0;
+	rtSync													: r_trig;
+	rtReset													: r_trig;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* controller init *)
+rtReset(CLK := ResetTrig);
+IF rtReset.Q OR NOT bIsInitDone OR NOT Enable 
+THEN
+	reset();
+	RETURN;
+END_IF
+
+(* 1. check for initialisation flag *)
+IF bIsInitDone 
+THEN
+	ErrorID 												:= ERR_NOERROR;
+ELSE                                    					
+	Error 													:= TRUE;
+	ErrorID 												:= ERR_NOINIT;
+END_IF
+
+(* 2. controller synchronization flag => look at the end of FB *)
+(* I-part *)
+IF( Tn > 0.0 ) 
+THEN
+	fDi 												:= (Kp * fCycleTime) / (2.0 * Tn);
+	bIsIPart											:= TRUE;
+ELSE                                    				
+	fDi 												:= 0.0;
+	bIsIPart 											:= FALSE;
+END_IF
+
+(* D-part *)
+IF	( Tv > 0.0 ) AND (Td > 0.0) 
+THEN
+	(* autoscaling necessary if (Td < CycleTime) or (Tv < Td)	*)
+	(* if (Td < CycleTime) => (Td = CycleTime)					*)
+	IF	( Td < fCycleTime ) 
+	THEN(* autoscaling for D-part *)
+		bIsDAutoScaling									:= TRUE;
+		fDd 											:= (Kp * Tv) / (fCycleTime + fCycleTime / 2.0);
+		fCd 											:= (fCycleTime / 2.0) / (fCycleTime + fCycleTime / 2.0);
+	ELSE(* normal calculation, no autoscaling for D-part *)
+		bIsDAutoScaling									:= FALSE;
+		fDd 											:= (Kp * Tv) / (Td + fCycleTime / 2.0);
+		fCd 											:= (Td - fCycleTime / 2.0) / (Td + fCycleTime / 2.0);
+	END_IF;                             				
+	bIsDPart 											:= TRUE;                   				
+ELSE                                    				
+	fDd													:= 0.0;
+	fCd 												:= 0.0;
+	bIsDPart 											:= FALSE;
+END_IF;                                 				
+                                        				
+                                        				
+(* 3. save old variable *)              				
+fE_1													:= fE;
+fY_1													:= fY;
+fYI_1													:= fYI;
+fYD_1													:= fYD;
+                                        				
+(* 4. set error/deviation input *)      				
+Deviation												:= SetValue - ActValue;
+fE														:= Deviation;  
+                                     				
+(* 5. YP-part *)                        	
+fYp														:= Kp * fE;
+                                        				
+(* 6. YI-part *)                        				
+IF bIsIPart                             				
+THEN                                    				
+	IF	( MinLimit                      				
+		AND (fE < 0.0) )                				
+	THEN                                				
+		ARWActive										:= TRUE;
+		fYI												:= fYI_1;						(* freeze I-part *)
+	ELSIF	( MaxLimit                  				
+			AND (fE > 0.0) )            				
+	THEN                                				
+		ARWActive										:= TRUE;
+		fYI												:= fYI_1;						(* freeze I-part *)
+	ELSE
+		ARWActive										:= FALSE;
+		(* fYI		:= fYI_1 + fDi * (fE + fE_1); *)					(* normal I-part calculation *)
+
+		(* reduce I-part in the inner window *)
+		IF ( ABS( fE ) < InnerWindow ) 
+		THEN
+			fYI 						:= fYI_1 + fDi * (fE + fE_1) * (ABS( fE ) / InnerWindow);(* reduced I-part *)
+		ELSIF ( bIsOuterWnd AND ( ABS( fE ) > OuterWindow ) ) 
+		THEN
+			fYI											:= fYI_1;						(* freeze I-part in outer window *)
+		ELSE                            				
+			fYI 										:= fYI_1 + fDi * (fE + fE_1);	(* normal I-part calculation *)
+		END_IF                          				
+                                        				
+	END_IF                              				
+ELSE                                    				
+	ARWActive											:= FALSE;
+	fYI													:= 0.0;
+END_IF                                  				
+                                        	
+(* 7. YD-part *)                        	
+IF bIsDPart THEN                        	
+	fYD													:=  fCd * fYD_1 + fDd * (fE - fE_1);
+ELSE                                    				
+	fYD													:= 0.0;
+END_IF                                  				
+                                        				
+(* 8. Ysum = YP + YI + YD *)            				
+fY														:= fYP + fYI + fYD;
+
+(* 2. synchronization: Bumpless Init Without Abrupt Change Of Y(t) *)
+rtSync(CLK := Sync);
+IF 	ManualOn 
+	OR rtSync.Q 
+THEN
+	Synchronize(SEL(ManualOn,SyncValue,ManualValue));
+END_IF                                  				
+                                        				
+(* 9. check for output limiting *)      				
+IF ( fY >= MaxOutput )                  				
+THEN                                    				
+	fY													:= MaxOutput;
+	MinLimit											:= FALSE;
+	MaxLimit											:= TRUE;
+ELSIF ( fY <= MinOutput )               				
+THEN                                    	
+	fY													:= MinOutput;
+	MinLimit											:= TRUE;
+	MaxLimit											:= FALSE;
+ELSE                                    				
+	MinLimit											:= FALSE;
+	MaxLimit											:= FALSE;
+END_IF
+
+(* 10. set controller output *)
+Q 														:= fY;
+
+(**********************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{3ab91711-b788-47da-83ee-a1febeaccfba}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL; //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* reset internal and external variables *)
+
+fE															:= fE_1		:= 0.0;
+fY															:= fY_1		:= 0.0;
+fYP															:= 0.0;
+fYI															:= fYI_1	:= 0.0;
+fYD															:= fYD_1	:= 0.0;
+bIsInitDone													:= FALSE;
+bIsIPart													:= FALSE;
+bIsDPart													:= FALSE;
+ARWActive													:= FALSE;
+bIsDAutoScaling												:= FALSE;
+bIsOuterWnd													:= FALSE;
+Q															:= 0.0;
+MinLimit													:= FALSE;
+MaxLimit													:= FALSE;
+Error 														:= FALSE;
+                            								
+(* ??? set fE=fCtrlInput und fE_1=fCtrlInput ??? *)
+(*	fE	:=  fCtrlInput; *)
+
+(* read PLC cycle time for discreete calculation *)
+(*	fCycleTime	:=	DINT_TO_REAL( GetScanTime( dummyInVar:= TRUE ) ) * 0.000001; *)
+fCycleTime													:= CycleTime;
+
+(* check cycle time parameter: (CycleTime > 0 AND CycleTme <= 60) *)
+IF (fCycleTime <= 0) OR (fCycleTime > 60.0) 
+THEN
+	ErrorID 												:= ERR_INVALIDCYCLETIME;
+	Error													:= TRUE;
+	RETURN;
+END_IF;
+
+(* check controller parameters: (Tn, Tv, Td >= 0) *)
+IF 	( (Tn < 0) 
+	OR (Tv < 0) OR (Td < 0) ) 
+THEN
+	ErrorID 												:= ERR_INVALIDPARAM;
+	Error													:= TRUE;
+	RETURN;
+END_IF;
+
+(* check controller parameters: (MinOutput > MaxOutput) *)
+IF ( MinOutput > MaxOutput ) 
+THEN
+	ErrorID 												:= ERR_INVALIDPARAM;
+	Error													:= TRUE;
+	RETURN;
+END_IF;
+
+(* check inner and outer window parameters: outer window must be greater than the inner window *)
+IF((bIsIPart) AND ( OuterWindow > 0.0 )) 
+THEN
+	IF (InnerWindow > OuterWindow) 
+	THEN
+		ErrorId 											:= ERR_INVALIDPARAM;
+		Error												:= TRUE;
+		RETURN;
+	END_IF;
+	bIsOuterWnd 											:= TRUE;
+END_IF;
+
+(* set internal init flag *)
+bIsInitDone													:= TRUE;
+Q		 													:= MinOutput;
+reset													:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="synchronize" Id="{18f576a3-7a94-4bf4-8092-6631be071f13}">
+      <Declaration><![CDATA[METHOD PUBLIC synchronize : BOOL  //Return value = TRUE if execution finished
+VAR_INPUT 
+	IN											:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemSyncValue										:= IN;
+	
+	(* Demand:  SyncValue != Ysum  with  SyncValue = Ysum = YP + YI + YD  =>  YI = SyncValue - Yp - Yd *)
+	IF 	( bIsIPart = TRUE ) 
+	THEN	(* I-part exists independent from the D-part *)
+		(* Normal:  fYI = fYI_1 + fDi * (fE + fE_1) *)
+		fYD 											:= fYD_1	:= 0.0;								
+		fYI												:= fYI_1	:= MemSyncValue - fYP - fYD;	
+		fY												:= MemSyncValue;
+	ELSIF ( bIsDPart = TRUE ) 
+	THEN	(* no I-part available, only D-part exits *)
+		(* Normal:  fYD = fCd * fYD_1 + fDd * (fE - fE_1) *)
+		(* fYD := fYD_1 := (fSyncValue - fYP - fYI) / fCd;*)(* 1) pre-calculation for the next cycle; fYI must be zero because there exists no I-part *)
+		fYD												:= fYD_1	:= (MemSyncValue - fYP - fYI);		(* 2) fYI must be zero because there exists no I-part *)
+		fY												:= MemSyncValue;
+	END_IF                              				
+	
+	Synchronize											:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="PIDController">
+      <LineId Id="407" Count="134" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="PIDController.reset">
+      <LineId Id="3" Count="64" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="PIDController.synchronize">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="22" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

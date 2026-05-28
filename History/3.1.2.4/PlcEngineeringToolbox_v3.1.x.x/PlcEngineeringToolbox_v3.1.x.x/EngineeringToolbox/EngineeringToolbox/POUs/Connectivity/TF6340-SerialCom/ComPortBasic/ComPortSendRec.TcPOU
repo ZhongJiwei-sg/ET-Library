@@ -1,0 +1,818 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="ComPortSendRec" Id="{5f8d8fe1-5e89-4acf-bbe0-6fc06c74cc6f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Discription: "ComPortSendRecCtrl" can be used to send and receive data and strings via serial Com-Port
+//based on TF6340 - SerialCommunication (Tc2_SerialCom)
+FUNCTION_BLOCK ComPortSendRec
+VAR_OUTPUT CONSTANT
+	FNC_RECEIVE												: INT := 0;
+	FNC_SEND												: INT := 1;
+	
+{attribute 'displaymode':='binary'}
+	OPTION_STRING_MODE										: BYTE := 2#0000_0001; // Activate String Mode / FALSE = Data mode
+{attribute 'displaymode':='binary'}
+	OPTION_CLEAR_BUFFER										: BYTE := 2#0000_0010; // Clear ComBuffer/Resetting at with first flag of execute 	
+{attribute 'displaymode':='binary'}
+	OPTION_REMOVE_PREFIX									: BYTE := 2#00000100; // Remonves Prefix of Received String
+{attribute 'displaymode':='binary'}
+	OPTION_REMOVE_SUFFIX									: BYTE := 2#00001000; // Remonves Suffix of Received String 	
+END_VAR
+VAR_INPUT
+	Execute													: BOOL := FALSE; 	// The function block will be executed with a rising edge 
+	Fnc														: INT (FNC_RECEIVE..FNC_SEND) := FNC_RECEIVE; //
+{attribute 'displaymode':='binary'}
+	Options													: BYTE := OPTION_STRING_MODE OR OPTION_CLEAR_BUFFER; // Bit 0 = Mode String / Bit 1 = Clear ComBuffer/Resetting at with first flag of execute 	
+	Prefix 													: STRING(20) := ''; // e.g. $02 Start of Text 
+	Suffix 													: STRING(20) := ''; // e.g. $03 End of Text
+	Timeout													: TIME := DEFAULT_ADS_TIMEOUT; //ADS timeout
+	SendString												: STRING(MAX_STRING_LENGTH);
+	LenghtData												: UDINT; // contains the number, in bytes, of the data to be read
+	pSendData												: POINTER TO BYTE := 0; // Pointer at startadress of send data
+	pRecData												: POINTER TO BYTE := 0; // Pointer at startadress of receive data
+	pRXBuffer												: POINTER TO COMbuffer := 0; // Pointer at RX-Buffer
+	pTXBuffer												: POINTER TO COMbuffer := 0; // Pointer at TX-Buffer
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	RecString												: STRING(MAX_STRING_LENGTH); // Received string in case Options bit .0 is set to TRUE
+	LenRecData												: INT;	//Len or size of received data
+	Busy													: BOOL := FALSE; // Busy is TRUE at the rising edge of Execute and FALSE when one of the outputs Done, Aborted, or Error is set 
+	Done													: BOOL := FALSE; // The Done output is set when the commanded action has been completed successfully 
+	Error													: BOOL := FALSE; // Error identification - see ADS return codes and TF6340 documentation at Beckhoff infosys for further information
+	ComErrorId												: Tc2_SerialCom.ComError_t := COMERROR_NOERROR; // Serial com. error indentification - Tc2_SerialCom documentaion for further information
+END_VAR
+VAR
+(* Local variables **************************************************)
+	StateRec												: INT := 0;
+	StateSend												: INT := 0;
+	MemErrorId												: Tc2_SerialCom.ComError_t := COMERROR_NOERROR; // see also ComLibV2.Lib 
+	MemFnc													: INT := -1;
+	
+	RecDataPrefixArr										: ARRAY[1..20] OF BYTE;
+	RecDataSuffixArr										: ARRAY[1..20] OF BYTE;
+
+(* Trigger **********************************************************)
+	RT_Execute												: R_Trig;
+	
+(* Instances ***************************************************************)
+	_ClearComBuffer											: Tc2_SerialCom.ClearComBuffer ;	
+	_RecString												: Tc2_SerialCom.ReceiveString255 ;
+	_SendString												: Tc2_SerialCom.SendString255 ;
+	_SendData												: Tc2_SerialCom.SendData;
+	_RecData												: Tc2_SerialCom.ReceiveData;	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Execute ***************************************************************************************)
+	RT_Execute(CLK := Execute);
+	IF RT_Execute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ComErrorId											:= COMERROR_NOERROR; 
+	END_IF                                 				
+                                            	
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_RECEIVE:
+		IF Options.0
+		THEN //Str mode 
+			ReceiveStr(Execute:= Execute);
+		ELSE //Data mode
+			ReceiveData(Execute:= Execute);
+		END_IF
+	
+	FNC_SEND:
+		IF Options.0
+		THEN //Str mode 
+			SendStr(Execute:= Execute);
+		ELSE //Data mode
+			SendData(Execute:= Execute);
+		END_IF	
+		
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ComErrorId										:= COMERROR_NOERROR; 
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ComErrorId											:= COMERROR_PARAMETERCHANGED; 
+	END_CASE                                	
+                                            	
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="clearBuffer" Id="{2cc86f33-b1d4-4f24-bf15-19981e038b2e}">
+      <Declaration><![CDATA[METHOD PUBLIC clearBuffer : booL //Return value = TRUE if execution finished
+//required parameter
+//pTXBuffer
+//pRXBuffer
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset();
+
+IF 	pRXBuffer = 0 OR pTXBuffer = 0
+THEN
+	Busy													:= FALSE;
+	Done													:= FALSE;
+	Error 													:= TRUE;
+	ComErrorId 												:= COMERROR_INVALIDPOINTER;
+ELSE                        								
+	_ClearComBuffer(Buffer:= pTXBuffer^);
+	_ClearComBuffer(Buffer:= pRXBuffer^);
+	
+END_IF
+ClearBuffer													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optClearBuffer" Id="{2c0838d8-7141-414d-80f4-c496ad4684e5}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optClearBuffer : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c21b0aad-7aad-498b-b644-4b8f19a89587}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optClearBuffer := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e15a0241-49ad-49ff-9e84-35a0ff86ad31}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optClearBuffer;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableStringMode" Id="{1b1e563e-b626-4b28-9bff-ae5f5f796e00}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optEnableStringMode : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d1b75caa-b1fa-407b-9494-8c076a95e9a3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableStringMode := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{27f1c6c9-61f6-4ddb-a516-4804edd6d007}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableStringMode;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optRemovePrefix" Id="{c0ba39a4-97d0-424d-a024-61ca0b9d2a68}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optRemovePrefix : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e68c2cb5-d987-4e7f-836e-17ac7ae41ec5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optRemovePrefix := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{de4e444e-ece8-432b-8e25-85d5584f3f2c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.2 := optRemovePrefix;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optRemoveSuffix" Id="{74763797-fb10-4893-af54-e3a5c70e68b6}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optRemoveSuffix : BOOL]]></Declaration>
+      <Get Name="Get" Id="{43d11178-cc96-4bcb-a8bf-dcd27dcb6e61}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optRemoveSuffix := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2c4bc2fd-9af4-4a9b-addb-2a916251b5c0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optRemoveSuffix;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="receiveData" Id="{878e6712-eeff-4ad9-ab02-78fb4a139563}">
+      <Declaration><![CDATA[METHOD PUBLIC receiveData : BOOL //Return value = TRUE if busy
+//required parameter
+//pRXBuffer
+//pRecData
+//LenghtData
+//Prefix
+//Suffix
+VAR_INPUT
+	Execute													:	BOOL; 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	pRXBuffer = 0 OR pRecData = 0 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ComErrorId 												:= COMERROR_INVALIDPOINTER;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;
+END_IF
+
+IF 	Execute
+	AND StateRec = 0
+THEN 
+	IF Options.1
+	THEN
+		reset();
+		_ClearComBuffer(Buffer:= pRXBuffer^);
+	END_IF
+	StateRec												:= 1;		
+END_IF
+
+MemFnc														:= FNC_RECEIVE;
+
+THIS^.Execute												:= Execute;
+
+IF StateRec = 1
+THEN
+	_RecData.LenPrefix 										:= UDINT_TO_BYTE(HEXSTR_TO_DATA(Prefix,ADR(RecDataPrefixArr), SIZEOF(RecDataPrefixArr)));
+	_RecData.LenSuffix 										:= UDINT_TO_BYTE(HEXSTR_TO_DATA(Suffix,ADR(RecDataSuffixArr), SIZEOF(RecDataSuffixArr)));
+
+// receiving data
+	_RecData(
+		pPrefix			:= ADR(RecDataPrefixArr),
+		LenPrefix		:= , // see above
+		pSuffix			:= ADR(RecDataSuffixArr),
+		LenSuffix		:= , // see above
+		pReceiveData	:= pRecData,
+		SizeReceiveData	:= LenghtData,
+		Timeout			:= Timeout,
+		Reset			:= FALSE,
+		RXbuffer		:= pRXBuffer^,
+		DataReceived	=> ,
+		busy			=> ,
+		Error			=> ,
+		RxTimeout		=> ,
+		LenReceiveData	=> );
+		
+	IF _RecData.Error <> 0
+	THEN
+		StateRec											:= 90;
+	ELSIF NOT _RecData.Busy
+		AND _RecData.DataReceived
+	THEN
+		StateRec											:= 2;
+		LenRecData											:= TO_INT(_RecData.LenReceiveData);
+	ELSIF NOT _RecData.Busy
+		AND _RecData.RxTimeout
+	THEN
+		StateRec											:= 91;
+	ELSE
+		LenRecData											:= TO_INT(_RecData.LenReceiveData);
+	END_IF
+END_IF
+
+CASE stateRec OF
+0: ; //waiting til start
+	ComErrorId												:= COMERROR_NOERROR; 
+	Busy													:= FALSE;
+	Error													:= FALSE;
+	Done													:= FALSE;
+	
+1: ; //reading acticve
+	ComErrorId												:= COMERROR_NOERROR; 
+	Busy													:= TRUE;
+	Error													:= FALSE;
+	Done													:= FALSE;
+	
+2: // finished reading
+	ComErrorId												:= COMERROR_NOERROR; 
+	Busy													:= FALSE;
+	Error													:= FALSE;
+	Done													:= TRUE;
+	
+	IF NOT Execute		
+	THEN
+		MemFnc												:= -1;
+		StateRec											:= 0;
+	END_IF
+	
+90:
+	ComErrorId												:= _RecData.Error; 
+	MemErrorId												:= ComErrorId;
+	Busy													:= FALSE;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	
+	IF NOT Execute		
+	THEN
+		MemFnc												:= -1;
+		StateRec											:= 0;
+	END_IF
+	
+91:	
+	ComErrorId												:= COMERROR_TIMEOUT; 
+	MemErrorId												:= ComErrorId;
+	Busy													:= FALSE;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	
+	IF NOT Execute		
+	THEN
+		MemFnc												:= -1;
+		StateRec											:= 0;
+	END_IF
+END_CASE
+
+ReceiveData													:= Busy;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="receiveStr" Id="{455f1010-45fd-4743-8f6a-38c3dddfa8f6}">
+      <Declaration><![CDATA[METHOD PUBLIC receiveStr : BOOL //Return value = TRUE if busy
+//required parameter
+//pRXBuffer
+//Prefix
+//Suffix
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pRXBuffer = 0 THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ComErrorId												:= COMERROR_INVALIDPOINTER;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;
+END_IF
+
+IF Execute
+	AND StateRec = 0
+THEN //start reading
+	IF Options.1
+	THEN
+		reset();
+		_ClearComBuffer(Buffer:= pRXBuffer^);	
+	END_IF
+	StateRec												:= 1;
+	MemSet(ADR(RecString),0,SIZEOF(RecString));						
+END_IF
+
+MemFnc														:= FNC_RECEIVE;
+
+THIS^.Execute												:= Execute;
+
+IF StateRec = 1
+THEN
+	_RecString(
+		Prefix			:= Prefix ,
+		Suffix			:= Suffix ,
+		Timeout			:= Timeout ,
+		Reset			:= FALSE,
+		ReceivedString	:= RecString,
+		RXbuffer		:= pRXBuffer^,
+		StringReceived	=> ,
+		Busy			=> ,
+		Error			=> ,
+		RxTimeout		=> );
+		
+	IF _RecString.Error <> 0
+	THEN
+		StateRec											:= 90;
+	ELSIF NOT _RecString.Busy
+		AND _RecString.StringReceived
+	THEN
+		IF Options.2 THEN RecString 						:= DELETE(RecString, len(Prefix), 1); 				END_IF
+		IF Options.3 THEN RecString 						:= DELETE(RecString, len(Suffix), len(RecString)); 	END_IF
+		LenRecData											:= LEN(RecString);
+		StateRec											:= 2;
+
+	ELSIF NOT _RecString.Busy
+		AND _RecString.RxTimeout
+	THEN
+		StateRec											:= 91;
+	END_IF
+END_IF
+
+CASE stateRec OF
+0: ; //wait until start
+	ComErrorId												:= COMERROR_NOERROR; 
+	Busy													:= FALSE;
+	Error													:= FALSE;
+	Done													:= FALSE;
+	                        								
+1: ; //reading active       								
+	ComErrorId												:= COMERROR_NOERROR; 
+	Busy													:= TRUE;
+	Error													:= FALSE;
+	Done													:= FALSE;
+	                        								
+2: // reading finished      								
+	ComErrorId												:= COMERROR_NOERROR; 
+	Busy													:= FALSE;
+	Error													:= FALSE;
+	Done													:= TRUE;
+	IF NOT Execute		    								
+	THEN                    								
+		MemFnc												:= -1;
+		StateRec											:= 0;
+	END_IF                  								
+	                        								
+90:                         								
+	ComErrorId												:= _RecString.Error; 
+	MemErrorId												:= ComErrorId;
+	Busy													:= FALSE;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	IF NOT Execute		    								
+	THEN                    								
+		MemFnc												:= -1;
+		StateRec											:= 0;
+	END_IF                  								
+	                        								
+91:                         								
+	ComErrorId												:= COMERROR_TIMEOUT; 
+	MemErrorId												:= ComErrorId;
+	Busy													:= FALSE;
+	Error													:= TRUE;
+	Done													:= FALSE;
+	IF NOT Execute		    								
+	THEN                    								
+		MemFnc												:= -1;
+		StateRec											:= 0;
+	END_IF                  								
+END_CASE                    								
+                            								
+ReceiveStr													:= Busy;
+						    								]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{b0680517-6c97-4899-98d9-ee7477183089}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : bool //Return value = TRUE if execution finished
+//required parameter
+//pRXBuffer
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pRXBuffer = 0 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ComErrorId 												:= COMERROR_INVALIDPOINTER;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	reset													:= TRUE;
+	RETURN;                             					
+END_IF                                  					
+                                        					
+	Busy													:= FALSE;
+	Done													:= FALSE;
+	Error													:= FALSE;
+	ComErrorId												:= COMERROR_NOERROR; // see also ComLibV2.Lib
+	StateRec												:= 0;
+	StateSend												:= 0;
+                                        					
+	_RecString(                             				
+		Prefix			:= Prefix ,
+		Suffix			:= Suffix ,
+		Timeout			:= Timeout ,
+		Reset			:= TRUE,
+		ReceivedString	:= RecString,
+		RXbuffer		:= pRXBuffer^,
+		StringReceived	=> ,
+		Busy			=> ,
+		Error			=> ,
+		RxTimeout		=> );
+		
+	_RecString.Reset										:= FALSE;
+
+	_RecData(
+		pPrefix			:= ADR(RecDataPrefixArr),
+		LenPrefix		:= , // see above
+		pSuffix			:= ADR(RecDataSuffixArr),
+		LenSuffix		:= , // see above
+		pReceiveData	:= pRecData,
+		SizeReceiveData	:= LenghtData,
+		Timeout			:= Timeout,
+		Reset			:= TRUE,
+		RXbuffer		:= pRXBuffer^,
+		DataReceived	=> ,
+		busy			=> ,
+		Error			=> ,
+		RxTimeout		=> ,
+		LenReceiveData	=> );
+	_RecData.Reset											:= FALSE;		
+		
+	reset													:= TRUE;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="sendData" Id="{7d9159e0-9b09-466b-b333-6f3c8b177f5c}">
+      <Declaration><![CDATA[METHOD PUBLIC sendData : BOOL //Return value = TRUE if busy
+//required parameter
+//pTXBuffer
+//pSendData
+//LenghtData		
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	pTXBuffer = 0 
+	OR pSendData = 0 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ComErrorId 												:= COMERROR_INVALIDPOINTER;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;                             					
+END_IF
+
+	IF Execute
+		AND StateSend = 0
+	THEN // start reading
+		IF Options.1
+		THEN
+			reset();
+			_ClearComBuffer(Buffer:= pTXBuffer^);
+		END_IF
+		StateSend											:= 1;		
+	END_IF
+
+	MemFnc													:= FNC_SEND;
+	
+	THIS^.Execute											:= Execute;
+		
+	IF 	StateSend = 1 
+		OR StateSend = 2
+	THEN		
+		_SendData(
+			pSendData 	:= pSendData,
+			Length		:= LenghtData,
+			TXbuffer	:= pTXBuffer^,
+			Busy		=> ,
+			Error		=> );
+			
+		IF _SendData.Error <> 0
+		THEN
+			StateSend		:= 90;	
+		ELSIF NOT _SendData.Busy
+		THEN
+			StateSend		:= 3;	
+	
+		ELSIF StateSend = 1
+		THEN
+			StateSend 		:= 2;
+		END_IF
+	END_IF
+	
+	CASE StateSend OF
+	0: ; //wait until start
+		ComErrorId											:= COMERROR_NOERROR; 
+		Busy												:= FALSE;
+		Error												:= FALSE;
+		Done												:= FALSE;
+		                        							
+	1,2: ; //writing active     							
+		ComErrorId											:= COMERROR_NOERROR; 
+		Busy												:= TRUE;
+		Error												:= FALSE;
+		Done												:= FALSE;
+		                        							
+	3: // finished writing      							
+		ComErrorId											:= COMERROR_NOERROR; 
+		Busy												:= FALSE;
+		Error												:= FALSE;
+		Done												:= TRUE;
+		IF NOT Execute		    							
+		THEN                    							
+			MemFnc											:= -1;
+			StateSend										:= 0;
+		END_IF                  							
+		                        							
+	90:                         							
+		ComErrorId											:= _SendData.Error; 
+		MemErrorId											:= ComErrorId;
+		Busy												:= FALSE;
+		Error												:= TRUE;
+		Done												:= FALSE;
+		IF NOT Execute		    							
+		THEN                    							
+			MemFnc											:= -1;
+			StateSend										:= 0;
+		END_IF                  							
+		                        							
+	END_CASE                    							
+	                            							
+	SendData												:= Busy;
+                                							
+                                							]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="sendStr" Id="{8078024a-aa1b-422b-b6ab-853cafc77e14}">
+      <Declaration><![CDATA[METHOD PUBLIC sendStr : BOOL //Return value = TRUE if busy
+//required parameter
+//pTXBuffer
+//SendString
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pTXBuffer = 0 THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ComErrorId 												:= COMERROR_INVALIDPOINTER;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;
+END_IF
+
+IF 	Execute
+	AND StateSend = 0
+THEN //start reading
+	IF Options.1
+	THEN
+		reset();
+		_ClearComBuffer(Buffer:= pTXBuffer^);
+	END_IF
+	StateSend												:= 1;		
+END_IF                                              	
+                                                    	
+MemFnc														:= FNC_SEND;
+                                                    	
+THIS^.Execute												:= Execute;
+                                                    	
+IF 	StateSend = 1                                   	
+	OR StateSend = 2                                	
+THEN		                                        	
+	_SendString(                                    	
+		SendString	:= SendString,                  	
+		TXbuffer	:= pTXBuffer^,                  	
+		Busy		=> ,                            	
+		Error		=> );                           	
+					                                	
+
+	IF _SendData.Error <> 0                      	
+	THEN                                            	
+		StateSend											:= 90;
+	ELSIF NOT _SendData.Busy                        	
+	THEN                                            	
+		StateSend											:= 3;
+	ELSIF StateSend = 1                                	
+	THEN                                            	
+		StateSend											:= 2;
+	END_IF                                          	
+END_IF                                              	
+                                                    	
+CASE StateSend OF                                   	
+0: ; //wait until start                             	
+	ComErrorId												:= COMERROR_NOERROR;    	
+	Busy													:= FALSE;               	
+	Error													:= FALSE;               	
+	Done													:= FALSE;               	
+	                        								                        	
+1,2: ; //writing active     								                        	
+	ComErrorId												:= COMERROR_NOERROR;    	
+	Busy													:= TRUE;                	
+	Error													:= FALSE;               	
+	Done													:= FALSE;               	
+	                        								                        	
+3: // finished writing      								                        	
+	ComErrorId												:= COMERROR_NOERROR;    	
+	Busy													:= FALSE;               	
+	Error													:= FALSE;               	
+	Done													:= TRUE;                	
+	IF NOT Execute		    								                        	
+	THEN                    								                        	
+		MemFnc												:= -1;                  	
+		StateSend											:= 0;                   	
+	END_IF                  								                        	
+	                        								                        	
+90:                         								                        	
+	ComErrorId												:= _SendString.Error;   	
+	MemErrorId												:= ComErrorId;          	
+	Busy													:= FALSE;               	
+	Error													:= TRUE;                	
+	Done													:= FALSE;               	
+	IF NOT Execute		    								                        	
+	THEN                    								                        	
+		MemFnc												:= -1;                  	
+		StateSend											:= 0;                   	
+	END_IF                  								                        	
+	                        								                        	
+END_CASE                    								                        	
+                            								                        	
+SendStr														:= Busy;                	
+                            								                        	
+                            								                        	]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ComPortSendRec">
+      <LineId Id="3" Count="46" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.clearBuffer">
+      <LineId Id="23" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.optClearBuffer.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.optClearBuffer.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.optEnableStringMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.optEnableStringMode.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.optRemovePrefix.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.optRemovePrefix.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.optRemoveSuffix.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.optRemoveSuffix.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.receiveData">
+      <LineId Id="3" Count="53" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="58" Count="3" />
+      <LineId Id="129" Count="1" />
+      <LineId Id="62" Count="56" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.receiveStr">
+      <LineId Id="3" Count="44" />
+      <LineId Id="115" Count="1" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="48" Count="58" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.reset">
+      <LineId Id="3" Count="50" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.sendData">
+      <LineId Id="3" Count="26" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="31" Count="6" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="107" Count="1" />
+      <LineId Id="100" Count="2" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="39" Count="2" />
+      <LineId Id="48" Count="42" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortSendRec.sendStr">
+      <LineId Id="3" Count="32" />
+      <LineId Id="38" Count="6" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="45" Count="42" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

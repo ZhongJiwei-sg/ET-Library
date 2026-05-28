@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="readStrToSeperator" Id="{351ca5e1-2b55-4d32-870e-61d70c7dcb63}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Returns a string found on the left side of a seperator, empty if seperator is not found
+FUNCTION readStrToSeperator : T_MaxString
+VAR_INPUT
+	Seperator												:	STRING(10) :=';';
+	Strline													:	T_MaxString;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR
+	pos														:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF strline='' 
+THEN
+	readStrToSeperator										:= '';
+ELSE
+	pos 													:= FIND (strline,seperator);
+	IF (pos >= 1) 
+	THEN
+		readStrToSeperator									:= LEFT (strline,pos-1);
+	ELSE
+		readStrToSeperator									:= '';
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="readStrToSeperator">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,526 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="NciMotion" Id="{016c5518-2ce2-437c-869a-fb0baca40e67}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Nci group motion control - Send EStop to group, release EStop via StepOn command, backup Nci program to make use of start retrace program forward/backward  
+//based on Tc2_NCI
+FUNCTION_BLOCK NciMotion  EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	FNC_ESTOP												:	INT := 0; //Send EStop to Nci group 
+	FNC_STEP_ON												:	INT := 1; 
+	FNC_ENABLE_FEEDER_BACKUP								:	INT := 2;
+	FNC_DISABLE_FEEDER_BACKUP								:	INT := 3;
+	FNC_RETRACE_FWD											:	INT := 4;
+	FNC_RETRACE_BWD											:	INT := 5;
+END_VAR                         							
+VAR_INPUT                       							
+	Fnc														:	INT (FNC_ESTOP..FNC_RETRACE_BWD):= FNC_ESTOP;
+	rNCIRef													:	REFERENCE TO NCI_REF := 0;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	ErrorText												:	STRING(40);	
+END_VAR
+VAR
+(* cache **************************************************************************)
+	MemFnc													:	INT := -1;
+
+(* Timer *)
+
+
+(* Trigger *)
+
+(* MC-functionblock instances *******************************************************)
+	ItpRetraceMoveBackward									:	ItpRetraceMoveBackward := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	ItpRetraceMoveForward									: 	ItpRetraceMoveForward := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	ItpEStopEx												:	ItpEStopEx := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	ItpStepOnAfterEStopEx									:	ItpStepOnAfterEStopEx := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+	ItpEnableFeederBackup									:	ItpEnableFeederBackup := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Nci group control																*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute );
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		ErrorText											:= '';
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_ESTOP												:	EStop(Execute);
+	FNC_STEP_ON												:	StepOn(Execute);
+	FNC_ENABLE_FEEDER_BACKUP								:	EnableFeederBackup(Execute);
+	FNC_DISABLE_FEEDER_BACKUP								:	DisableFeederBackup(Execute);
+	FNC_RETRACE_FWD											:	RetraceFwd(Execute);
+	FNC_RETRACE_BWD											:	RetraceBwd(Execute);
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorText										:= '';
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+		ErrorText											:= CONCAT('invalid parameter value(s) Fnc no: ' , INT_TO_STRING(MemFnc));
+	END_CASE
+
+(**************************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="disableFeederBackup" Id="{a5691c57-364b-4d40-8a1e-91b28841240f}">
+      <Declaration><![CDATA[METHOD PUBLIC disableFeederBackup : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_DISABLE_FEEDER_BACKUP;
+	THIS^.Execute											:= Execute;
+	                                                    	
+IF NOT __ISVALIDREF(rNCIRef)                            	
+THEN                                                    	
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+IF Execute
+THEN
+	Error													:=	FALSE;
+	ErrorId													:= 0;
+	ItpEnableFeederBackup.bExecute 							:= TRUE;
+ELSIF NOT ItpEnableFeederBackup.bBusy   					
+THEN                                    					
+	Error													:=	FALSE;
+	ErrorId													:= 0;
+	ItpEnableFeederBackup.bExecute 							:= FALSE;
+                                                        	
+END_IF                                                  	
+                                                        	
+ItpEnableFeederBackup(                                  	
+	bEnable		:= FALSE,                               	
+	bExecute	:= ,                                    	
+	tTimeOut	:= ,                                    	
+	sNciToPlc	:= rNCIRef.NciToPlc,                    	
+	bBusy		=> busy,                                	
+	bErr		=> ,                                    	
+	nErrId		=> );                                   	
+                                                        	
+Done														:= NOT ItpEnableFeederBackup.bBusy
+																AND NOT ItpEnableFeederBackup.bErr
+																AND ItpEnableFeederBackup.bExecute;
+                                                        	
+IF NOT Busy                                             	
+THEN                                                    	
+	IF ItpEnableFeederBackup.bExecute                   	
+	THEN                                                	
+		Error												:=	ItpEnableFeederBackup.bErr;
+		ErrorId												:= ItpEnableFeederBackup.nErrId;
+		ErrorText											:= SEL(Error , '' ,  CONCAT('Error ItpEnableFeederBackup (EN=FALSE) id: ',  UDINT_TO_STRING(Errorid)));
+	END_IF                          						
+	IF NOT Execute                  						
+	THEN                            	                		
+		MemFnc												:= -1 ;
+		ItpEnableFeederBackup(bExecute := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+	END_IF
+END_IF
+
+DisableFeederBackup											:= FALSE;
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enableFeederBackup" Id="{614a772b-1205-438a-a41d-694337d8833f}">
+      <Declaration><![CDATA[METHOD PUBLIC enableFeederBackup : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_DISABLE_FEEDER_BACKUP;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpEnableFeederBackup.bExecute 						:= TRUE;
+	ELSIF NOT ItpEnableFeederBackup.bBusy   				
+	THEN                                    				
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpEnableFeederBackup.bExecute 						:= FALSE;
+
+	END_IF
+
+	ItpEnableFeederBackup(
+		bEnable		:= TRUE,
+		bExecute	:= ,
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> busy,
+		bErr		=> ,
+		nErrId		=> );
+
+	Done													:= NOT ItpEnableFeederBackup.bBusy
+																AND NOT ItpEnableFeederBackup.bErr
+																AND ItpEnableFeederBackup.bExecute;
+
+	IF NOT Busy
+	THEN
+		IF ItpEnableFeederBackup.bExecute
+		THEN
+			Error											:=	ItpEnableFeederBackup.bErr;
+			ErrorId											:= ItpEnableFeederBackup.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpEnableFeederBackup (EN=TRUE) id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1 ;
+			ItpEnableFeederBackup(bExecute := FALSE , sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+	
+	EnableFeederBackup										:= Busy;
+
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="eStop" Id="{2da7c9b6-f260-4547-966f-64e9d0a41430}">
+      <Declaration><![CDATA[METHOD PUBLIC eStop : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_ESTOP;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= -1 ;
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpEStopEx.bExecute 								:= TRUE;
+	ELSIF NOT ItpEStopEx.bBusy          					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpEStopEx.bExecute 								:= FALSE;
+
+	END_IF
+	
+	ItpEStopEx(
+		bExecute	:= ,
+		fDec		:= (* Dec *),
+		fJerk		:= (* Jerk *),
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> Busy,
+		bErr		=> ,
+		nErrId	=> );
+
+	Done													:= NOT ItpEStopEx.bBusy
+																AND NOT ItpEStopEx.bErr
+																AND ItpEStopEx.bExecute;
+
+	IF NOT Busy
+	THEN
+		IF ItpEStopEx.bExecute
+		THEN
+			Error											:=	ItpEStopEx.bErr;
+			ErrorId											:= ItpEStopEx.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpEStopEx id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1 ;
+			ItpEStopEx(bExecute := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+
+	EStop													:= Busy;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="retraceBwd" Id="{b6265667-f4df-4f24-9f7f-22e70c13b2d1}">
+      <Declaration><![CDATA[METHOD PUBLIC retraceBwd : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_RETRACE_BWD;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= 16#4B30;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+IF Execute
+THEN
+	Error												:=	FALSE;
+	ErrorId												:= 0;
+	ItpRetraceMoveBackward.bExecute 					:= TRUE;
+ELSIF NOT ItpRetraceMoveBackward.bBusy      			
+THEN                                        			
+	Error												:=	FALSE;
+	ErrorId												:= 0;
+ItpRetraceMoveBackward.bExecute 						:= FALSE;
+
+END_IF
+
+ItpRetraceMoveBackward(
+	bExecute	:= ,
+	tTimeOut	:= ,
+	sNciToPlc	:= rNCIRef.NciToPlc,
+	bBusy		=> Busy,
+	bErr		=> ,
+	nErrId		=> );
+Done													:= NOT ItpRetraceMoveBackward.bBusy
+															AND NOT ItpRetraceMoveBackward.bErr
+															AND ItpRetraceMoveBackward.bExecute;
+
+IF NOT Busy
+THEN
+	IF ItpRetraceMoveBackward.bExecute
+	THEN
+		Error											:=	ItpRetraceMoveBackward.bErr;
+		ErrorId											:= ItpRetraceMoveBackward.nErrId;
+		ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpRetraceMoveBackward id: ',  UDINT_TO_STRING(Errorid)));
+	END_IF
+	IF NOT Execute
+	THEN
+		MemFnc											:= -1 ;
+		ItpRetraceMoveBackward(bExecute := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+	END_IF
+END_IF
+
+RetraceBwd												:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="retraceFwd" Id="{c41cfc49-ce89-4082-bd3d-6d5d78b6ec0d}">
+      <Declaration><![CDATA[METHOD PUBLIC retraceFwd : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_RETRACE_FWD;
+	THIS^.Execute											:= Execute;
+IF NOT __ISVALIDREF(rNCIRef) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpRetraceMoveForward.bExecute 						:= TRUE;
+	ELSIF NOT ItpRetraceMoveForward.bBusy       			
+	THEN                                        			
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpRetraceMoveForward.bExecute 						:= FALSE;
+
+	END_IF
+	
+	ItpRetraceMoveForward(
+		bExecute	:= ,
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> Busy,
+		bErr		=> ,
+		nErrId		=> );
+
+	Done												:= NOT ItpRetraceMoveForward.bBusy
+															AND NOT ItpRetraceMoveForward.bErr
+															AND ItpRetraceMoveForward.bExecute;
+                                        				
+	IF NOT Busy
+	THEN
+		IF ItpRetraceMoveForward.bExecute
+		THEN
+			Error										:=	ItpRetraceMoveForward.bErr;
+			ErrorId										:= ItpRetraceMoveForward.nErrId;
+			ErrorText									:= SEL(Error , '' ,  CONCAT('Error ItpRetraceMoveForward id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF                          				
+		IF NOT Execute                  				
+		THEN                            	
+			MemFnc										:= -1 ;
+			ItpRetraceMoveForward(bExecute := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+
+	RetraceFwd											:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="stepOn" Id="{41be4286-ee96-4e0b-a4bb-68fc463ed584}">
+      <Declaration><![CDATA[METHOD PUBLIC stepOn : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc													:= FNC_STEP_ON;
+	THIS^.Execute											:= Execute;
+	
+IF NOT __ISVALIDREF(rNCIRef) THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	ErrorText												:= 'Reference to rNCIRef invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpStepOnAfterEStopEx.bExecute 						:= TRUE;
+	ELSIF NOT ItpStepOnAfterEStopEx.bBusy   				
+	THEN                                    				
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		ItpStepOnAfterEStopEx.bExecute 						:= FALSE;
+
+	END_IF
+
+	ItpStepOnAfterEStopEx(
+		bExecute	:= ,
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> Busy,
+		bErr		=> ,
+		nErrId		=> );
+
+	Done													:= NOT ItpStepOnAfterEStopEx.bBusy
+																AND NOT ItpStepOnAfterEStopEx.bErr
+																AND ItpStepOnAfterEStopEx.bExecute;
+
+	IF NOT Busy
+	THEN
+		IF ItpStepOnAfterEStopEx.bExecute
+		THEN
+			Error											:=	ItpStepOnAfterEStopEx.bErr;
+			ErrorId											:= ItpStepOnAfterEStopEx.nErrId;
+			ErrorText										:= SEL(Error , '' ,  CONCAT('Error ItpStepOnAfterEStopEx id: ',  UDINT_TO_STRING(Errorid)));
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1 ;
+			ItpStepOnAfterEStopEx(bExecute := FALSE, sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+
+	stepOn													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciMotion">
+      <LineId Id="3" Count="40" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciMotion.disableFeederBackup">
+      <LineId Id="3" Count="59" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciMotion.enableFeederBackup">
+      <LineId Id="3" Count="60" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciMotion.eStop">
+      <LineId Id="3" Count="57" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciMotion.retraceBwd">
+      <LineId Id="3" Count="52" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciMotion.retraceFwd">
+      <LineId Id="3" Count="52" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciMotion.stepOn">
+      <LineId Id="3" Count="52" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

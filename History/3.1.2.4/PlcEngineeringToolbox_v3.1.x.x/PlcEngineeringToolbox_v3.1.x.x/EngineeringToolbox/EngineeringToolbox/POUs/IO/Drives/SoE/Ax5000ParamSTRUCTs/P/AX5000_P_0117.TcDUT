@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0117" Id="{eed68b10-4171-45b7-b3cd-6c0fb372f4fe}">
+    <Declaration><![CDATA[TYPE AX5000_P_0117 :
+STRUCT
+	ASM_stall_protection_loop_intrgral_action_time:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

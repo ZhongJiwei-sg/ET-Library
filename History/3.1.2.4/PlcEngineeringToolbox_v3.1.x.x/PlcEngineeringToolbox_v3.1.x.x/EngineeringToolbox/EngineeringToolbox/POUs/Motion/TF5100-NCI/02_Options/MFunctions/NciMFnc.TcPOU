@@ -1,0 +1,190 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="NciMFnc" Id="{3746ddf4-f086-41eb-a5d6-049513391ce0}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK NciMFnc
+VAR_OUTPUT CONSTANT 
+	MIN_M_FUNC												:	 UINT := 0;
+	MAX_M_FUNC												:	 UINT := 159;
+	
+//Predefined M Functions
+	M2_PRG_END												:	UINT := 2;
+	M17_END_SUBROUTINE										:	UINT := 17;
+	M30_PRG_END_WITH_ALL_MFUNC								:	UINT := 30; 
+END_VAR                 									
+VAR_INPUT               									
+	ConfirmHsk												:	BOOL := FALSE; (* oder Methode benutzen *)
+	FastMFuncReset											:	BOOL := FALSE; (* Signal Start Reser der unter FastMFuncNo angegebenen MFunc Nr. *)
+	FastMFuncNo												:	UINT (MIN_M_FUNC..MAX_M_FUNC) := MIN_M_FUNC; (* Nr. der MFunktion die Resetet werden soll *)
+	rNCIRef													:	REFERENCE TO NCI_REF := 0;
+END_VAR                 									
+VAR_OUTPUT              	
+	HskReq													:	BOOL;
+	HskId													:	UINT; 	
+	CntActive												:	INT; //Count number of active M fucntions
+	Active													:	BOOL; //Rising trigger M-Function active
+	No														:	ARRAY[MIN_M_FUNC..MAX_M_FUNC] OF BOOL; (* Array of M-Functions *)
+	rtNo													:	ARRAY[MIN_M_FUNC..MAX_M_FUNC] OF BOOL; (* rising trigger of M-Functions *)
+END_VAR                     								
+VAR
+(* Zwischenspeicher ************************************************************)
+	MemFnc													:	INT := -1;
+
+(* Deklaration Trigger **********************************************************)
+
+(* Zeiten ******************************************************************)
+
+(* Bausteine ***************************************************************)
+	ItpResetFastMFuncEx										:  ItpResetFastMFuncEx := (tTimeOut	:= DEFAULT_ADS_TIMEOUT);
+
+(* Dummy Speicher **********************************************************)
+	i														:	UINT := 0;
+	OK														:	BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(************************************************************************************)
+	(*																					*)
+	(*		B E C K H O F F   N E W   A U T O M A T I O N   T E C H N O L O G Y    		*)
+	(*																					*)
+	(*		Eiserstr.5	D-33415 Verl	Germany	phone:	+49-5246-0	www.Beckhoff.Com	*)
+    (*																					*)
+    (*		Bausteinbeschreibung	:	Auswerten von M-Funktionen						*)
+	(*		TwinCAT-Version			:	2.11.x 											*)
+	(*		Version					:	V2.0/ 05/20										*)
+ 	(*		Autor					:	Daniel Schlingmann								*)
+	(*		Lib						:	TcNCI.Lib										*)
+	(*																					*)
+	(************************************************************************************)
+
+(* evaluate M-function with additional acknowledge *********************************************************************)
+	HskReq 													:= rNCIRef.NciToPlc.HskMFuncReq.0;
+	HskId 													:= SEL(HskReq, 0, rNCIRef.NciToPlc.HskMFuncNo);
+
+	(* Confirm request *)
+	rNCIRef.PlcToNci.MFuncGranted.0 						:= (ConfirmHsk OR rNCIRef.PlcToNci.MFuncGranted.0) AND rNCIRef.NciToPlc.HskMFuncReq.0;
+
+(* set all M-function setzen *)
+	CntActive												:= 0;
+	Active													:= FALSE;
+	
+	FOR i := MIN_M_FUNC TO MAX_M_FUNC DO
+	 	OK	 												:= ItpIsFastMFunc(UINT_TO_INT(i),rNCIRef.NciToPlc) OR rNCIRef.NciToPlc.HskMFuncNo = i AND rNCIRef.NciToPlc.HskMFuncReq.0;
+		rtNo[i]												:= NOT No[i] AND OK;
+		No[i]												:= OK;
+		IF No[i] 
+		THEN 
+			CntActive										:= CntActive + 1;		
+			Active 											:= TRUE; 
+		END_IF
+	END_FOR
+
+(* reset fast M-functions, ResetFastMFunc can also be used *)
+	IF MemFnc < 0
+	THEN
+		IF FastMFuncReset
+		THEN
+			MemFnc 											:= 1;
+			ResetFastMFunc(FastMFuncNo:= FastMFuncNo);
+		END_IF
+	ELSE 
+		ResetFastMFunc(FastMFuncNo:= FastMFuncNo);		
+	END_IF
+
+(************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="confirm" Id="{34b5c2c3-19c9-499a-a964-33b473c40cb2}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : BOOL //Return value = TRUE if execution finished
+//required parameter
+//rNCIRef
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF __ISVALIDREF(rNCIRef)
+THEN
+	rNCIRef.PlcToNci.MFuncGranted.0 						:= rNCIRef.NciToPlc.HskMFuncReq.0;
+	Confirm													:= NOT rNCIRef.NciToPlc.HskMFuncReq.0;
+ELSE
+	Confirm 												:= TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resetFastMFunc" Id="{ef15cc3c-3acf-4ae1-92f9-e0d7696df6b6}">
+      <Declaration><![CDATA[METHOD PUBLIC resetFastMFunc : BOOL //Return value = TRUE if busy
+//required parameter
+//rNCIRef
+VAR_INPUT
+	FastMFuncNo												:	UINT; (* number of M-function, which has to be resetted *)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT __ISVALIDREF(rNCIRef)
+THEN
+	ResetFastMFunc											:= FALSE;
+	Return;	
+END_IF
+
+	IF ItpIsFastMFunc(UINT_TO_INT(FastMFuncNo),rNCIRef.NciToPlc) 
+	THEN
+		ItpResetFastMFuncEx.bExecute 						:= TRUE;
+		MemFnc.0											:= TRUE;
+	ELSIF NOT ItpResetFastMFuncEx.bBusy             		
+	THEN                                            		
+		ItpResetFastMFuncEx.bExecute 						:= FALSE;
+	END_IF
+	
+	THIS^.FastMFuncNo										:= FastMFuncNo;
+
+	ItpResetFastMFuncEx(
+		bExecute	:= ,
+		nMFuncNo	:= FastMFuncNo,
+		tTimeOut	:= ,
+		sNciToPlc	:= rNCIRef.NciToPlc,
+		bBusy		=> ,
+		bErr		=> ,
+		nErrId	=> );
+		
+	IF NOT ItpResetFastMFuncEx.bBusy
+	THEN
+		IF ItpResetFastMFuncEx.bExecute
+		THEN
+			;
+		//	Error											:=	ItpResetFastMFuncEx.bErr;
+		//	ErrorId											:= ItpResetFastMFuncEx.nErrId;
+		END_IF
+		IF NOT ItpIsFastMFunc(UINT_TO_INT(FastMFuncNo),rNCIRef.NciToPlc) 
+		THEN
+			MemFnc											:= -1;
+			ItpResetFastMFuncEx(bExecute := FALSE , sNciToPlc:= rNCIRef.NciToPlc);
+		END_IF
+	END_IF
+	
+	resetFastMFunc											:= ItpResetFastMFuncEx.bBusy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="NciMFnc">
+      <LineId Id="3" Count="21" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="30" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciMFnc.confirm">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="NciMFnc.resetFastMFunc">
+      <LineId Id="3" Count="43" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="Cylinder_wUnitItf" Id="{0ab8f445-21f2-424b-be28-b865cad33352}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK Cylinder_wUnitItf EXTENDS cylinder
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}
+	OPTION_REPORT_ERROR										:	BYTE := 2#0000_0001; //Set master unit into error if acuator is in error	
+END_VAR
+VAR_INPUT  
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE :=0;	
+	ipUnit													:	I_StatemodelBase;	
+	
+END_VAR                                     			
+VAR_OUTPUT 
+	BtnBasePos												:	BOOL;		
+	BtnWorkPos												:	BOOL;         			
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* 										 								       	*)
+	(* 								 												*)
+	(********************************************************************************)
+
+(* execute cylinder function *************************************)
+	SUPER^();
+	
+(* Check master unit ***********************************************)
+	IF ipUnit <> 0 
+	THEN
+		CASE ipUnit.actState OF
+ 		eSTATE.EXECUTE:
+			IF ipUnit.actMode = eMODE.MANUAL OR ipUnit.mode = eMODE.SERVICE
+			THEN
+				IF BtnBasePos THEN SUPER^.moveToBasePos(); END_IF
+				ELSIF BtnWorkPos THEN SUPER^.moveToWorkPos(); END_IF
+			ELSE //In auto
+				IF Options.0 AND_THEN SUPER^.inError
+				THEN
+					ipUnit.setMachineError();
+				END_IF	
+			END_IF
+		END_CASE
+	END_IF
+	
+(*********************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="Cylinder_wUnitItf">
+      <LineId Id="1011" Count="3" />
+      <LineId Id="1024" Count="0" />
+      <LineId Id="1116" Count="1" />
+      <LineId Id="1036" Count="0" />
+      <LineId Id="1119" Count="1" />
+      <LineId Id="1137" Count="0" />
+      <LineId Id="1148" Count="0" />
+      <LineId Id="1141" Count="0" />
+      <LineId Id="1131" Count="1" />
+      <LineId Id="1135" Count="0" />
+      <LineId Id="1142" Count="0" />
+      <LineId Id="1144" Count="2" />
+      <LineId Id="1143" Count="0" />
+      <LineId Id="1128" Count="0" />
+      <LineId Id="1139" Count="0" />
+      <LineId Id="1121" Count="0" />
+      <LineId Id="1037" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

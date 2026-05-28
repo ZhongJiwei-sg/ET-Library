@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="Output" Id="{bfc4f4e5-dbe0-41dd-9de3-68ac105cf38e}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Simple object for one hardware output with an additionl bit to forward the Out status to the AT  %Q* variable
+FUNCTION_BLOCK Output 
+VAR_INPUT
+	Enable													:	BOOL := TRUE;	//FB will be processed as long as enable is TRUE 	
+	Out														:	BOOL := FALSE;	//sets output
+END_VAR         								
+VAR_OUTPUT      								
+	status													:	BYTE := 0;		//query Options (conditions see below)
+	Q												AT  %Q* :	BOOL;			//hardware output
+END_VAR         							
+VAR             				
+END_VAR         	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF Out THEN
+	switchOn();
+ELSE
+	SwitchOff();
+END_IF
+
+status.0 													:= NOT Q;
+status.1 													:= Q;
+status.5 													:= Enable;
+         													]]></ST>
+    </Implementation>
+    <Method Name="switchOff" Id="{7a803ce3-62fc-4d11-b256-e7afcdaa7d24}">
+      <Declaration><![CDATA[METHOD PUBLIC switchOff : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q := Out											:= FALSE;
+SwitchOff											:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{d845a3e4-f40a-4cb9-89a0-c12196b98144}">
+      <Declaration><![CDATA[METHOD PUBLIC switchOn : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Out														:= TRUE;
+SwitchOn := Q 											:= Enable AND Out;
+
+														]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Output">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Output.switchOff">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Output.switchOn">
+      <LineId Id="3" Count="1" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

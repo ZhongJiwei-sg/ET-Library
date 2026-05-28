@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="ADSERROR_TO_WSERROR" Id="{271b90b8-6132-4a52-b7df-14b472341e68}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Convert ADS error id into winsocket error enum
+FUNCTION ADSERROR_TO_WSERROR : E_WinsockError
+VAR_INPUT
+{attribute 'displaymode':='hex'}
+	ErrorID													: UDINT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF ErrorID >= TO_UDINT(16#80070000) AND ErrorID <= TO_UDINT(16#8007FFFF)
+THEN
+	ADSERROR_TO_WSERROR										:= TO_INT(ErrorID - TO_UDINT(16#80070000));
+	IF ADSERROR_TO_WSERROR < 10004 OR ADSERROR_TO_WSERROR >= 12000
+	THEN //Because of other Win32 error
+		ADSERROR_TO_WSERROR									:= WSOK;
+	END_IF
+ELSIF ErrorID = 16#274C
+THEN
+	ADSERROR_TO_WSERROR										:= WSAETIMEDOUT;
+ELSIF ErrorID = 16#274D
+THEN
+	ADSERROR_TO_WSERROR										:= WSAECONNREFUSED;
+ELSIF ErrorID = 16#2751
+THEN
+	ADSERROR_TO_WSERROR										:= WSAEHOSTUNREACH;
+ELSIF ErrorID >= TO_UDINT(16#00008000) AND ErrorID <= TO_UDINT(16#000080FF)
+THEN //Internal error TCP/IP Server 
+	ADSERROR_TO_WSERROR										:= WSAEHOSTUNREACH;
+ELSE
+	ADSERROR_TO_WSERROR										:= WSOK;
+END_IF	
+]]></ST>
+    </Implementation>
+    <LineIds Name="ADSERROR_TO_WSERROR">
+      <LineId Id="73" Count="5" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="49" Count="1" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="54" Count="2" />
+      <LineId Id="58" Count="2" />
+      <LineId Id="91" Count="1" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

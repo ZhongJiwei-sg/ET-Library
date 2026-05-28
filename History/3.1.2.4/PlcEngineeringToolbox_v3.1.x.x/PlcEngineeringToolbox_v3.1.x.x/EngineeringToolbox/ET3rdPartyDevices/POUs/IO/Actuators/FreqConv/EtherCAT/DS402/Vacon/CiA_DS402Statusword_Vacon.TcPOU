@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="CiA_DS402Statusword_Vacon" Id="{c225f227-090c-464a-94f1-32ccef406c32}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Statusword_Vacon EXTENDS CiA_DS402Statusword
+VAR_INPUT
+END_VAR
+VAR_OUTPUT	
+	TargetReached				: BOOL; // Bit 10 commonly used FOR in target position, velocity ect.
+	IncorrectDriveMode		:	BOOL; //Manufacturer specific_Bit14
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="readStatusword" Id="{64fca09e-e8e7-4463-b099-62aa5eacfe60}">
+      <Declaration><![CDATA[METHOD PUBLIC readStatusword : BOOL
+VAR_INPUT
+	Statusword 					:	UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+
+	TargetReached											:= Statusword.10;
+
+	IncorrectDriveMode										:= Statusword.14;
+
+
+	readStatusword											:= SUPER^.readStatusword(Statusword);
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Statusword_Vacon">
+      <LineId Id="110" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Statusword_Vacon.readStatusword">
+      <LineId Id="107" Count="7" />
+      <LineId Id="95" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

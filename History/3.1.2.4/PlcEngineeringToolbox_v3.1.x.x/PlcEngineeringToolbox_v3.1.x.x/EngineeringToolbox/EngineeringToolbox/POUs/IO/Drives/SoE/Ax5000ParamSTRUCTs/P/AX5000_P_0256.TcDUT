@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0256" Id="{ceaef951-bf7c-4397-889a-8f56b4989e5e}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0256 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+(*Positive Edge*)
+	Times:ARRAY[0..1] OF UDINT;
+	Values:ARRAY[0..1] OF UDINT;
+	Rsvd1:ARRAY[0..1] OF UDINT;
+	Last_time_index:UINT;
+	Last_value_index:UINT;
+	Latched_time:UDINT;
+	Latched_value:UDINT;
+(*Negative Edge*)
+	Times2:ARRAY[0..1] OF UDINT;
+	Values2:ARRAY[0..1] OF UDINT;
+	Rsvd2:ARRAY[0..1] OF UDINT;
+	Last_time_index2:UINT;
+	Last_value_index2:UINT;
+	Latched_time2:UDINT;
+	Latched_value2:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

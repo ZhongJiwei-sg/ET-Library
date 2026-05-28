@@ -1,0 +1,86 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="VeloLinearMeasurement" Id="{e0e2aadc-de42-44ae-9ed6-181a843ac1e1}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Accumulates the covered distance based on the velocity input and the time IN is TRUE - used to detect jamped pieces on a conveyor
+FUNCTION_BLOCK VeloLinearMeasurement
+VAR_INPUT
+	Enable													:	BOOL;	//Enable function (e.g. Conveyor on)
+	ResetTrig												:	BOOL;	//Reset Q
+	IN														:	BOOL; 	//Sensor input
+	Velo													:	LREAL;  //mm/ms | m/s with FACTOR=1, m/min with FACTOR=16.666666666666668
+	Factor													:	LREAL := 1.0;	//Used to convert "VELO" into mm/ms (e.g. 16.666666666666668 to convert m/min into mm/ms
+END_VAR             										
+VAR_OUTPUT          										
+	Q														:	LREAL;	//Accumulated value in mm
+END_VAR             										
+VAR                 										
+	tx														:	DWORD;
+	last 													: 	DWORD;
+	ms														: 	DWORD;
+	mmProms													:	LREAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Get mm pro ms *)
+mmProms 													:= VELO * FACTOR; 
+
+(* read system time *)
+tx 															:= TIME_TO_DWORD(TIME());
+
+(* Sequence *)
+IF ResetTrig THEN
+	reset();
+ELSIF IN AND Enable THEN
+	(* add the current milliseconds *)
+	ms 														:= (tx - last) + ms;
+	Q 														:= ms * mmProms;
+ELSE
+	;
+END_IF
+
+(* Save last Cylcetime *)
+last 														:= tx;
+
+(**********************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{3bb9e85c-c8ec-4cbf-89e1-1c0da1403edb}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : bool //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q 															:= 0;
+ms 															:= 0;
+reset													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="VeloLinearMeasurement">
+      <LineId Id="85" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VeloLinearMeasurement.reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

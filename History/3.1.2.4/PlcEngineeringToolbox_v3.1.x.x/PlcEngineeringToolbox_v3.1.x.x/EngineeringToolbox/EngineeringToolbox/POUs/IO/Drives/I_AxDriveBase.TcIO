@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <Itf Name="I_AxDriveBase" Id="{bd294a7b-9420-4419-8749-42aea727b934}">
+    <Declaration><![CDATA[INTERFACE I_AxDriveBase EXTENDS __SYSTEM.IQueryInterface
+]]></Declaration>
+    <Property Name="rAxDrive" Id="{1c3d979c-3af3-43ea-9f00-ede3a090d6fe}">
+      <Declaration><![CDATA[PROPERTY PUBLIC rAxDrive : REFERENCE TO AxDriveBase]]></Declaration>
+      <Get Name="Get" Id="{5ef96e38-26fe-4ae6-8dd2-f6f60766037c}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

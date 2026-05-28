@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <DUT Name="LCID" Id="{e221db65-902e-45a0-b47d-b4318e7573ac}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+TYPE LCID :
+STRUCT
+// Code: 	https://de.wikipedia.org/wiki/ISO-3166-1-Kodierliste
+// LCID:	https://msdn.microsoft.com/de-de/goglobal/bb964664.aspx
+// LCID:	https://winprotocoldoc.blob.core.windows.net/productionwindowsarchives/MS-LCID/%5bMS-LCID%5d.pdf
+
+//	ISO3166 ALPHA-2, ALPHA-3
+	NONE						: eLCID := eLCID.NONE;
+	CZ,CZE						: eLCID := eLCID.CZ; // Czech - 1029 
+	DK,DNK						: eLCID := eLCID.DK; // Danish - 1030
+	DE,DEU						: eLCID := eLCID.DE; // German - 1033	
+	GR,GRC						: eLCID := eLCID.GR; // Greek - 1032
+	US,USA						: eLCID := eLCID.US; // English(US) - 1033
+	ES,ESP						: eLCID := eLCID.ES; // Spainsh(Spain) - 1034
+	FI,FIN						: eLCID := eLCID.FI; // Finnish - 1035
+	FR,FRA						: eLCID := eLCID.FR; // French(France) - 1036	
+	IT,ITA						: eLCID := eLCID.IT; // Italian - 1040
+	NL,NLD						: eLCID := eLCID.NL; // Dutch(Netherlands) - 1043
+	NO,NOR						: eLCID := eLCID.NO; // Norwegian - 1044
+	PL,POL						: eLCID := eLCID.PL; // Polish - 1045
+	RU,RUS						: eLCID := eLCID.RU; // Russian - 1049
+	SE,SWE						: eLCID := eLCID.SE; // Swedish(Sweden) - 1053
+	CA,CAN						: eLCID := eLCID.CA; // Canadian - 1099
+	TR,TUR						: eLCID := eLCID.TR; // Turkish - 1055
+	CN,CHN						: eLCID := eLCID.CN; // Chinese(CN-Simplified) - 2052
+	GB,GBR						: eLCID := eLCID.GB; // English(UK) - 2057	
+	PT,PRT						: eLCID := eLCID.PT; // Portuguese(Portugal) - 2057	
+END_STRUCT
+END_TYPE
+
+
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

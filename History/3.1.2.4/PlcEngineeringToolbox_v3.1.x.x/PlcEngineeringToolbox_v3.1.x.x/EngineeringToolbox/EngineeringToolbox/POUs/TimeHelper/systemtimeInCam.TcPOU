@@ -1,0 +1,119 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="systemtimeInCam" Id="{1c161321-5b44-4f8a-ac32-f192db4e7998}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+// retuns True if In Timestruct is in setpoint +/- window 
+// Year and DayOfWeek will except of this comparison 
+FUNCTION systemtimeInCam : Bool
+VAR_IN_OUT
+	In				: TIMESTRUCT;
+	SETP			: TIMESTRUCT;
+	WINDOW			: TIMESTRUCT;
+END_VAR
+VAR
+	Neg 			: 	WORD;	
+	Pos 			:	WORD;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[systemtimeInCam			:= FALSE;	
+
+//Neg 				:= TO_WORD(LIMIT(0,TO_INT(SETP.wYear) - TO_INT(WINDOW.wYear),2070));
+//Pos 				:= TO_WORD(LIMIT(0,TO_INT(SETP.wYear) + TO_INT(WINDOW.wYear),2070));
+//IF 		In.wYear > Neg
+//	AND	In.wYear < Pos
+//THEN // Year OK
+//	IF 		In.wYear = Neg
+//		OR	In.wYear = Pos
+//	THEN // Year Limit
+		Neg 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wMonth) - TO_INT(WINDOW.wMonth),12));
+		Pos 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wMonth) + TO_INT(WINDOW.wMonth),12));
+		IF 		In.wMonth >= Neg
+			AND In.wMonth <= Pos
+		THEN // Month OK
+			IF 		In.wMonth = Neg
+				OR 	In.wMonth = Pos
+			THEN // Month Limit
+				Neg 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wDay) - TO_INT(WINDOW.wDay),31));
+				Pos 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wDay) + TO_INT(WINDOW.wDay),31));
+				IF 		In.wDay >= Neg
+					AND	In.wDay <= Pos
+				THEN // Day OK
+					IF 		In.wDay = Neg
+						OR	In.wDay = Pos
+					THEN // Day Limit
+//						Neg 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wDayOfWeek) - TO_INT(WINDOW.wDayOfWeek),7));
+//						Pos 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wDayOfWeek) + TO_INT(WINDOW.wDayOfWeek),7));
+//						IF 		In.wDayOfWeek >= Neg
+//							AND In.wDayOfWeek <= Pos
+//						THEN // Dow OK
+//							IF 		In.wDayOfWeek = Neg
+//								OR	In.wDayOfWeek = Pos
+//							THEN // Dow Limit
+								Neg 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wHour) - TO_INT(WINDOW.wHour),23));
+								Pos 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wHour) + TO_INT(WINDOW.wHour),23));
+								IF 		In.wHour >= Neg
+									AND	In.wHour <= Pos
+								THEN // Hour OK
+									IF 		In.wHour = Neg
+										OR	In.wHour = Pos
+									THEN // Hour Limit
+										Neg 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wMinute) - TO_INT(WINDOW.wMinute),60));
+										Pos 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wMinute) + TO_INT(WINDOW.wMinute),60));
+										IF 		In.wMinute >= Neg
+											AND In.wMinute <= Pos
+										THEN // Minute OK
+											IF		In.wMinute = Neg
+												OR	In.wMinute = Pos
+											THEN // Minute Limit
+												Neg 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wSecond) - TO_INT(WINDOW.wSecond),60));
+												Pos 			:= TO_WORD(LIMIT(0,TO_INT(SETP.wSecond) + TO_INT(WINDOW.wSecond),60));
+												IF 		In.wSecond >= Neg
+													AND	In.wSecond <= Pos
+												THEN // Second OK
+													IF 		In.wSecond = Neg
+														OR	In.wSecond = Pos
+													THEN // Second Limit
+														Neg 					:= TO_WORD(LIMIT(0,TO_INT(SETP.wMilliseconds) - TO_INT(WINDOW.wMilliseconds),1000));
+														Pos 					:= TO_WORD(LIMIT(0,TO_INT(SETP.wMilliseconds) + TO_INT(WINDOW.wMilliseconds),1000));
+														IF 		In.wMilliseconds >= Neg
+															AND In.wMilliseconds <= Pos
+														THEN // Millisecond OK
+															systemtimeInCam					:= TRUE;																													
+														END_IF	
+													ELSE // Second OK
+														systemtimeInCam					:= TRUE;
+													END_IF
+												END_IF
+											ELSE // Minute OK
+												systemtimeInCam					:= TRUE;
+											END_IF
+										END_IF
+									ELSE // Hour OK
+										systemtimeInCam					:= TRUE;
+									END_IF
+								END_IF
+//							ELSE // DOW OK
+//								TimestructCAM					:= TRUE;
+//							END_IF
+//						END_IF
+					ELSE // Day OK
+						systemtimeInCam					:= TRUE;			
+					END_IF
+				END_IF
+			ELSE // Month OK
+				systemtimeInCam					:= TRUE;			
+			END_IF
+		END_IF 
+//	ELSE // Year OK
+//		TimestructCAM					:= TRUE;	
+//	END_IF	
+//END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="systemtimeInCam">
+      <LineId Id="349" Count="91" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

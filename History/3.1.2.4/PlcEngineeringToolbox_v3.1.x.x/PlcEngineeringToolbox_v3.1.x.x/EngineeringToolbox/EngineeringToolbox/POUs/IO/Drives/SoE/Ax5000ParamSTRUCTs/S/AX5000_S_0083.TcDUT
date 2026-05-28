@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0083" Id="{cbe65f88-d6ae-4e23-ba08-8821b5379554}">
+    <Declaration><![CDATA[TYPE AX5000_S_0083 :
+STRUCT
+	Negative_Torque_command_value:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

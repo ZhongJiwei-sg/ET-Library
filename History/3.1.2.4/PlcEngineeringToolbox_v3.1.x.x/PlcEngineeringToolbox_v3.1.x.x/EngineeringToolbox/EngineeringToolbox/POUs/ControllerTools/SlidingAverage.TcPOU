@@ -1,0 +1,143 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="SlidingAverage" Id="{04cbb492-5ede-4bc3-8245-6802810ae7ea}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK SlidingAverage 
+VAR_OUTPUT CONSTANT 
+	MIN_BUFFER												:	INT := 1;
+	MAX_BUFFER												:	INT := PARAM.SLIDING_AVERAGE_MAX_ENTRYS;
+END_VAR
+VAR_INPUT
+	In														: LREAL := 0.0;			//Actual value 
+	ResetTrig												: BOOL := FALSE;		//Reset average buffer
+	MaxNoOfValues											: DINT := PARAM.SLIDING_AVERAGE_MAX_ENTRYS;//Buffer limit if value is smaller than MAX_BUFFER
+	SampleTime												: TIME := T#0MS;
+END_VAR                 									
+VAR_OUTPUT              									
+	Q														: LREAL := 0.0;			//Average value
+	Derivative												: LREAL := 0.0;			//
+	ActIdx													: DINT := 1; 			//rotating count of buffer 
+	Buffer													: ARRAY [MIN_BUFFER..MAX_BUFFER] OF LREAL;
+END_VAR                 									
+VAR           
+	MinIdx													: DINT := MIN_BUFFER;   
+	MaxIdx													: DINT := 0;       									
+	Count													: DINT := 0; // limited count 
+	pBuffer													: POINTER TO LREAL := 0;
+	pIdx													: POINTER TO LREAL := 0;
+	IdxOld													: DINT := 1;
+	ftotal													: LREAL;
+	fttotal													: LREAL;
+	tonSampleTimer											: ton;
+END_VAR                 	
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+IF ResetTrig THEN reset(); RETURN; END_IF
+
+pBuffer														:= ADR(Buffer);
+MaxIdx														:= LIMIT(MIN_BUFFER, TO_INT(MaxNoOfValues), MAX_BUFFER);
+
+IF(ActIdx>MaxIdx)
+THEN
+	ActIdx													:= MinIdx;
+END_IF                      								
+IF(ActIdx<MinIdx)           								
+THEN                        								
+	ActIdx													:= MaxIdx;
+END_IF                      								
+                            								
+IF(ActIdx>MaxIdx)           								
+THEN                        								
+	Q														:= IN; (* Puffer-Indices sind unsinnig *)
+ELSIF(pBuffer=0)            								
+THEN                        								
+	Q														:= IN; (* Puffer-Adresse ist unsinnig *)
+ELSE            
+	tonSampleTimer(IN := SampleTime > T#0MS, PT :=  SampleTime);
+	IF NOT tonSampleTimer.IN OR tonSampleTimer.Q    
+	THEN   			
+		tonSampleTimer(IN := FALSE);	
+		
+		Count												:= MIN(Count, MaxIdx - MinIdx + 1);
+		IdxOld												:= ActIdx - Count;
+															
+		IF(IdxOld<MinIdx)      								
+		THEN                    							
+			IdxOld											:= IdxOld + MaxIdx - MinIdx + 1;
+		END_IF                  	                        
+									                        
+		IF(ActIdx=MinIdx)       	                        
+		THEN                    	                        
+			fttotal											:= 0.0;
+		END_IF                  							
+															
+		IF(Count<1)            								
+		THEN                    							
+			ftotal := Derivative 							:= 0.0;	(* first cycle *)
+		END_IF                  							
+															
+		pIdx												:= pBuffer + ((ActIdx - MinIdx) * SIZEOF(LREAL));
+									                        
+		IF(Count = (MaxIdx - MinIdx + 1))                   
+		THEN                                                
+			Derivative										:= (IN - pIdx^) / DINT_TO_LREAL(Count);
+			ftotal											:= ftotal-pIdx^;		(* buffer is filled at least once *)
+		END_IF                  							
+		pIdx^												:=IN;
+		fttotal												:=fttotal + IN;
+		ftotal												:=ftotal + IN;
+															
+		ActIdx												:=ActIdx + 1;
+									                        
+		IF(ActIdx > MaxIdx)                                 
+		THEN                                                
+			(* swapping *)                                  
+			ftotal											:= fttotal;
+			ActIdx											:= MinIdx;
+		END_IF                                              
+		                                                    
+		Count												:= MIN(Count + 1, MaxIdx - MinIdx + 1);
+															
+		Q													:=ftotal / DINT_TO_LREAL(Count);
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{db99c04b-e640-4284-a0bc-70c57cfa8329}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q															:=0.0;
+Derivative													:=0.0;
+ActIdx														:=MIN_BUFFER;	(* rotating count *)
+Count														:=0;			(* limited count *)
+                        									
+                        									
+IdxOld														:=1;
+                        	
+ftotal														:=0.0;
+fttotal														:=0.0;
+MEMSET(ADR(Buffer), 0 , SIZEOF(Buffer));
+reset													:= TRUE;
+
+	
+	]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="SlidingAverage">
+      <LineId Id="285" Count="21" />
+      <LineId Id="376" Count="1" />
+      <LineId Id="379" Count="0" />
+      <LineId Id="381" Count="1" />
+      <LineId Id="307" Count="40" />
+      <LineId Id="380" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SlidingAverage.reset">
+      <LineId Id="3" Count="11" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

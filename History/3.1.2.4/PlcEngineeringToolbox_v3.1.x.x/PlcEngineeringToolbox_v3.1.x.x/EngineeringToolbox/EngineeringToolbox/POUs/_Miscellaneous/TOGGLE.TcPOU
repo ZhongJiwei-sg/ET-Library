@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="TOGGLE" Id="{8a9bdbe2-e36a-4132-8ebe-f7adf2758508}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Toggle / FlipFlop
+FUNCTION_BLOCK TOGGLE
+VAR_INPUT
+	IN														:	BOOL;
+	RST														:	BOOL;
+END_VAR             										
+VAR_OUTPUT          										
+	Q														:	BOOL;
+END_VAR             	
+VAR                 	
+	M														:	BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Toggle 				             	 																*)
+	(************************************************************************************)
+
+(* Ablauf ********************************************************************)
+IF IN
+	AND NOT M
+THEN
+	Q														:= NOT Q;
+END_IF
+M															:=	IN;
+IF RST 
+THEN 
+	Reset(); 
+END_IF
+
+
+(********************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="CLK" Id="{1eae4270-cbf3-4b8a-8802-897ad186bece}">
+      <Declaration><![CDATA[METHOD PUBLIC CLK : BOOL //Return value = status of output Q
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q															:= NOT Q; 														
+CLK 														:= Q;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RESET" Id="{3357bf36-b5ff-4406-aec7-f64a2b41cede}">
+      <Declaration><![CDATA[METHOD RESET : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M := Q := FALSE;
+RESET	:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SET" Id="{a90ce808-5d5e-492a-85c4-3cdd65b19786}">
+      <Declaration><![CDATA[METHOD PUBLIC SET : BOOL  //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SET := M := Q := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="TOGGLE">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TOGGLE.CLK">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TOGGLE.RESET">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TOGGLE.SET">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

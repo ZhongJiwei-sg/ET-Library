@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0518" Id="{bb1ccee8-fac0-4533-8487-0471f9f0f8f1}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}
+TYPE AX5000_P_0518 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Mode:UINT;
+//	{attribute 'hide'}
+	Rsvd:UINT;
+	Velocity_window:UDINT;
+	TIME_:UINT;
+//	{attribute 'hide'}
+	Rsvd1:UINT;
+//	{attribute 'hide'}
+	Rsvd2:UINT;
+//	{attribute 'hide'}
+	Rsvd3:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

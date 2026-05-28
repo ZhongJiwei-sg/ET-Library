@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0081" Id="{b6504b56-8bd8-4e11-aefe-5a5c43f1f5a7}">
+    <Declaration><![CDATA[TYPE AX5000_S_0081 :
+STRUCT
+	Additive_Torque_command_value:INT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

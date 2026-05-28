@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="LOGx" Id="{0a1be79a-f283-4ca8-9144-89449f13b7e5}" SpecialFunc="None">
+    <Declaration><![CDATA[//The function returns the base 2 logarithm of a number 
+//Permitted data types for the input variables: any numeric basic data type
+FUNCTION LOGx : LREAL
+VAR_INPUT
+	In														: LREAL;
+	Basis													: UINT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF Basis = 0 OR In <= 0.0
+THEN
+	LOGx													:= 0.0;
+ELSE
+	LOGx 													:= LOG(In) / LOG(Basis);
+END_IF
+	]]></ST>
+    </Implementation>
+    <LineIds Name="LOGx">
+      <LineId Id="34" Count="1" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

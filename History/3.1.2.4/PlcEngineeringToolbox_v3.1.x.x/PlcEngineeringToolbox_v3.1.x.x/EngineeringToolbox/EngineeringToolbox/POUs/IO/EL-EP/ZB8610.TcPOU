@@ -1,0 +1,347 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="ZB8610" Id="{7b82c0c5-04b9-4bab-bde4-530b152af111}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//ZB8610 - Fan cartridge for EtherCAT and Bus Terminals
+//This function block controls the Beckhoff cartridge fan
+FUNCTION_BLOCK ZB8610
+VAR_INPUT
+	Mode				: INT := MODE_TEMP;
+END_VAR
+VAR_OUTPUT
+	Diag		AT%I*	: BOOL;	// [FALSE = Error | TRUE = Operational]	
+END_VAR
+VAR_OUTPUT CONSTANT
+	MODE_TEMP			: INT := 0;
+	MODE_1HZ			: INT := 1;
+	MODE_2HZ			: INT := 2;
+	MODE_3HZ			: INT := 3;
+	MODE_4HZ			: INT := 4;
+	MODE_5HZ			: INT := 5;
+	MODE_6HZ			: INT := 6;
+	MODE_7HZ			: INT := 7;
+	MODE_8HZ			: INT := 8;
+	MODE_9HZ			: INT := 9;
+	MODE_HIGH			: INT := 10;
+END_VAR
+VAR
+	Out			AT%Q*	: BOOL;
+	Timer				: TON;
+	CycleTime			: TIME;
+	InstGETCURTASKINDEX	: GETCURTASKINDEX;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF InstGETCURTASKINDEX.index = 0 THEN 
+	InstGETCURTASKINDEX(index => ); 
+	CycleTime			:= TO_TIME(TO_REAL(TwinCAT_SystemInfoVarList._TaskInfo[InstGETCURTASKINDEX.index].CycleTime) * 0.0001);
+	CycleTime			:= CycleTime * 2;
+END_IF	
+
+CASE Mode OF
+	MODE_TEMP			:	Timer(IN := FALSE, 			PT := T#0MS);
+	MODE_1HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#500MS 	- CycleTime);
+	MODE_2HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#250MS 	- CycleTime);
+	MODE_3HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#166MS 	- CycleTime);
+	MODE_4HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#125MS 	- CycleTime);
+	MODE_5HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#100MS	- CycleTime);
+	MODE_6HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#83MS 	- CycleTime);
+	MODE_7HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#71MS 	- CycleTime);
+	MODE_8HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#62MS 	- CycleTime);
+	MODE_9HZ			: 	Timer(IN := NOT Timer.Q, 	PT := T#55MS 	- CycleTime);
+	MODE_HIGH			: 	;
+END_CASE
+Out 					:= SEL(Timer.Q, Out, NOT Out) OR Mode = MODE_HIGH;]]></ST>
+    </Implementation>
+    <Property Name="mode1Hz" Id="{1980ae02-9082-4e88-a750-e92011813b57}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode1Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9fe65a3d-6d4d-4ebb-9340-b0b9c06aac7c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode1Hz := Mode = MODE_1HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{07cad6e7-9e40-4663-bad6-7861ce1f751c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode1Hz,MODE_TEMP ,MODE_1HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="mode2Hz" Id="{5478b7b0-9d39-4e49-94f7-b8c563b1d9ec}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode2Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{42763de2-eb13-4fc6-adc7-6465402070a0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode3Hz := Mode = MODE_3HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2a594a2e-69eb-4723-8965-345350329fe6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode2Hz,MODE_TEMP ,MODE_2HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="mode3Hz" Id="{020ccf78-4a5a-43bc-b883-434103241a54}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode3Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a36257b5-4435-415e-a8f3-17a5bda9c70a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode3Hz := Mode = MODE_3HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{75d0742b-9993-4165-80e5-8dd5b34f5dbb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode3Hz,MODE_TEMP ,MODE_3HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="mode4Hz" Id="{2544cec5-2dd2-4ed3-8264-d12a4735bcab}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode4Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ebc0b052-7ae7-4cc1-9b7a-040b9f8c6f72}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode4Hz := Mode = MODE_4HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{46514bfd-9940-4051-9c21-2a2dbb71ca98}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode4Hz,MODE_TEMP ,MODE_4HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="mode5Hz" Id="{b62df777-f1ab-44db-9628-9d1ea090fd8a}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode5Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ea93fa3a-07d4-4f64-9183-14dd87accc0a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode5Hz := Mode = MODE_5HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{df38eaad-fe37-4c5e-b862-adaa2fe3f405}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode5Hz,MODE_TEMP ,MODE_5HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="mode6Hz" Id="{7fa10c43-5683-45fd-ac22-7b18fc319451}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode6Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{df3bf299-bd36-4343-a145-15c7218e2626}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode6Hz := Mode = MODE_6HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{cbd1e250-c764-4177-a849-d25156e9ec41}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode6Hz,MODE_TEMP ,MODE_6HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="mode7Hz" Id="{569521f0-9def-4f5e-8468-43f3f857be26}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode7Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{46a48a57-1398-4d59-919a-17cc0eb83053}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode7Hz := Mode = MODE_7HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{5d8003fa-3d9b-46f2-8f48-e8e2f723cde8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode7Hz,MODE_TEMP ,MODE_7HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="mode8Hz" Id="{72c41670-7898-4169-ac19-5e7597c63fd7}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode8Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4bcaca0a-8cc1-4bd3-9a88-54b2a19b5833}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode8Hz := Mode = MODE_8HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2368653f-2450-42ae-9e1f-f58809ef785b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode8Hz,MODE_TEMP ,MODE_8HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="mode9Hz" Id="{526aa7d1-fb8a-4bd7-87a9-2c9731191707}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC mode9Hz : BOOL]]></Declaration>
+      <Get Name="Get" Id="{eace5a23-b792-4f28-a880-847ca327dde0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode9Hz := Mode = MODE_9HZ;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{957d4d17-3f97-443d-8dee-46739bae03a9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(Mode9Hz,MODE_TEMP ,MODE_9HZ);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="modeHigh" Id="{93303085-2042-43bf-983d-8834f501302e}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC modeHigh : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e95208c4-2c62-4ef0-81b3-0d2fd173b878}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ModeHigh := Mode = MODE_HIGH;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{bf95f233-cd87-4c2a-96ff-b667ca5d52c3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := SEL(ModeHigh,MODE_TEMP ,MODE_HIGH);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="modeTemp" Id="{a0213ee1-9d75-4522-b277-7726a028ef7d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC modeTemp : BOOL //Default - Out = 0]]></Declaration>
+      <Get Name="Get" Id="{058b4fb6-1521-4a85-84d6-da17f22447c2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ModeHigh := Mode = MODE_TEMP;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{64c85082-16b9-442c-8e9f-008e9b7f1256}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Mode := MODE_TEMP;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="ZB8610">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode1Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode1Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode2Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode2Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode3Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode3Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode4Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode4Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode5Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode5Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode6Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode6Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode7Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode7Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode8Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode8Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode9Hz.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.mode9Hz.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.modeHigh.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.modeHigh.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.modeTemp.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ZB8610.modeTemp.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

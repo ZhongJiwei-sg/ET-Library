@@ -1,0 +1,252 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="XmlReadWrite" Id="{8067f87f-4638-4134-bdb7-f6f6b6ab494f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Wrapper for functions of TF6421 XML-Server
+//based on TF6421 - required lib: Tc2_XmlDataSvr - see Beckhoff documentation for more information
+FUNCTION_BLOCK XmlReadWrite EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	FNC_READ												:	INT := 0; //Read data from XML
+	FNC_WRITE												:	INT := 1; //Create XML if not exist and wite data into file
+END_VAR             										
+VAR_INPUT           										
+	Fnc														:	INT (FNC_READ..FNC_WRITE) := FNC_READ; //See output constants for possible parameter
+	NetId													: 	T_AmsNetId := ''; //Ams Net ID
+	Mode													: 	WORD := XMLSRV_ADDMISSING; // XMLSRV_SKIPMISSING or XMLSRV_ADDMISSING;
+	pSymAddr												: 	PVOID := 0;	//Pointer to target variable to read or write data 
+	SymSize													:	UDINT := 0;	//Size of variable/structure
+	FilePath												:	T_MaxString := 'C:\'; // \\PCName\Folder\test.xml
+	FileName												:	T_MaxString := 'data.xml'; // \\PCName\Folder\test.xml
+	XPath													:	T_MaxString := '/dataentry/data'; // XML tag name/adress to access all or specified data insite the file. Array access->CONCAT('/Datentry/Step[@index="',CONCAT(DINT_TO_STRING(AktStep),'"]')); 										
+	Timeout													: 	TIME := T#60S;
+END_VAR             										
+VAR_OUTPUT          										
+END_VAR             	
+VAR                 	
+(* Local variables ************************************************************)
+	MemFnc													:	INT := -1;
+	
+(* Trigger *****************************************************************)
+
+(* Timer ******************************************************************)
+
+(* Fcuntion blocks ***************************************************************)
+	XmlSrvRead 												: 	FB_XmlSrvRead;
+	XmlSrvWrite 											: 	FB_XmlSrvWrite;
+
+(* Dummys **********************************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* XML Read/Write														V2.0		*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= SEL(Fnc = FNC_WRITE, FNC_READ , FNC_WRITE) ;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_READ:
+		Read(
+			Execute	:= Execute);
+	
+	FNC_WRITE:
+		Write(			
+			Execute	:= Execute);
+			
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+		END_IF                              				
+	ELSE                                    				
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+	END_CASE
+
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="read" Id="{98963e8b-2e2f-4e80-919b-72d0fad3f607}">
+      <Declaration><![CDATA[METHOD PUBLIC read : BOOL //Return value = TRUE if busy
+//required parameter
+//pSymAddr
+//SymSize
+//FilePath
+//XPath
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pSymAddr = 0 THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		XmlSrvRead.bExecute 								:= TRUE;
+	ELSIF NOT XmlSrvRead.bBusy      						
+	THEN                            						
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		XmlSrvRead.bExecute 								:= FALSE;
+                                    						
+	END_IF                          						
+                                    	
+	MemFnc													:= FNC_READ;
+	                                						
+	THIS^.Execute											:= Execute;
+                                    						
+	XmlSrvRead(                    	
+		sNetId		:= NetId,
+		ePath		:= ,(* Default *)
+		nMode		:= XMLSRV_SKIPMISSING, 
+		pSymAddr	:= pSymAddr,
+		cbSymSize	:= SymSize,
+		sFilePath	:= CONCAT(FilePath,FileName),
+		sXPath		:= XPath,
+		bExecute	:=  ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	Done													:= NOT XmlSrvRead.bBusy
+																AND NOT XmlSrvRead.bError
+																AND XmlSrvRead.bExecute;
+                                        				
+	IF NOT Busy
+	THEN
+		IF XmlSrvRead.bExecute
+		THEN
+			Error											:=	XmlSrvRead.bError;
+			ErrorId											:= XmlSrvRead.nErrId;
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1 ;
+			XmlSrvRead(bExecute := FALSE);
+		END_IF
+	END_IF
+	
+	Read													:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="write" Id="{e15dfdbc-804c-4d28-8949-5f6c1337d752}">
+      <Declaration><![CDATA[METHOD PUBLIC write : BOOL //Return value = TRUE if busy
+//required parameter
+//pSymAddr
+//SymSize
+//FilePath
+//XPath
+VAR_INPUT
+	Execute				:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pSymAddr = 0 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;
+END_IF
+
+	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		XmlSrvWrite.bExecute 								:= TRUE;
+	ELSIF NOT XmlSrvWrite.bBusy     						
+	THEN                            						
+		XmlSrvWrite.bExecute								:= FALSE;
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+	END_IF                          						
+                                    						
+	MemFnc													:= FNC_WRITE;
+	                                						
+	THIS^.Execute											:= Execute;
+                                    	
+	XmlSrvWrite(
+		sNetId		:= NetId,
+		ePath		:= ,(* Default *)
+		nMode		:= Mode,
+		pSymAddr	:= pSymAddr,
+		cbSymSize	:= SymSize,
+		sFilePath	:= CONCAT(FilePath,FileName),
+		sXPath		:= XPath,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	Done													:= NOT XmlSrvWrite.bBusy
+																AND NOT XmlSrvWrite.bError
+																AND XmlSrvWrite.bExecute;
+                                        					
+	IF NOT Busy
+	THEN
+		IF XmlSrvWrite.bExecute
+		THEN
+			Error											:=	XmlSrvWrite.bError;
+			ErrorId											:= XmlSrvWrite.nErrId;
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			XmlSrvWrite(bExecute := FALSE);
+		END_IF
+	END_IF
+
+	Write													:= Busy;
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="XmlReadWrite">
+      <LineId Id="3" Count="41" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWrite.read">
+      <LineId Id="3" Count="60" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWrite.write">
+      <LineId Id="3" Count="62" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

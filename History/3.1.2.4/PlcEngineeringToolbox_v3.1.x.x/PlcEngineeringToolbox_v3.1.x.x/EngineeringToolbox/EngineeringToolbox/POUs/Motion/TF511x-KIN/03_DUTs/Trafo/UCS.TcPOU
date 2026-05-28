@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="UCS" Id="{6f0af4b2-3151-4bea-8a8f-c47090bfc4a2}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'hide'}
+FUNCTION_BLOCK UCS
+VAR_INPUT
+	oid														:	UDINT := 0;		//Object identifier
+	vTranslation 											:	VECTOR;
+ 	vRotation 												:	VECTOR;
+	Valid													:	BOOL := FALSE;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="delete" Id="{d382f36b-ea83-408c-8666-d9fb9aa0877f}">
+      <Declaration><![CDATA[METHOD delete : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(vTranslation),0,SIZEOF(vTranslation));
+MEMSET(ADR(VRotation),0,SIZEOF(VRotation));
+oid 													:= 0;
+delete	:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="UCS">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="UCS.delete">
+      <LineId Id="8" Count="1" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <Itf Name="I_ActuatorUpDown" Id="{c6a6a5fa-2410-408f-9be1-da95dab0841f}">
+    <Declaration><![CDATA[INTERFACE I_ActuatorUpDown EXTENDS I_ActuatorBase
+]]></Declaration>
+    <Property Name="downOk" Id="{26256a76-3c63-477a-8a4a-f1a82805d139}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public downOk : BOOL]]></Declaration>
+      <Get Name="Get" Id="{000d82fd-63c8-4741-a741-eb4a4b4cbae7}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="moveDown" Id="{06ade7e5-25a6-4c23-aee7-cde9e9fdf274}">
+      <Declaration><![CDATA[METHOD public moveDown : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="moveUp" Id="{b7ebaa68-88fe-40af-b5f9-af58f000bcc4}">
+      <Declaration><![CDATA[METHOD public moveUp : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="upOK" Id="{597b27d4-7aa3-47b6-931b-21e158fd7587}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public upOK : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6af2f25a-7886-4521-bfa7-c44ffb354d7a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

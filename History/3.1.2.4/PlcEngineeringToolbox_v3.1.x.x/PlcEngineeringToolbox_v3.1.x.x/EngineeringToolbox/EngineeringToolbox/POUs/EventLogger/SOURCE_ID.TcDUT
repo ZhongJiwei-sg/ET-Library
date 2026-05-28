@@ -1,0 +1,99 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4018.5">
+  <DUT Name="SOURCE_ID" Id="{22ee907e-20f6-4a7c-b6a3-f0b5420f4eb8}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+//Predefined EventLogger Source Ids which collaborate to the default TcEventLogger Excel sheet   
+//Most source IDs are already used as initial values for function blocks in this lib
+TYPE SOURCE_ID :
+STRUCT	
+	TC_IO_MESSAGES			:	UDINT := 300;		//Reserved - TC3 default for TcIoMessages.xml
+	TC_NC_MESSAGES			:	UDINT := 500;		//Reserved - TC3 default for TcNcMessages.xml
+	TC_MIN_CNC_ERRORS		:	UDINT := 550;		//Reserved - TC3 default for TcCncErrors.xml
+	TC_MAX_CNC_ERRORS		:	UDINT := 599;		//Reserved - TC3 default for TcCncErrors.xml
+	TC_MIN_CNC_USER_EVENTS	:	UDINT := 650;		//Reserved - TC3 TcCncUserEvents.xml
+	TC_MAX_CNC_USER_EVENTS	:	UDINT := 699;		//Reserved - TC3 TcCncUserEvents.xml
+	TC_NC_DEF				:	UDINT := 700;		//Reserved - TC3 default for NCDefs.xml
+	TC_NC_DEF_2				:	UDINT := 701;		//Reserved - TC3 default for NCDefs.xml
+	
+//	TcIoMessages.xml		:	UDINT := 300;		space - TC3 default 
+//	TcNcMessages.xml		:	UDINT := 500;		space - TC3 default
+//	TcCncErrors.xml			:	UDINT := 550-599;	space - TC3 default
+//	TcCncUserEvents.xml		:	UDINT := 650-699;	space - TC3 default
+//	NCDefs.xml				:	UDINT := 700-701;	space - NC Default
+	
+// 	General 0000- 0100
+	GENERAL_STARTUP			:	UDINT := 100000;
+	IPC_DIAG				:	UDINT := 100001;
+	
+// Safety 	0300-0399
+	MIN_SAFETY_PLC_TERM_DIAG:	UDINT := 100300;
+	MAX_SAFETY_PLC_TERM_DIAG:	UDINT := 100309;
+
+	MIN_SAFETY_IO_TERM_DIAG	:	UDINT := 100310;
+	MAX_SAFETY_IO_TERM_DIAG	:	UDINT := 100399;
+
+// NC		1000-1999
+	MIN_NC_AXIS				:	UDINT := 101000;	// NC Axis Min 
+	MAX_NC_AXIS				:	UDINT := 101199;	// NC Axis Max
+	
+	MIN_NCI_GROUP			:	UDINT := 101200;	// NCI Groups Min 
+	MAX_NCI_GROUP			:	UDINT := 101209;	// NCI Groups Max 
+	
+	MIN_KIN_GROUP			:	UDINT := 101210;	// Kinematik Groups Min 
+	MAX_KIN_GROUP			:	UDINT := 101219;	// Kinematik Groups Max 
+	
+	MIN_XTS_GROUP			:	UDINT := 101220;	// XTS Groups Min 
+	MAX_XTS_GROUP			:	UDINT := 101229;	// XTS Groups Max 
+	
+	MIN_CA_GROUP			:	UDINT := 101230;	// CA - Collision Avoidance Min 
+	MAX_CA_GROUP			:	UDINT := 101239;	// CA - Collision Avoidance Max 
+	
+	MIN_PP_GROUP			:	UDINT := 101240;	// PP - Pick and Place Min 
+	MAX_PP_GROUP			:	UDINT := 101249;	// PP - Pick and Place Max 
+
+// Drives	2000-2999
+	MIN_DRIVE_SOE			:	UDINT := 102000;	// Sercos Drive Min 
+	MAX_DRIVE_SOE			:	UDINT := 102199;	// Sercos Drive Max 
+	
+	MIN_DRIVE_COE			:	UDINT := 102200;	// CanOpen Drive Min 
+	MAX_DRIVE_COE			:	UDINT := 102399;	// CanOpen Drive Max 
+
+	MIN_DRIVE_HYDR			:	UDINT := 102400;	// Hydraulic Drive Min 
+	MAX_DRIVE_HYDR			:	UDINT := 102599;	// Hydraulic Drive Max 
+	
+	MIN_DRIVE_STEPPER		:	UDINT := 102600;	// Stepper Drive Min 
+	MAX_DRIVE_STEPPER		:	UDINT := 102799;	// Stepper Drive Max 
+	
+// Fieldbus	3000-3099
+	MIN_HW_EC_DIAG			:	UDINT := 103000;	// EtherCAT Master Min 
+	MAX_HW_EC_DIAG			:	UDINT := 103009;	// EtherCAT Master Max 
+
+	MIN_HW_CAN_DIAG			:	UDINT := 103010;	// CanOpen Master Min 
+	MAX_HW_CAN_DIAG			:	UDINT := 103019;	// CanOpen Master Max 
+
+	MIN_HW_PB_DIAG			:	UDINT := 103020;	// ProfiBus Master Min 
+	MAX_HW_PB_DIAG			:	UDINT := 103029;	// ProfiBus Master Max 
+
+	MIN_HW_PN_DIAG			:	UDINT := 103030;	// ProfiNet Master Min 
+	MAX_HW_PN_DIAG			:	UDINT := 103039;	// ProfiNet Master Max 
+
+	MIN_HW_DN_DIAG			:	UDINT := 103040;	// DeviceNet Master Min 
+	MAX_HW_DN_DIAG			:	UDINT := 103049;	// DeviceNet Master Max 
+
+	MIN_HW_S3_DIAG			:	UDINT := 103050;	// Sercos 3 Master Min 
+	MAX_HW_S3_DIAG			:	UDINT := 103059;	// Sercos 3 Master Max 
+
+	MIN_HW_LB_DIAG			:	UDINT := 103060;	// LightBus Master Min 
+	MAX_HW_LB_DIAG			:	UDINT := 103069;	// LightBus Master Max 
+
+	MIN_HW_IB_DIAG			:	UDINT := 103070;	// InterBus Master Min 
+	MAX_HW_IB_DIAG			:	UDINT := 103079;	// InterBus Master Max 
+
+	MIN_HW_EIP_DIAG			:	UDINT := 103080;	// Ethernet/IP Master Min 
+	MAX_HW_EIP_DIAG			:	UDINT := 103089;	// Ethernet/IP Master Max 
+	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

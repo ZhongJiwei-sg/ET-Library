@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="GETBIT64" Id="{e3039f6a-1dab-48cf-8d2e-a1bcb092b1f0}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'displaymode':='binary'}	
+FUNCTION GETBIT64 : BOOL
+VAR_INPUT
+	inVal64												:	LWORD;
+	bitNo												:	INT;
+END_VAR
+VAR
+{attribute 'displaymode':='binary'}	
+	lwConst			 									: 	LWORD := 1;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[GETBIT64												:= ( inVal64 AND SHL(  lwConst,bitNo MOD 64 ) ) > 0;
+]]></ST>
+    </Implementation>
+    <LineIds Name="GETBIT64">
+      <LineId Id="23" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

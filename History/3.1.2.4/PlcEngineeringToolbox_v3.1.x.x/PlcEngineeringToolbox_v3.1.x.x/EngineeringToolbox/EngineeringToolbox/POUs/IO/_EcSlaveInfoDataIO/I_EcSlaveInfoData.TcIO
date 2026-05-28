@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <Itf Name="I_EcSlaveInfoData" Id="{5706b104-2ae8-4159-b5a9-4cb9cf0427b9}">
+    <Declaration><![CDATA[INTERFACE I_EcSlaveInfoData EXTENDS __SYSTEM.IQueryInterface
+]]></Declaration>
+    <Property Name="rInfoData" Id="{a4e23c19-ff21-443d-990c-1a7c92151b0d}">
+      <Declaration><![CDATA[PROPERTY PUBLIC rInfoData : reference to EcSlaveInfoData]]></Declaration>
+      <Get Name="Get" Id="{c083f74d-f681-4919-bf91-4ecbf91112f6}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

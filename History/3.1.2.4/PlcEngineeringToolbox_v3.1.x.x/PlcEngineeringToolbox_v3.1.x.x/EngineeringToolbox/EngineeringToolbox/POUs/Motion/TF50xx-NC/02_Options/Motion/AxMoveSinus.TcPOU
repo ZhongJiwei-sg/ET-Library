@@ -1,0 +1,163 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AxMoveSinus" Id="{dc2eb644-d294-4c3c-a86d-2252a34b807b}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '4'}
+FUNCTION_BLOCK AxMoveSinus EXTENDS FbBase
+VAR_INPUT
+	Frequence												: LREAL := 0.0; //Hz
+	SinusVeloAmplitude										: LREAL := 0.0; //mm/s
+	DrivingTime												: TIME := T#0MS; //s
+END_VAR
+VAR_IN_OUT
+	Axis													: AXIS_REF;
+END_VAR
+VAR_OUTPUT
+	Active													: booL := FALSE;
+	CommandAborted											: BOOL := FALSE;
+END_VAR
+VAR //Sinus Oscillation Sequence
+(* 
+- used as single sinus oscillation (sinus generator)
+- used as sinus oscillation sequence (e.g. for bode plot) NEW 
+UINT32 ENUM 1 				start type (fixed to start type 1 yet) 
+UINT32 Reserved			
+REAL64 e.g. mm/s > 0.0 		base amplitude (e.g. 2.5 mm/s) 
+REAL64 Hz [0.0 .... 10.0] 	base frequency (e.g. 1.953125 Hz) 
+REAL64 e.g. mm/s ≥ 0.0 		start amplitude at begin (e.g. 0.0 mm/s) 
+REAL64 e.g. mm/REV > 0.0 	feed constant motor (per motor turn) (e.g. 10.0 mm/REV) 
+REAL64 Hz ≥ 1.0 			frequency range: start frequency (e.g. 20.0 Hz) 
+REAL64 Hz ≤ 1/(2*dT) 		frequency range: stop frequency (e.g. 500.0 Hz) 
+REAL64 s > 0.0 				step duration (e.g. 2.048s) 
+UINT32 1 [1 ... 200] 		number of measurements (step cycles) (e.g. 20) 
+UINT32 1   					number of parallel measurements (e.g. 1)   not used yet! 
+=72
+*)   
+	StartType												:	UDINT := TO_UDINT(Tc2_MC2._E_TCNC_StartPosType.TCNC_START_ABSOLUTE);
+	Reserved												:	UDINT := 0;	
+	BaseAmplitude											:	LREAL := 2.5;
+	BaseFrequency											:	LREAL := 1.953125;
+	StartAmplitude											:	LREAL := 0.0;
+	FeedConstantMotor										:	LREAL := 10.0;
+	FreqRangeStartFreq										:	LREAL := 0.0;
+	FreqRangeStopFreq										:	LREAL := 500.0;								
+	StepDuration											:	LREAL := 0.0;
+	NumOfMeasurements										:	UDINT  := 0; //StepCount
+	NumOfParallelMeasurements								:	UDINT  := 1;	
+END_VAR
+VAR
+(* Internal memory **********************************************************************)
+	LastErrorID												:	UDINT;
+	StartCmdNo												: WORD;
+	
+(* Timer ********************************************************************************)                 	
+	tonTimeout												:	TON;
+
+(* Trigger ******************************************************************************)
+
+(* FB instances *************************************************************************)
+	Write_ADS												: ADSWRITE  := (NetId := '', Port := AMSPORT_R0_NCSAF, IdxGrp := 16#4200 + 0, IdxOffs := 16#33, LEN := 72, TmOut := DEFAULT_ADS_TIMEOUT);
+
+(* Dummys *******************************************************************************)
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Sinus Oscillation Sequence *************************************************************************************)
+rtExecute(CLK := Execute);
+CASE State OF
+0://Wait for execute signal to change state to true
+	IF NOT Execute OR rtExecute.Q	
+	THEN
+		Write_Ads(WRITE := FALSE);
+		tonTimeout(IN := FALSE);
+		FreqRangeStartFreq									:= Frequence;
+		StartAmplitude										:= SinusVeloAmplitude;
+		StepDuration										:= TO_LREAL(DrivingTime) * 0.001; //time ms to lreal s
+		Busy												:= rtExecute.Q;
+		CommandAborted										:= FALSE;
+		Active												:= FALSE;
+		Done 												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		StartCmdNo											:= Axis.NcToPlc.CmdNo;
+
+		Write_ADS( //See also declaration
+			IdxGrp	:=	16#4200+Axis.NcToPlc.AxisId,
+			SrcAddr	:=ADR(StartType), 
+			Write 	:= rtExecute.Q);
+		
+		state												:= SEL(Write_ADS.Write, 0, state + 1);
+	
+	END_IF
+
+1://Read original parameters for position lag monitoring
+	Write_ADS(SrcAddr	:=ADR(StartType)); 
+	IF NOT Write_ADS.BUSY 
+	THEN
+		IF Write_ADS.ERR 
+		THEN
+			LastErrorId										:= Write_ADS.ERRID;	
+			BUSY 											:= FALSE;
+			Error											:= TRUE;
+			ErrorId											:= LastErrorId;
+			State											:= 0;
+		ELSE				
+			Active 											:= F_AxisHasJob(Axis.NcToPlc.StateDWord) AND StartCmdNo <> Axis.NcToPlc.CmdNo;	
+			state											:= state + 1;
+		END_IF
+		Write_ADS(Write := FALSE);
+	END_IF
+
+2: //Wait for command done
+	IF F_AxisHasJob(Axis.NcToPlc.StateDWord) AND StartCmdNo <> Axis.NcToPlc.CmdNo
+	THEN
+		Active												:= TRUE;
+	ELSIF F_AxisInErrorState(Axis.NcToPlc.StateDWord) 
+	THEN
+		Active												:= FALSE;
+		Busy												:= FALSE;
+		(* axis error came up before this command has been started *)
+		Error 												:= TRUE;
+		ErrorID 											:= AXIS.NcToPlc.ErrorCode;
+		LastErrorId											:= ErrorId;
+		state												:= 0;
+		
+	ELSIF F_AxisIsCoupled(Axis.NcToPlc.CoupleState) 
+		OR F_AxisHasBeenStopped(Axis.NcToPlc.StateDWord) 
+	THEN
+		(* if axis is coupled during motion (FlyingSaw) all commands are aborted *)
+		Active												:= FALSE;
+		Busy												:= FALSE;
+		CommandAborted 										:= TRUE;
+		state												:= 0;																																     	
+
+	ELSIF Active
+	THEN //No longer active
+		Active												:= FALSE;
+		Busy												:= FALSE;
+		Done												:= TRUE;
+		state												:= 0;		
+	ELSE 	
+		tonTimeOut(In := TRUE, PT := T#100MS);
+		IF tonTimeOut.Q
+		THEN //Command not responded
+			Busy											:= FALSE;
+			Error 											:= TRUE;
+			ErrorID 										:= MC_ERROR_STATE_FEEDBACK_TIMEOUT;
+			state											:= 0;				
+		END_IF			
+	END_IF
+END_CASE
+(********************************************************************************************)
+]]></ST>
+    </Implementation>
+    <LineIds Name="AxMoveSinus">
+      <LineId Id="3" Count="20" />
+      <LineId Id="25" Count="36" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="62" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

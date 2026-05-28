@@ -1,0 +1,74 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="isWStringNumeric" Id="{5c566874-00d2-4461-b207-fa08db526db5}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Returns TRUE in case a ascii string contains only a valid number signs. Minus,plus,space,comma and dot are allowed
+//Limited to a Param.MAX_EXT_STRING_LENGTH long string  
+FUNCTION isWStringNumeric : BOOL 
+VAR_INPUT
+	pSource													:	POINTER TO WORD;
+END_VAR             										
+VAR                 
+	Cr														:	WORD;	//Char									
+	countSeperator											:	INT;
+	i														:	UDINT;
+	Addr													:	POINTER TO WORD;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pSource <> 0
+THEN
+	isWStringNumeric										:=	TRUE;
+	FOR i := 0 TO PARAM.MAX_EXT_STRING_LENGTH DO
+		Addr												:= pSource + (i * 2);
+		Cr												:= Addr^;
+		IF Cr = 0
+		THEN 														
+			isWStringNumeric								:= i > 0; //Only TRUE if string is not empty 
+			EXIT;
+		ELSIF Cr = 46 OR Cr = 44 //comma or point as a seperator
+		THEN
+			countSeperator									:= countSeperator + 1;
+			IF countSeperator > 1 
+			THEN
+				isWStringNumeric							:= FALSE;
+				EXIT;	(* more than one seperator -> no number *)
+			END_IF
+		ELSIF(Cr < 48 OR Cr > 57)
+			AND Cr <> 45 (* minus *)
+			AND Cr <> 43 (* plus *)
+			AND Cr <> 32 (* Space *)
+			AND Cr <> 101(* e for 9.9999992e-2 *)
+			OR i = PARAM.MAX_EXT_STRING_LENGTH
+		THEN
+			isWStringNumeric								:= FALSE;
+			EXIT;	(* no numerical char *)
+		END_IF
+	END_FOR      
+ELSE
+	isWStringNumeric										:= FALSE;
+END_IF
+]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="isWStringNumeric">
+      <LineId Id="59" Count="31" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

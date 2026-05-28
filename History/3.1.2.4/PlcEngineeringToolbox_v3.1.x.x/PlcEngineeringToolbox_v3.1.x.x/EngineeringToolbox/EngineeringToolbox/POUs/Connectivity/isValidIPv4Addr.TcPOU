@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="isValidIPv4Addr" Id="{263660c3-a6f0-4e10-aed5-81911ce9e491}" SpecialFunc="None">
+    <Declaration><![CDATA[//Checks wheter a IPv4 address string is valid
+FUNCTION isValidIPv4Addr : bool
+VAR_INPUT
+	IPv4Addr				:	T_IPv4Addr; //String
+END_VAR
+VAR
+	Bytes 					: 	T_IPv4AddrArr; //IPv4 address as an array 0..3 of Byte
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Bytes						:= F_ScanIPv4AddrIds(IPv4Addr);
+isValidIPv4Addr				:= Bytes[0] > 0 AND Bytes[0] <= 255
+								AND Bytes[1] >= 0 AND Bytes[1] <= 255
+								AND Bytes[2] >= 0 AND Bytes[2] <= 255
+								AND Bytes[3] >= 0 AND Bytes[3] <= 255;
+								
+]]></ST>
+    </Implementation>
+    <LineIds Name="isValidIPv4Addr">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

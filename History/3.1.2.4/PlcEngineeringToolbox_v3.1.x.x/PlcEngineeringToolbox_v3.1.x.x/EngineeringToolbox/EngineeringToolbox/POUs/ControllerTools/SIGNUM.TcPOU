@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="signum" Id="{6c72f19b-b9e8-4d80-92e4-8b23efdd18f6}" SpecialFunc="None">
+    <Declaration><![CDATA[//LREAL Signum function
+FUNCTION signum : LREAL
+VAR_INPUT
+	IN		:	LREAL;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF IN = 0.0
+THEN
+	SIGNUM		:= 0.0;
+ELSIF IN > 0.0
+THEN
+	SIGNUM		:= 1.0;
+ELSE
+	SIGNUM	 	:= -1.0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="signum">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

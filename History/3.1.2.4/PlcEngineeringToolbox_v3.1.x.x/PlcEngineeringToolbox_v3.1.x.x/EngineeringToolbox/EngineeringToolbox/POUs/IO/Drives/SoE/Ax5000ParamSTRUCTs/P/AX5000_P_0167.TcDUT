@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0167" Id="{83eb0fde-3680-45b5-bbba-bcc593ddba88}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0167 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	eMode:UINT;
+	Current_level:UINT;
+	Moving_distance:UINT;
+	Velocety:UINT;
+//{attribute 'hide'}
+	Rsvd:UINT;
+//{attribute 'hide'}
+	Rsvd2:UINT;
+	EqualDirektions:UINT;
+	Commutation_position_difference:UINT;
+//{attribute 'hide'}
+	Rsvd3:UINT;
+//{attribute 'hide'}
+	Rsvd4:UINT;
+
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

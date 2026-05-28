@@ -1,0 +1,536 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="AxResonanceAvoidance" Id="{5fb9b6e2-2884-4634-a195-60daba0a9980}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxResonanceAvoidance
+//External setpoint generation used inside to create relationship beween master and slave axis
+//Need to get called with same cycle time as NC axes
+//Developed by Frank Apolito,DS
+VAR_INPUT                   								
+	Enable													: BOOL; //Enable (TRUE) or Disable (FALSE) the coupling beween master and slave via external setpiont generator
+	                        						                      								
+	ResonanceFrequency1										: LREAL; //e.g. 10Hz
+	ResonanceFrequency2										: LREAL; 
+	ResonanceFrequency3										: LREAL;
+	                        								
+	Damping1												: LREAL; //eg. 100, default = 0
+	Damping2												: LREAL;
+	Damping3												: LREAL;
+END_VAR         
+VAR_IN_OUT
+	Master													: AXIS_REF; //Simulation or real axis
+	Slave													: AXIS_REF; //Vibrating real axis  
+END_VAR                 								
+VAR_OUTPUT                  								
+	Busy													: BOOL;
+	CommandAborted											: BOOL;
+	InGear													: BOOL;
+	Active													: BOOL;
+	Delay													: LREAL; // [ms]
+	Error													: BOOL;
+{attribute 'displaymode':='hex'}
+	ErrorId													: UDINT;
+END_VAR              								
+VAR CONSTANT                								
+	MIN_NO_OF_RES_FREQ										:	INT := 1;
+	MAX_NO_OF_RES_FREQ										:	INT := 3;
+
+	MIN_MOTION_BUFFER										:	INT := 0;
+	MAX_MOTION_BUFFER										:	INT := 1000;
+	
+	MIN_PARAMETER											:	INT := 1;
+	MAX_PARAMETER											:	INT := 3;
+	
+	MIN_ADSREAD_BUFFER										:	INT := 0;
+	MAX_ADSREAD_BUFFER										:	INT := 9;
+
+	PARAM_POS												:	INT := 1;
+	PARAM_VELO												:	INT := 2;
+	PARAM_ACC												:	INT := 3;
+	
+	NCIDXG_AXPARMS											: UDINT := 16#00004000;	(* Axis with ID: Parameter 			*)
+	NCIDXO_AXP_HWAMSADDR									: UDINT := 16#00000031;
+	
+	GEAR_RATIO												: LREAL := 1.0;
+	FEEDBACK_TO_DELAY										:	TIME := T#50MS;
+	
+END_VAR                     								
+VAR                         								
+(* cache ********************************************)
+	State													: UDINT;
+	CycleTime												: LREAL;
+	WasInGear												: BOOL;
+	DriveTypeSupported										: INT := 0;	//>0 Found drive type supported 
+	StartOffset												: LREAL; //Master pos
+	StartPosition											: LREAL; //Slave pos
+	Distance												: LREAL;
+	NextValues												: ARRAY[MIN_PARAMETER..MAX_PARAMETER] OF LREAL;
+	
+	iResonanceFrequency										: ARRAY [MIN_NO_OF_RES_FREQ..MAX_NO_OF_RES_FREQ] OF LREAL;
+	iDamping												: ARRAY [MIN_NO_OF_RES_FREQ..MAX_NO_OF_RES_FREQ] OF LREAL;
+	
+	Buffer													: ARRAY [MIN_NO_OF_RES_FREQ..MAX_NO_OF_RES_FREQ] OF ARRAY [MIN_MOTION_BUFFER..MAX_MOTION_BUFFER] OF ARRAY[MIN_PARAMETER..MAX_PARAMETER] OF LREAL;
+	AnzResonanzen											: UDINT;	
+
+	GearRatio1, GearRatio2									: ARRAY [MIN_NO_OF_RES_FREQ..MAX_NO_OF_RES_FREQ] OF LREAL;
+	                        	
+	iDelay													: ARRAY [MIN_NO_OF_RES_FREQ..MAX_NO_OF_RES_FREQ] OF LREAL;
+ 
+	//Read hardware info                    
+	ConfiguredEcType 										: STRING(20);	(* type of slave, e.g. "AX5206-0000-0009" *)	 
+    DriveRef												: ST_DriveRef; 	(* contains sNetID of EcMaster, nSlaveAddr of EcDrive, nDriveNo of EcDrive, either preset or read from NC *)
+	AdsReadBuffer											: ARRAY[MIN_ADSREAD_BUFFER..MAX_ADSREAD_BUFFER] OF BYTE;
+	AmsNetId												: T_AmsNetIdArr; (* Ams net id as array of bytes *)
+                						
+(* trigger ******************************************)
+
+(* timer ********************************************)
+	TWait													: TON;
+	
+(* blocks *******************************************)	
+	GetCurrentTaskIndex										: GETCURTASKINDEX;
+	ExtSetPointGenEnable									: MC_ExtSetPointGenEnable;
+	ExtSetPointGenDisable									: MC_ExtSetPointGenDisable;
+	EcGetSlaveIdentity										: FB_EcGetSlaveIdentity := (tTimeout := DEFAULT_ADS_TIMEOUT); 
+	AdsRead													: ADSREAD := (TMOUT := DEFAULT_ADS_TIMEOUT);
+	
+(* dummys *******************************************)
+	Temp													: LREAL;	
+	i														: INT;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Resonance avoidance 								V1.1	*)
+	(************************************************************)
+	
+(* Get cycle time ***********************************************************)
+IF GetCurrentTaskIndex.index = 0 THEN (* initialization - get cycle time*) 
+	GetCurrentTaskIndex(); 
+	CycleTime												:= TwinCAT_SystemInfoVarList._TaskInfo[GetCurrentTaskIndex.index].cycleTime / 1E4;
+END_IF
+
+(* Sequence *****************************************************************)
+	CASE State OF
+	0:
+		Busy 												:= FALSE;
+		InGear 												:= FALSE;
+		Active												:= FALSE;
+		
+		IF DriveTypeSupported = 0	
+		THEN //Get and check  drive device type
+			EcGetSlaveIdentity(bExecute := FALSE);
+			AdsRead(READ := FALSE);
+			MEMSET(ADR(DriveRef), 0, SIZEOF(DriveRef));
+			MEMSET(ADR(AdsReadBuffer), 0, SIZEOF(AdsReadBuffer));
+	
+			IF Slave.NcToPlc.OpModeDWord.8 
+			THEN // Slave is simulation axis 
+				DriveTypeSupported							:= -1;
+			ELSE
+				state										:= 100;
+			END_IF
+							
+		ELSIF NOT Enable
+		THEN
+			CommandAborted									:= FALSE;
+			Error 											:= FALSE;
+			ErrorId 										:= 0;
+		ELSIF NOT Error
+		THEN
+			IF DriveTypeSupported <> 0
+			THEN
+				ExtSetPointGenEnable(Execute := FALSE, Axis	:= Slave);
+				ExtSetPointGenDisable(Execute := FALSE, Axis:= Slave);	
+								
+				IF (2.0 * ResonanceFrequency1) > (1000.0/CycleTime) OR Damping1 < 0.0
+				  OR (2.0 * ResonanceFrequency2) > (1000.0/CycleTime) OR Damping2 < 0.0 
+				  OR (2.0 * ResonanceFrequency3) > (1000.0/CycleTime) OR Damping3 < 0.0 
+				THEN
+					Busy 									:= FALSE;
+					Error 									:= TRUE;
+					ErrorId 								:= MC_ERROR_PARAMETER_NOT_CORRECT;			
+					RETURN;				                    
+				END_IF                                      
+				                                            
+				AnzResonanzen								:=0;
+				IF ResonanceFrequency1 > 0.0                
+				THEN                                        
+					AnzResonanzen 							:= AnzResonanzen + 1;
+					iResonanceFrequency[AnzResonanzen] 		:= ResonanceFrequency1;
+					iDamping[AnzResonanzen] 				:= Damping1;
+				END_IF                                      
+				IF ResonanceFrequency2 > 0.0                
+				THEN                                        
+					AnzResonanzen 							:= AnzResonanzen + 1;
+					iResonanceFrequency[AnzResonanzen] 		:= ResonanceFrequency2;
+					iDamping[AnzResonanzen] 				:= Damping2;
+				END_IF                                      
+				IF ResonanceFrequency3 > 0.0                
+				THEN                                        
+					AnzResonanzen 							:= AnzResonanzen + 1;
+					iResonanceFrequency[AnzResonanzen] 		:= ResonanceFrequency3;
+					iDamping[AnzResonanzen] 				:= Damping3;
+				END_IF
+				
+				MEMSET(ADR(Buffer),0,SIZEOF(Buffer));	
+				TWait(IN:=FALSE);	
+	
+				FOR i := MIN_NO_OF_RES_FREQ TO MAX_NO_OF_RES_FREQ 
+				DO
+					IF iResonanceFrequency[i] > 0.0 
+					THEN
+						Temp 								:= (EXPT(EXP(1),-iDamping[i] /(2.0 * iResonanceFrequency[i])));
+			                                                
+						GearRatio2[i] 						:= Temp / (1.0 + Temp);
+						GearRatio1[i] 						:= 1.0 / (1.0 + Temp);
+						                                    
+						iDelay[i] 							:= 1000.0 / (2.0 * iResonanceFrequency[i]); // [ms]
+					ELSE                                    
+						GearRatio2[i] 						:= 0.0;
+						GearRatio1[i] 						:= 1.0;
+						                                    
+						iDelay[i]					 		:= 0.0; // [ms]
+					END_IF                                  
+				END_FOR                                     
+			                                                
+				Busy 										:= TRUE;
+				InGear 										:= F_AxisHasExtSetPointGen(Slave.NcToPlc.StateDWord);
+                                            
+				StartOffset 								:= Master.NcToPlc.SetPos;
+				StartPosition 								:= Slave.NcToPlc.SetPos;
+						                                            
+				State 										:= State + 1;
+			ELSE
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= E_AdsErr.E ;  //Object (slave drive) does not match				
+			END_IF
+		END_IF
+		
+	// Enable coupling (external setpoint generation
+	1: 	
+		ExtSetPointGenEnable(
+			Axis		:= Slave, 
+			Execute		:= TRUE, 
+			Position	:= StartPosition, 
+			PositionType:= );
+
+		NextValues[PARAM_POS] 								:= StartPosition;
+		NextValues[PARAM_VELO]								:= 0.0; 
+		NextValues[PARAM_ACC]								:= 0.0; 
+
+		MC_ExtSetPointGenFeed(
+			Position	:= NextValues[PARAM_POS], 
+			Velocity	:= NextValues[PARAM_VELO], 
+			Acceleration:= NextValues[PARAM_ACC], 
+			Direction	:= MC_Positive_Direction, 
+			Axis		:= Slave);
+
+		IF NOT ExtSetPointGenEnable.Busy 
+		THEN	
+			IF ExtSetPointGenEnable.Error OR NOT ExtSetPointGenEnable.Done
+			THEN
+				Busy 										:= FALSE;
+				Error 										:= TRUE;
+				ErrorId 									:= ExtSetPointGenEnable.ErrorID;
+				state										:= 0;
+			ELSE
+				Active										:= TRUE;
+ 				State 										:= State + 1;
+			END_IF
+			ExtSetPointGenEnable(Execute:= FALSE,Axis:= Slave);
+		END_IF
+
+	// Trigger normal command to master and feed slave with 2 scaled and shifted profiles
+	2:	
+		InGear 												:= F_AxisHasExtSetPointGen(Slave.NcToPlc.StateDWord);
+		TWait(IN:=TRUE, PT:=T#50MS); 
+		IF(NOT Enable OR NOT InGear) AND (WasInGear OR TWait.Q)
+		THEN
+			ExtSetPointGenDisable(Execute := TRUE,Axis	:= Slave);		
+			Busy											:= FALSE;
+			Active											:= FALSE;
+			CommandAborted									:= NOT InGear;
+			State 											:= 3;
+		ELSE
+			IF InGear THEN WasInGear := TRUE; END_IF
+		
+			Delay 											:= iDelay[1] + iDelay[2] + iDelay[3];
+			
+			Buffer[1][LREAL_TO_UDINT(iDelay[1]/CycleTime)][PARAM_POS]	:= (Master.NcToPlc.SetPos - StartOffset);
+			Buffer[1][LREAL_TO_UDINT(iDelay[1]/CycleTime)][PARAM_VELO] 	:= Master.NcToPlc.SetVelo;
+			Buffer[1][LREAL_TO_UDINT(iDelay[1]/CycleTime)][PARAM_ACC] 	:= Master.NcToPlc.SetAcc;
+				
+			Buffer[2][LREAL_TO_UDINT(iDelay[2]/CycleTime)][PARAM_POS]	:= (Master.NcToPlc.SetPos - StartOffset) * GearRatio1[1] + Buffer[1][1][PARAM_POS] * GearRatio2[1];
+			Buffer[2][LREAL_TO_UDINT(iDelay[2]/CycleTime)][PARAM_VELO]	:= Master.NcToPlc.SetVelo * GearRatio1[1] + Buffer[1][1][PARAM_VELO] * GearRatio2[1]; 
+			Buffer[2][LREAL_TO_UDINT(iDelay[2]/CycleTime)][PARAM_ACC]	:= Master.NcToPlc.SetAcc * GearRatio1[1] + Buffer[1][1][PARAM_ACC] * GearRatio2[1]; 
+	
+			Buffer[3][LREAL_TO_UDINT(iDelay[3]/CycleTime)][PARAM_POS]	:= ((Master.NcToPlc.SetPos - StartOffset) * GearRatio1[1] + Buffer[1][1][PARAM_POS] * GearRatio2[1]) * GearRatio1[2] + Buffer[2][1][PARAM_POS] * GearRatio2[2];
+			Buffer[3][LREAL_TO_UDINT(iDelay[3]/CycleTime)][PARAM_VELO]	:= (Master.NcToPlc.SetVelo * GearRatio1[1] + Buffer[1][1][PARAM_VELO] * GearRatio2[1]) * GearRatio1[2] + Buffer[2][1][PARAM_VELO] * GearRatio2[2]; 
+			Buffer[3][LREAL_TO_UDINT(iDelay[3]/CycleTime)][PARAM_ACC]	:= (Master.NcToPlc.SetAcc * GearRatio1[1] + Buffer[1][1][PARAM_ACC] * GearRatio2[1]) * GearRatio1[2] + Buffer[2][1][PARAM_ACC] * GearRatio2[2]; 
+			
+			FOR i := MIN_MOTION_BUFFER + 1 TO MAX_MOTION_BUFFER - 1 
+			DO
+				Buffer[1][i] 								:= Buffer[1][i+1];
+				Buffer[2][i] 								:= Buffer[2][i+1];
+				Buffer[3][i] 								:= Buffer[3][i+1];
+			END_FOR
+			
+			NextValues[PARAM_POS] 							:= StartPosition + ((((Master.NcToPlc.SetPos - StartOffset) * GearRatio1[1] + Buffer[1][1][PARAM_POS] * GearRatio2[1]) * GearRatio1[2] + Buffer[2][1][PARAM_POS] * GearRatio2[2]) * GearRatio1[3] + Buffer[3][1][PARAM_POS] * GearRatio2[3]) * GEAR_RATIO;
+			NextValues[PARAM_VELO]							:= (((Master.NcToPlc.SetVelo * GearRatio1[1] + Buffer[1][1][PARAM_VELO] * GearRatio2[1]) * GearRatio1[2] + Buffer[2][1][PARAM_VELO] * GearRatio2[2]) * GearRatio1[3] + Buffer[3][1][PARAM_VELO] * GearRatio2[3]) * GEAR_RATIO;
+			NextValues[PARAM_ACC]							:= (((Master.NcToPlc.SetAcc * GearRatio1[1] + Buffer[1][1][PARAM_ACC] * GearRatio2[1]) * GearRatio1[2] + Buffer[2][1][PARAM_ACC] * GearRatio2[2]) * GearRatio1[3] + Buffer[3][1][PARAM_ACC] * GearRatio2[3]) * GEAR_RATIO;
+			
+			MC_ExtSetPointGenFeed(
+				Position		:= NextValues[PARAM_POS], 
+				Velocity		:= NextValues[PARAM_VELO], 
+				Acceleration	:= NextValues[PARAM_ACC], 
+				Direction		:= MC_Positive_Direction, 
+				Axis			:= Slave);			
+		END_IF
+		
+	//Disable coupling in case of disable or axis error 
+	3: 
+		ExtSetPointGenDisable(Execute := TRUE,Axis	:= Slave);				
+		IF NOT ExtSetPointGenDisable.Busy 
+		THEN
+			Busy 											:= FALSE;
+			Active											:= FALSE;
+			InGear											:= FALSE;
+			Error 											:= ExtSetPointGenDisable.Error;
+			ErrorId 										:= ExtSetPointGenDisable.ErrorID;			
+			State 											:= 0;
+		END_IF	
+		
+	(* Check drive hardware **********************************************)
+	100: //Get slave drive address
+		AdsRead(
+			NETID	:= '',
+			PORT	:= AMSPORT_R0_NC,
+			IDXGRP	:= NCIDXG_AXPARMS + Slave.NcToPlc.AxisId,
+			IDXOFFS	:= NCIDXO_AXP_HWAMSADDR,
+			LEN		:= SIZEOF(AdsReadBuffer) ,
+			DESTADDR:= ADR(AdsReadBuffer),
+			READ	:= TRUE);
+		IF NOT AdsRead.BUSY
+		THEN
+			IF NOT AdsRead.ERR 
+			THEN
+				MEMCPY(ADR(AmsNetId), ADR(AdsReadBuffer), SIZEOF(AmsNetId)); 							(* AdsreadBuffer[0..5] *)
+				MEMCPY(ADR(DriveRef.nSlaveAddr), ADR(AdsReadBuffer[6]), SIZEOF(DriveRef.nSlaveAddr));  	(* AdsreadBuffer[6..7] *)
+				MEMCPY(ADR(DriveRef.nDriveNo), ADR(AdsReadBuffer[8]), SIZEOF(DriveRef.nDriveNo));  		(* AdsreadBuffer[8..9] *)
+
+				(* create string out of byte array *)
+				DriveRef.sNetId 							:= F_CreateAmsNetId(AmsNetId);
+				state										:= State + 1;
+			ELSE
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= AdsRead.ERRID;
+				State										:= 0;
+			END_IF
+		END_IF
+		
+	101: //Check connected slave drive type
+		EcGetSlaveIdentity(bExecute := TRUE, sNetId	:= DriveRef.sNetId, nSlaveAddr:= DriveRef.nSlaveAddr);
+		IF NOT EcGetSlaveIdentity.bBusy THEN
+			IF NOT EcGetSlaveIdentity.bError 
+			THEN
+				ConfiguredEcType 							:= F_ConvProductCodeToString(EcGetSlaveIdentity.identity);
+				IF NOT F_CheckVendorId(EcGetSlaveIdentity.identity)
+				THEN
+					DriveTypeSupported						:= 0;
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					ErrorID									:= agf; //Objects do not match
+					state									:= 0;						
+				ELSIF LEFT(ConfiguredEcType, 3) <> 'AX5'	
+				THEN
+					DriveTypeSupported						:= 1;					
+				ELSIF LEFT(ConfiguredEcType, 3) <> 'AX8'	
+				THEN
+					DriveTypeSupported						:= 2;
+				ELSIF LEFT(ConfiguredEcType, 4) <> 'EL70'	
+				THEN
+					DriveTypeSupported						:= 3;
+				ELSIF LEFT(ConfiguredEcType, 4) <> 'EL72'	
+				THEN
+					DriveTypeSupported						:= 4;		
+				ELSIF LEFT(ConfiguredEcType, 4) <> 'EP70'	
+				THEN				
+					DriveTypeSupported						:= 5;		
+				ELSIF LEFT(ConfiguredEcType, 4) <> 'EP72'	
+				THEN				
+					DriveTypeSupported						:= 6;
+				ELSIF LEFT(ConfiguredEcType, 4) <> 'EJ72'	
+				THEN				
+					DriveTypeSupported						:= 7;
+				ELSIF LEFT(ConfiguredEcType, 4) <> 'EJ70'	
+				THEN				
+					DriveTypeSupported						:= 8;
+				ELSE
+					DriveTypeSupported						:= 0;
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					ErrorID									:= adsf; //Object (drive) does not match
+					state									:= 0;
+				END_IF			
+			ELSE
+				Busy 										:= FALSE;
+				Error 										:= EcGetSlaveIdentity.bError;
+				ErrorId 									:= EcGetSlaveIdentity.nErrId;			
+				State 										:= 0;
+			END_IF
+			EcGetSlaveIdentity(bExecute := FALSE);
+		END_IF
+	END_CASE
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="AxResonanceAvoidance">
+      <LineId Id="1419" Count="0" />
+      <LineId Id="1421" Count="0" />
+      <LineId Id="1420" Count="0" />
+      <LineId Id="898" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="902" Count="0" />
+      <LineId Id="901" Count="0" />
+      <LineId Id="899" Count="0" />
+      <LineId Id="897" Count="0" />
+      <LineId Id="707" Count="0" />
+      <LineId Id="10" Count="2" />
+      <LineId Id="391" Count="0" />
+      <LineId Id="1191" Count="0" />
+      <LineId Id="697" Count="0" />
+      <LineId Id="1172" Count="6" />
+      <LineId Id="1286" Count="0" />
+      <LineId Id="1291" Count="0" />
+      <LineId Id="1290" Count="0" />
+      <LineId Id="1287" Count="0" />
+      <LineId Id="1289" Count="0" />
+      <LineId Id="1288" Count="0" />
+      <LineId Id="1285" Count="0" />
+      <LineId Id="698" Count="1" />
+      <LineId Id="703" Count="2" />
+      <LineId Id="702" Count="0" />
+      <LineId Id="706" Count="0" />
+      <LineId Id="655" Count="0" />
+      <LineId Id="659" Count="0" />
+      <LineId Id="398" Count="1" />
+      <LineId Id="1302" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="297" Count="0" />
+      <LineId Id="26" Count="7" />
+      <LineId Id="301" Count="0" />
+      <LineId Id="219" Count="0" />
+      <LineId Id="34" Count="1" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="300" Count="0" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="39" Count="1" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="299" Count="0" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="44" Count="4" />
+      <LineId Id="317" Count="0" />
+      <LineId Id="49" Count="1" />
+      <LineId Id="302" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="303" Count="0" />
+      <LineId Id="52" Count="15" />
+      <LineId Id="1197" Count="0" />
+      <LineId Id="69" Count="1" />
+      <LineId Id="1195" Count="0" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="1162" Count="0" />
+      <LineId Id="1169" Count="1" />
+      <LineId Id="1165" Count="1" />
+      <LineId Id="688" Count="0" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="1423" Count="0" />
+      <LineId Id="75" Count="18" />
+      <LineId Id="304" Count="0" />
+      <LineId Id="367" Count="0" />
+      <LineId Id="372" Count="0" />
+      <LineId Id="376" Count="1" />
+      <LineId Id="374" Count="0" />
+      <LineId Id="378" Count="0" />
+      <LineId Id="373" Count="0" />
+      <LineId Id="1194" Count="0" />
+      <LineId Id="375" Count="0" />
+      <LineId Id="369" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="1424" Count="0" />
+      <LineId Id="110" Count="1" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="449" Count="0" />
+      <LineId Id="1186" Count="1" />
+      <LineId Id="1315" Count="0" />
+      <LineId Id="1188" Count="0" />
+      <LineId Id="1193" Count="0" />
+      <LineId Id="1189" Count="0" />
+      <LineId Id="440" Count="0" />
+      <LineId Id="407" Count="0" />
+      <LineId Id="447" Count="1" />
+      <LineId Id="409" Count="29" />
+      <LineId Id="408" Count="0" />
+      <LineId Id="405" Count="0" />
+      <LineId Id="664" Count="0" />
+      <LineId Id="1425" Count="0" />
+      <LineId Id="1304" Count="4" />
+      <LineId Id="1313" Count="1" />
+      <LineId Id="1309" Count="2" />
+      <LineId Id="1303" Count="0" />
+      <LineId Id="1312" Count="0" />
+      <LineId Id="666" Count="0" />
+      <LineId Id="909" Count="0" />
+      <LineId Id="926" Count="7" />
+      <LineId Id="939" Count="0" />
+      <LineId Id="951" Count="1" />
+      <LineId Id="954" Count="0" />
+      <LineId Id="941" Count="4" />
+      <LineId Id="934" Count="0" />
+      <LineId Id="959" Count="0" />
+      <LineId Id="946" Count="0" />
+      <LineId Id="955" Count="0" />
+      <LineId Id="960" Count="2" />
+      <LineId Id="956" Count="2" />
+      <LineId Id="665" Count="0" />
+      <LineId Id="800" Count="0" />
+      <LineId Id="823" Count="1" />
+      <LineId Id="839" Count="0" />
+      <LineId Id="971" Count="0" />
+      <LineId Id="967" Count="1" />
+      <LineId Id="973" Count="3" />
+      <LineId Id="970" Count="0" />
+      <LineId Id="972" Count="0" />
+      <LineId Id="846" Count="1" />
+      <LineId Id="850" Count="1" />
+      <LineId Id="866" Count="0" />
+      <LineId Id="853" Count="1" />
+      <LineId Id="867" Count="0" />
+      <LineId Id="856" Count="1" />
+      <LineId Id="868" Count="0" />
+      <LineId Id="859" Count="0" />
+      <LineId Id="855" Count="0" />
+      <LineId Id="869" Count="0" />
+      <LineId Id="863" Count="1" />
+      <LineId Id="870" Count="0" />
+      <LineId Id="1069" Count="1" />
+      <LineId Id="1068" Count="0" />
+      <LineId Id="1072" Count="1" />
+      <LineId Id="1071" Count="0" />
+      <LineId Id="872" Count="0" />
+      <LineId Id="895" Count="0" />
+      <LineId Id="889" Count="0" />
+      <LineId Id="893" Count="1" />
+      <LineId Id="874" Count="0" />
+      <LineId Id="841" Count="1" />
+      <LineId Id="890" Count="2" />
+      <LineId Id="876" Count="1" />
+      <LineId Id="903" Count="0" />
+      <LineId Id="843" Count="0" />
+      <LineId Id="149" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

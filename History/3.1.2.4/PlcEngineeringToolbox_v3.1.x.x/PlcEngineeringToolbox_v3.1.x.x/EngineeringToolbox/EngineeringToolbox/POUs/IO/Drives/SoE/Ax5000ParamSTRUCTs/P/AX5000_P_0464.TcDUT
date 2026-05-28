@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0464" Id="{65dc8b34-fe25-4f59-b72e-0212d5a96ee6}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}
+TYPE AX5000_P_0464 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Mode:UINT;
+	Adaptive_gain:UINT;
+	Min_bandswitch:UINT;
+	Max_bandswitch:UINT;
+	Correction_factor_Iq_to_Acc:UINT;
+	Damping:UINT;
+	Starting_current_command:UINT;
+	Rsvd:UINT;
+	Threshold_speed1:UDINT;
+	Threshold_speed2:UDINT;
+//	{attribute 'hide'}
+	Rsvd2:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

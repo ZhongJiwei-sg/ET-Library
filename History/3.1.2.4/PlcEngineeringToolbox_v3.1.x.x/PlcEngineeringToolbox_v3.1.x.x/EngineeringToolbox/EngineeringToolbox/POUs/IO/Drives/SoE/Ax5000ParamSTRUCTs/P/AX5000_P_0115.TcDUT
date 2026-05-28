@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0115" Id="{09b94b1a-c6c2-4fb1-97cb-6510792e6c23}">
+    <Declaration><![CDATA[TYPE AX5000_P_0115 :
+STRUCT
+	ASM_stall_protection_loop_torque_limit_value:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

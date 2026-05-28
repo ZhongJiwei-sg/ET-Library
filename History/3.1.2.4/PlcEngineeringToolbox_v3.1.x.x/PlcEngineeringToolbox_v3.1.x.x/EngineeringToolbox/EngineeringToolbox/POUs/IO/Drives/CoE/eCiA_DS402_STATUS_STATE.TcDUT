@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="eCiA_DS402_STATUS_STATE" Id="{ed46bce3-74d8-43fb-bf9e-e96bda447ac3}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+TYPE eCiA_DS402_STATUS_STATE :
+(
+	NOT_READY_TO_SWITCH_ON									:= 2#0000_0000, //2#x0xx_0000 / Not ready to switch on. The drive is initialising or being configured.
+	SWITCH_ON_DISABLED										:= 2#0100_0000, //2#x1xx_0000 / The Drive will not accept a switch on command 
+	READY_TO_SWITCH_ON										:= 2#0010_0001, //2#x01x_0001 / The Drive will accept a switch on command.
+	SWITCHED_ON												:= 2#0010_0011, (* 2#x01x_0011 / The Drive will accept an Operation Enable (Run or Jog) command. 		
+																				- Power stage of the Drive is ready to operate.
+																				- Voltage has not yet been applied to the motor terminals*)
+	OPERATION_ENABLED										:= 2#0010_0111,  (* 2#x01x_0111 / Normal operational state of the drive. This state includes Running, Jogging,
+																				Stopping (Disabling Operation) and Shutting Down (Switching Off).
+																				- Voltage applied to the motor terminals. *)
+	QUICK_STOP_ACTIVE										:= 2#0000_0111, //2#x00x_0111 / Emergency stop (Fast stop) is active
+    FAULT_REACTION_ACTIVE									:= 2#0000_1111, //2#x0xx_1111 / The Drive is processing a tripped event                                                                        
+	FAULT_ACTIVE											:= 2#0000_1000 //2#x0xx_1000 / The Drive is in fault state and awaiting a reset trigger
+	
+);                                                                          
+END_TYPE                                                                    
+                                                                            ]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0272" Id="{d4b3b4d1-62fb-4f2a-8f50-8f524983a14b}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0272 :
+STRUCT
+	Actual_Length : UINT := 8;
+	Max_Length : UINT := 8;
+	(* FeedbackNumber &amp; MemorySelection *)
+	Data : BYTE;
+//	{attribute 'hide'}
+	Rsvd1 : ARRAY [1..3] OF USINT;
+	Position_Offset : UDINT;	
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

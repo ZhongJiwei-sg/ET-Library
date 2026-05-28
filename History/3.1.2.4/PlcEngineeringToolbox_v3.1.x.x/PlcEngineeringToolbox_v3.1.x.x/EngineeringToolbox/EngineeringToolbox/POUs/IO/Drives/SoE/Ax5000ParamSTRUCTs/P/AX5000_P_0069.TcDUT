@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0069" Id="{b2f32d3c-93f1-4127-a596-3cb118f75ec6}">
+    <Declaration><![CDATA[TYPE AX5000_P_0069 :
+STRUCT
+	Actual_lenght:UINT:=2;
+	Max_lenght:UINT:=2;
+	velocity_limit:UINT:=100;
+//	{attribute 'hide'}
+	Rsvd:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

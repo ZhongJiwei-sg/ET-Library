@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SWAP_WORDS_OF_LWORD" Id="{f29d760c-98f0-4192-85f3-0e81d19bff53}" SpecialFunc="None">
+    <Declaration><![CDATA[// Returns TRUE when words are successfully swapped 
+FUNCTION SWAP_WORDS_OF_LWORD : LWORD
+VAR_INPUT
+	in														:	LWORD;
+END_VAR
+VAR
+	pTmp													:	POINTER TO WORD;
+	WordArray												:	ARRAY[1..4] OF WORD;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	pTmp													:= ADR(in);
+	WordArray[4]											:= pTmp^; // [1]
+	pTmp													:= pTmp + 2;
+	WordArray[3]											:= pTmp^; // [2]
+	pTmp													:= pTmp + 2;
+	WordArray[2]											:= pTmp^; // [3]
+	pTmp													:= pTmp + 2;
+	WordArray[1]											:= pTmp^; // [4]
+	
+	Memcpy(ADR(SWAP_WORDS_OF_LWORD),ADR(WordArray),SIZEOF(WordArray));
+]]></ST>
+    </Implementation>
+    <LineIds Name="SWAP_WORDS_OF_LWORD">
+      <LineId Id="26" Count="0" />
+      <LineId Id="4" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

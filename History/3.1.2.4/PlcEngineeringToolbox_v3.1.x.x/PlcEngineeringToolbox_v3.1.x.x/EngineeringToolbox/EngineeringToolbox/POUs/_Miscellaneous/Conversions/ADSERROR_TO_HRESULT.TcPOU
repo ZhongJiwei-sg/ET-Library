@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="ADSERROR_TO_HRESULT" Id="{44ae8113-f7f0-42f0-a680-10f74f7f415d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Convert ADS error id into HRESULT error enum
+FUNCTION ADSERROR_TO_HRESULT : E_HRESULTAdsErr
+VAR_INPUT
+{attribute 'displaymode':='hex'}
+	ErrorID													: UDINT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF ErrorID < 10000 //WS Error 
+THEN	
+	ADSERROR_TO_HRESULT				:= TO_DINT(ErrorID + TO_UDINT(16#98110000));
+ELSIF ErrorID < TO_UDINT(16#98110000)
+THEN
+	ADSERROR_TO_HRESULT				:= E_HRESULTAdsErr.HRESULT_ADS_NOERROR;
+ELSE
+	ADSERROR_TO_HRESULT				:= TO_DINT(ErrorID); 
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="ADSERROR_TO_HRESULT">
+      <LineId Id="111" Count="0" />
+      <LineId Id="113" Count="2" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="116" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,47 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="CiA_DS402Controlword_Lenze" Id="{8f5f011b-553f-44e1-a91b-77b2decd4123}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Controlword_Lenze EXTENDS CiA_DS402Controlword
+VAR_INPUT
+	ReleaseBrake			: BOOL; //Manufacturere specific Bit 14 
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="createControlword" Id="{b954e133-1a8a-44f1-88e1-a55de35a506f}">
+      <Declaration><![CDATA[METHOD PUBLIC createControlword : BOOL
+VAR_INPUT
+	StatusState												: eCiA_DS402_STATUS_STATE;
+END_VAR
+VAR_IN_OUT
+	Controlword												:	UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	
+	createControlword											:= SUPER^.createControlword(StatusState,Controlword);;
+	Controlword.14												:= ReleaseBrake;	
+	
+	
+
+(*****************************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Controlword_Lenze">
+      <LineId Id="54" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Controlword_Lenze.createControlword">
+      <LineId Id="129" Count="0" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="60" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

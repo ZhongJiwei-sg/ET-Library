@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="T_EXT_WSTRING" Id="{3b7ec357-bf50-4150-a6e5-300af4ab21e7}">
+    <Declaration><![CDATA[TYPE T_EXT_WSTRING : WSTRING(Param.MAX_EXT_STRING_LENGTH); END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

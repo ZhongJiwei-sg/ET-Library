@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TcEventSourceLocation>
+	<Location>
+		<SourceId>300</SourceId>
+		<Path>TcIoMessages.xml</Path>
+	</Location>
+	<Location>
+		<SourceId>500</SourceId>
+		<Path>TcNcMessages.xml</Path>
+	</Location>
+	<Location>
+		<!-- Error Text-->
+		<SourceId>700</SourceId>
+		<!-- Error Description-->
+		<SourceId>701</SourceId>
+		
+		<Path>NcDefs.xml</Path>		
+	</Location>
+	<Location>	
+		<!-- Channel Source IDs -->
+		<SourceId>702</SourceId>
+		<SourceId>703</SourceId>
+		<SourceId>704</SourceId>
+		<SourceId>705</SourceId>
+		<SourceId>706</SourceId>
+		<SourceId>707</SourceId>
+		<SourceId>708</SourceId>
+		<SourceId>709</SourceId>
+		<SourceId>710</SourceId>
+		<SourceId>720</SourceId>
+		<SourceId>721</SourceId>
+		<SourceId>722</SourceId>
+		<SourceId>723</SourceId>
+		<SourceId>724</SourceId>
+		<SourceId>725</SourceId>
+		<SourceId>726</SourceId>
+		<SourceId>727</SourceId>
+		<SourceId>728</SourceId>
+		<SourceId>729</SourceId>
+		<SourceId>730</SourceId>
+		<!-- Axis Source IDs -->
+		<SourceId>800</SourceId>
+		<SourceId>801</SourceId>
+		<SourceId>802</SourceId>
+		<SourceId>803</SourceId>
+		<SourceId>804</SourceId>
+		<SourceId>805</SourceId>
+		<SourceId>806</SourceId>
+		<SourceId>807</SourceId>
+		<SourceId>808</SourceId>
+		<SourceId>809</SourceId>
+		<SourceId>810</SourceId>
+		<SourceId>820</SourceId>
+		<SourceId>821</SourceId>
+		<SourceId>822</SourceId>
+		<SourceId>823</SourceId>
+		<SourceId>824</SourceId>
+		<SourceId>825</SourceId>
+		<SourceId>826</SourceId>
+		<SourceId>827</SourceId>
+		<SourceId>828</SourceId>
+		<SourceId>829</SourceId>
+		<SourceId>830</SourceId>
+		<SourceId>840</SourceId>
+		<SourceId>841</SourceId>
+		<SourceId>842</SourceId>
+		<SourceId>843</SourceId>
+		<SourceId>844</SourceId>
+		<SourceId>845</SourceId>
+		<SourceId>846</SourceId>
+		<SourceId>847</SourceId>
+		<SourceId>848</SourceId>
+		<SourceId>849</SourceId>
+		<SourceId>850</SourceId>
+		<!-- PLC Source IDs -->	
+		<SourceId>1100</SourceId>
+		<SourceId>1101</SourceId>
+		<SourceId>1102</SourceId>
+		<SourceId>1103</SourceId>
+		<SourceId>1104</SourceId>
+		<SourceId>1105</SourceId>
+		<SourceId>1106</SourceId>
+		<SourceId>1107</SourceId>
+		<SourceId>1108</SourceId>
+		<SourceId>1109</SourceId>
+		
+		<Path>TcEventType.xml</Path>
+	</Location>	
+</TcEventSourceLocation>

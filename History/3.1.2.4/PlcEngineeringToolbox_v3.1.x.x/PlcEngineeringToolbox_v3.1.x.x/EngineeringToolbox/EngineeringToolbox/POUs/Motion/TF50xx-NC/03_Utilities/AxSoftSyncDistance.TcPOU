@@ -1,0 +1,320 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AxSoftSyncDistance" Id="{a88146ba-3783-421b-a8ba-9b0a3a22957d}" SpecialFunc="None">
+    <Declaration><![CDATA[//Use this FB if NC-Reference mode is set to "Software Sync" or "Hardware-Sync".
+//It is mandatory that the NC encoder parameter "Encoder Sub Mask (absolute range maximum value)" is set to the correct value!
+//
+//This FB checks the disctance between the falling edge of an reference sensor 
+//and the final reference flag of the encoder (e.g. SingleTurn overflow in mode SoftwareSync)
+//In case these two signals are very close together, it might be possible that the reference position varied about one motor turn
+//depending whether the falling edge of the reference sensor occured before or after the software sync impulse.
+//
+//The FB reports an OK if the resulting distance if greater or equel than the "MinDistanceInDeg". 
+{attribute 'no_check'}
+FUNCTION_BLOCK AxSoftSyncDistance EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+//option settings 
+END_VAR
+VAR CONSTANT
+	DEG_PER_TURN											:	LREAL := 360.0;	
+END_VAR
+VAR_INPUT
+	MinDistanceInDeg										:	LREAL := 45.0; //Minmum required distance between falling edge of sensor and software sync reference impuls (Single turn overflow)   
+END_VAR
+VAR_IN_OUT
+	Axis													:	AXIS_REF;
+END_VAR
+VAR_OUTPUT
+	Distance												: LREAL; //In user units (e.g. mm)
+	DistancePerTurn											: LREAL; //In user units (e.g. mm)
+	DistanceInDeg											: LREAL; //Resulting distance in degrees	
+	OK														: BOOL;  //Inidcates whether the distance between falling edge of sensor and software sync is greater or equal than MinDistanceInDeg  
+END_VAR
+VAR
+(*  Memory *****************************************************)
+	LastErrorState											:	INT;
+	LastErrorId												:	UDINT;
+	ScalingNumerator										:	LREAL;
+	ScalingDenumerator										:	LREAL;
+	Scaling													:	LREAL;
+	RefSystem												:	UDINT;
+	RefMode													:	UDINT;
+	{attribute 'displaymode':='hex'}
+	EncSubMask												:	UDINT;
+
+
+(*  Timer ******************************************************)
+
+(*  Trigger ****************************************************)
+
+(*  Blocks *****************************************************)
+	ReadAdsPara												: ADSREAD := (NetID:= '' , Port:=AMSPORT_R0_NC,TmOut := DEFAULT_ADS_TIMEOUT );
+
+(*  Error ******************************************************)
+(*  Dummys *****************************************************)
+	{attribute 'hide' := ''}
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Check distance between falling edge of reference sensor and deteced sync impulse		*)
+	(****************************************************************************************)
+	
+(* Sequence ********************************************************)
+	rtExecute(CLK := Execute);
+	CASE state OF
+	0 : 
+		Busy 												:= FALSE;
+		IF NOT Execute THEN
+			OK												:= FALSE;
+			Done 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorID 										:= 0;
+		END_IF
+		IF rtExecute.Q THEN
+			ReadAdsPara( Read := FALSE); 
+			Busy											:= TRUE;
+			Distance										:= 0.0;
+			ScalingNumerator								:= 0.0;
+			ScalingDenumerator								:= 0.0;
+			Scaling											:= 0.0;
+			RefSystem										:= 0;
+			EncSubMask										:= 0;
+			OK												:= FALSE;
+			Done 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorID 										:= 0;
+			state 											:= state + 1;
+		END_IF
+		
+		
+	(* Read scaling numerator **********************************************)
+	1:
+		ReadAdsPara(Read:= TRUE,	IDxGrp:=(16#5000+Axis.NcToPlc.AxisId) , IDxOffs:=16#23,LEN:=SIZEOF(ScalingNumerator), DestAddr:=ADR(ScalingNumerator));	
+		IF NOT ReadAdsPara.BUSY
+		THEN
+			IF ReadAdsPara.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= ReadAdsPara.ERRID;
+				LastErrorState								:= state;
+				LastErrorId									:= ErrorId;
+				state										:= 0;
+			ELSE 
+				state										:= state + 1;						
+			END_IF
+			ReadAdsPara( Read := FALSE);
+		END_IF
+		
+	(* Read scaling denumerator **********************************************)
+	2:
+		ReadAdsPara(Read:= TRUE,	IDxGrp:=(16#5000+Axis.NcToPlc.AxisId) , IDxOffs:=16#24,LEN:=SIZEOF(ScalingDenumerator), DestAddr:=ADR(ScalingDenumerator));	
+		IF NOT ReadAdsPara.BUSY
+		THEN
+			IF ReadAdsPara.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= ReadAdsPara.ERRID;
+				LastErrorState									:= state;
+				LastErrorId									:= ErrorId;
+				state										:= 0;
+			ELSE
+				Scaling										:= ScalingNumerator / SEL(ScalingDenumerator = 0.0, ScalingDenumerator , 1.0);	
+				IF Scaling = 0.0
+				THEN
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					ErrorID									:= MC_ERROR_PARAMETER_NOT_CORRECT;
+					LastErrorState								:= state;
+					LastErrorId									:= ErrorId;
+					state									:= 0;	
+				ELSE
+					state									:= state + 1;
+				END_IF					
+			END_IF
+			ReadAdsPara( Read := FALSE);
+		END_IF
+
+	(* Read distance in user units **********************************************)
+	3:
+		ReadAdsPara(Read:= TRUE,	IDxGrp:=(16#5100+Axis.NcToPlc.AxisId) , IDxOffs:=16#101,LEN:=SIZEOF(Distance), DestAddr:=ADR(Distance));	
+		IF NOT ReadAdsPara.BUSY
+		THEN
+			IF ReadAdsPara.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= ReadAdsPara.ERRID;
+				LastErrorState									:= state;
+				LastErrorId									:= ErrorId;
+				state										:= 0;
+			ELSE 
+				state										:= state + 1;			
+			END_IF
+			ReadAdsPara( Read := FALSE);
+		END_IF
+		
+	(* Read selected reference system **********************************************)
+	4:
+		ReadAdsPara(Read:= TRUE,	IDxGrp:=(16#5000+Axis.NcToPlc.AxisId) , IDxOffs:=16#19,LEN:=SIZEOF(RefSystem), DestAddr:=ADR(RefSystem));	
+		IF NOT ReadAdsPara.BUSY
+		THEN
+			IF ReadAdsPara.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= ReadAdsPara.ERRID;
+				LastErrorState									:= state;
+				LastErrorId									:= ErrorId;
+				state										:= 0;
+			ELSE 
+				state										:= state + 1;					
+			END_IF
+			ReadAdsPara( Read := FALSE);
+		END_IF
+	
+	(* Read selected reference mode **********************************************)
+	5:
+		ReadAdsPara(Read:= TRUE,	IDxGrp:=(16#5000+Axis.NcToPlc.AxisId) , IDxOffs:=16#107,LEN:=SIZEOF(RefMode), DestAddr:=ADR(RefMode));	
+		IF NOT ReadAdsPara.BUSY
+		THEN
+			IF ReadAdsPara.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= ReadAdsPara.ERRID;
+				LastErrorState									:= state;
+				LastErrorId									:= ErrorId;
+				state										:= 0;
+			ELSE 
+				state										:= state + 1;					
+			END_IF
+			ReadAdsPara( Read := FALSE);
+		END_IF
+	
+	(* Read EncSubMask (Inc per turn) **********************************************)
+	6:
+		ReadAdsPara(Read:= TRUE,	IDxGrp:=(16#5000+Axis.NcToPlc.AxisId) , IDxOffs:=16#108,LEN:=SIZEOF(EncSubMask), DestAddr:=ADR(EncSubMask));	
+		IF NOT ReadAdsPara.BUSY
+		THEN
+			IF ReadAdsPara.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= ReadAdsPara.ERRID;
+				LastErrorState									:= state;
+				LastErrorId									:= ErrorId;
+				state										:= 0;
+			ELSIF EncSubMask = 0
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorID										:= MC_ERROR_PARAMETER_NOT_CORRECT;
+				LastErrorState									:= state;
+				LastErrorId									:= ErrorId;
+				state										:= 0;			
+			ELSE
+				state										:= state + 1;					
+			END_IF
+			ReadAdsPara( Read := FALSE);
+		END_IF
+		
+	(* Check reference value ************************************)
+	7:
+		DistancePerTurn										:= EncSubMask * Scaling;
+		DistanceInDeg										:= (DEG_PER_TURN / DistancePerTurn) * Distance;	
+																		
+		OK													:= ABS(DistanceInDeg) <= DEG_PER_TURN - ABS(MinDistanceInDeg)  
+																AND ABS(DistanceInDeg) >= ABS(MinDistanceInDeg) ;							
+	
+		Busy												:= FALSE;
+		Done												:= TRUE;
+		state												:= 0;	
+	END_CASE
+
+(****************************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="AxSoftSyncDistance">
+      <LineId Id="3" Count="2" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="125" Count="3" />
+      <LineId Id="533" Count="0" />
+      <LineId Id="129" Count="2" />
+      <LineId Id="133" Count="2" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="435" Count="5" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="142" Count="2" />
+      <LineId Id="147" Count="0" />
+      <LineId Id="149" Count="1" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="151" Count="2" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="160" Count="1" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="166" Count="1" />
+      <LineId Id="171" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="680" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="532" Count="0" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="362" Count="12" />
+      <LineId Id="681" Count="0" />
+      <LineId Id="592" Count="0" />
+      <LineId Id="375" Count="0" />
+      <LineId Id="582" Count="6" />
+      <LineId Id="682" Count="0" />
+      <LineId Id="589" Count="2" />
+      <LineId Id="377" Count="0" />
+      <LineId Id="524" Count="0" />
+      <LineId Id="378" Count="0" />
+      <LineId Id="182" Count="0" />
+      <LineId Id="380" Count="11" />
+      <LineId Id="683" Count="0" />
+      <LineId Id="392" Count="0" />
+      <LineId Id="413" Count="0" />
+      <LineId Id="394" Count="0" />
+      <LineId Id="531" Count="0" />
+      <LineId Id="395" Count="1" />
+      <LineId Id="290" Count="11" />
+      <LineId Id="684" Count="0" />
+      <LineId Id="302" Count="0" />
+      <LineId Id="305" Count="1" />
+      <LineId Id="530" Count="0" />
+      <LineId Id="307" Count="1" />
+      <LineId Id="594" Count="11" />
+      <LineId Id="685" Count="0" />
+      <LineId Id="606" Count="5" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="419" Count="10" />
+      <LineId Id="686" Count="0" />
+      <LineId Id="430" Count="0" />
+      <LineId Id="458" Count="0" />
+      <LineId Id="453" Count="4" />
+      <LineId Id="687" Count="0" />
+      <LineId Id="451" Count="0" />
+      <LineId Id="431" Count="1" />
+      <LineId Id="529" Count="0" />
+      <LineId Id="433" Count="1" />
+      <LineId Id="317" Count="0" />
+      <LineId Id="315" Count="0" />
+      <LineId Id="447" Count="0" />
+      <LineId Id="472" Count="0" />
+      <LineId Id="479" Count="0" />
+      <LineId Id="449" Count="0" />
+      <LineId Id="617" Count="0" />
+      <LineId Id="450" Count="0" />
+      <LineId Id="319" Count="0" />
+      <LineId Id="448" Count="0" />
+      <LineId Id="446" Count="0" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

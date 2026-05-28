@@ -1,0 +1,230 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="EL3403Logic" Id="{052f9627-1bbc-4ad1-8b48-6ba85e785f90}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//FB gets raw data from EL3404 every cycle and calculate real values *)
+FUNCTION_BLOCK EL3403Logic
+VAR_INPUT
+	TrigReadVariantValues									:	BOOL 	:= FALSE;	//Rising edge reports actual total values on FB outputs
+	Transmission											:	LREAL 	:= 750.0; 	//Transmission current transformator
+	Mode													:	INT 	:= 0; 		(* 	0 = Phase 1-3
+																					  	1 = Phase 1
+																					 	2 = Phase 2
+																					 	3 = Phase 3 *)                                   						
+END_VAR                             	
+VAR_OUTPUT
+	(* Components OUTPUT -> ReadOnly ! *)
+	IO														:	EL3403;
+                                    				                                					
+	(* Total Values *)              					
+	TotalEffectivePower										: 	LREAL; 	//W
+	TotalPowerFactor										: 	LREAL; 	//total power factor cos phi
+	TotalEnergyConsumption									: 	LREAL; 	//Wh
+                                    					
+	(* Error *)                     					
+	ErrorPhaseSequence										:	BOOL;
+	ErrorMissingZeroCrossing								:	BOOL;
+	TimeStart												: 	TIME;		(* Startzeit *)
+	TimeEnd													: 	TIME;		(* Endzeit *)
+	TimeDiff												: 	TIME;		(* Differenz Start End *)
+	
+	(* Ctrl Status  *)              					
+	Valid													:	BOOL;	//TRUE when data is valid
+	Busy													:	BOOL;	//Busy is TRUE at the rising edge of Execute and FALSE when one of the outputs Done, Aborted, or Error is set 
+	Error													:	BOOL;	//Rising edge of Error informs that an error occurred during the execution of the Function Block 
+
+END_VAR                             	
+VAR                                 	
+	rtReadVariantValues										:	R_Trig;
+	state													:	INT;
+	_MIN_PHASE												:	INT;
+	_MAX_PHASE												:	INT;
+	i														:	INT;
+END_VAR                             	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Work EL3403 data 						*)
+(********************************************)
+
+(* Work Termianl IO ******************************************)
+	FOR i := IO.MIN_PHASE TO IO.MAX_PHASE 
+	DO
+		IO.Transmission[i] 									:= Transmission;
+	END_FOR
+
+	IO();
+
+(* Error *****************************************************)
+	Error 													:= IO.WCState OR IO.InfoDataState <> Tc2_EtherCAT.EC_DEVICE_STATE_OP;
+
+(* Get Total Values ******************************************)
+IF NOT Error
+THEN
+	CASE Mode OF
+	1:
+		TotalEffectivePower 								:= IO.ActivePower[1];
+		TotalPowerFactor 									:= IO.PowerFactor[1];
+		TotalEnergyConsumption 								:= IO.EnergyConsumption[1];
+	2:                              						
+		TotalEffectivePower 								:= IO.ActivePower[2];
+		TotalPowerFactor 									:= IO.PowerFactor[2];
+		TotalEnergyConsumption 								:= IO.EnergyConsumption[2];
+	3:                              						
+		TotalEffectivePower 								:= IO.ActivePower[3];
+		TotalPowerFactor 									:= IO.PowerFactor[3];
+		TotalEnergyConsumption 								:= IO.EnergyConsumption[3];
+	ELSE (* Phase 1-3 *)            						
+		TotalEffectivePower 								:= IO.ActivePower[1] + IO.ActivePower[2] + IO.ActivePower[3];
+		TotalPowerFactor 									:= (IO.PowerFactor[1] + IO.PowerFactor[2] + IO.PowerFactor[3]) / 3.0;
+		TotalEnergyConsumption 								:= IO.EnergyConsumption[1] + IO.EnergyConsumption[2] + IO.EnergyConsumption[3];
+	END_CASE                        	
+
+END_IF
+
+(* Trigger ReadVariantValues ******************************)
+rtReadVariantValues(CLK := TrigReadVariantValues);
+
+IF rtReadVariantValues.Q
+	OR state <> 0
+THEN
+	ReadVariantValues(Mode := Mode);
+END_IF
+
+(********************************************************)]]></ST>
+    </Implementation>
+    <Method Name="readVariantValues" Id="{43cb9be3-1060-4878-a299-95a51705221b}">
+      <Declaration><![CDATA[METHOD PUBLIC readVariantValues : Bool //Return value = TRUE if busy
+VAR_INPUT
+	Mode								:	INT 	:= 0; (* 	0 = Phase 1-3
+															  		1 = Phase 1
+															 	 	2 = Phase 2
+															 		3 = Phase 3 *)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF state = 0 
+THEN
+	THIS^.Mode												:= Mode;
+	CASE mode OF
+	1:
+		_MIN_PHASE 											:= IO.MIN_PHASE;
+		_MAX_PHASE 											:= IO.MIN_PHASE;
+	2:             											
+		_MIN_PHASE 											:= IO.MIN_PHASE + 1;
+		_MAX_PHASE 											:= IO.MIN_PHASE + 1;
+	3:             											
+		_MIN_PHASE 											:= IO.MAX_PHASE;
+		_MAX_PHASE 											:= IO.MAX_PHASE;
+	ELSE           											
+		_MIN_PHASE 											:= IO.MIN_PHASE;
+		_MAX_PHASE 											:= IO.MAX_PHASE;
+	END_CASE
+	state 													:= 1;
+	TimeStart 												:= TIME();
+END_IF
+
+(* Read Variant Values *******************************)
+	CASE state OF
+	0:
+		;
+		
+	1:
+		FOR i := _MIN_PHASE TO _MAX_PHASE DO
+			IO.IndexOut[i] 									:= 0;
+			IF IO.IndexIn[i] = IO.IndexOut[i]
+				AND i = _MAX_PHASE
+			THEN (* Set Next index *)
+				state 										:= 2;
+			ELSE
+				;
+			END_IF
+		END_FOR
+
+	2:
+		FOR i := _MIN_PHASE TO _MAX_PHASE DO
+			IO.IndexOut[i] 									:= 1;
+			IF IO.IndexIn[i] = IO.IndexOut[i]
+				AND i = _MAX_PHASE
+			THEN (* Set Next index *)
+				state 										:= 3;
+			ELSE
+				;
+			END_IF
+		END_FOR
+	3:
+		FOR i := _MIN_PHASE TO _MAX_PHASE DO
+			IO.IndexOut[i] 									:= 2;
+			IF IO.IndexIn[i] = IO.IndexOut[i]
+				AND i = _MAX_PHASE
+			THEN (* Set Next index *)
+				state 										:= 4;
+			ELSE
+				;
+			END_IF
+		END_FOR
+	4:
+		FOR i := _MIN_PHASE TO _MAX_PHASE DO
+			IO.IndexOut[i] 									:= 3;
+			IF IO.IndexIn[i] = IO.IndexOut[i]
+				AND i = _MAX_PHASE
+			THEN (* Set Next index *)
+				state 										:= 5;
+			ELSE
+				;
+			END_IF
+		END_FOR
+	5:
+		FOR i := _MIN_PHASE TO _MAX_PHASE DO
+			IO.IndexOut[i] 									:= 4;
+			IF IO.IndexIn[i] = IO.IndexOut[i]
+				AND i = _MAX_PHASE
+			THEN (* Set Next index *)
+				state 										:= 6;
+			ELSE
+				;
+			END_IF
+		END_FOR
+
+	6:
+		FOR i := _MIN_PHASE TO _MAX_PHASE DO
+			IO.IndexOut[i] 									:= 5;
+			IF IO.IndexIn[i] = IO.IndexOut[i]
+				AND i = _MAX_PHASE
+			THEN (* Set Next index *)
+				state 										:= 7;
+			ELSE
+				;
+			END_IF
+		END_FOR
+
+	7:
+		FOR i := _MIN_PHASE TO _MAX_PHASE DO
+			IO.IndexOut[i] 									:= 100;
+			IF IO.IndexIn[i] = IO.IndexOut[i]
+				AND i = _MAX_PHASE
+			THEN (* Set Next index *)
+				Valid 										:= TRUE;
+				state 										:= 0;
+				TimeEnd 									:= TIME();
+				TimeDiff 									:= TimeEnd - TimeStart;
+			ELSE
+				;
+			END_IF
+		END_FOR
+
+	END_CASE
+	
+	Busy													:= state <> 0;
+	ReadVariantValues 										:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EL3403Logic">
+      <LineId Id="3" Count="46" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL3403Logic.readVariantValues">
+      <LineId Id="3" Count="113" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

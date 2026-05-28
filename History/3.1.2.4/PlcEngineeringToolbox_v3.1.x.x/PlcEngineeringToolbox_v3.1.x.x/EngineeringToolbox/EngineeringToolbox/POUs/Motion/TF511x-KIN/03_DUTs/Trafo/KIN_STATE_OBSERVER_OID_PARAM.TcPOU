@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="KIN_STATE_OBSERVER_OID_PARAM" Id="{d79ddc5d-5ca6-426b-8f4d-a85af5a37d2a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'hide'}
+FUNCTION_BLOCK KIN_STATE_OBSERVER_OID_PARAM
+VAR_INPUT
+	oid														:	UDINT := 0; (* Scara State Observer OID *)
+	TooltrafoOID											:	UDINT := 0; (* ToolTrafoOID *)
+	NextTrafoOID											:	UDINT := 0; (*StaticTrafoOID *)
+
+END_VAR
+VAR_OUTPUT
+
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="delete" Id="{c5b1b096-648a-487a-aa00-cfba1def4944}">
+      <Declaration><![CDATA[METHOD delete : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	oid														:= 0;
+	TooltrafoOID											:= 0;
+	NextTrafoOID											:= 0;
+delete	:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="KIN_STATE_OBSERVER_OID_PARAM">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_STATE_OBSERVER_OID_PARAM.delete">
+      <LineId Id="8" Count="1" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

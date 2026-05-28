@@ -1,0 +1,95 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EAP_PUB_SUB_IO" Id="{7453658e-208e-4bcc-9617-517d78295e6f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Publisher/Subscriber IOs
+FUNCTION_BLOCK EAP_PUB_SUB_IO 
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT
+	{attribute 'displaymode':='hex'}
+	FrameCtrl									AT %Q*:	UINT;
+END_VAR		
+VAR_OUTPUT	
+	{attribute 'displaymode':='hex'}
+	FrameState									AT %I*:	UINT;
+	
+	NotSentFrameSkipped								: Bool;
+	ErrorFrameOversized								: Bool;
+	SubscriberMissing								: Bool;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* IOs 									*)
+	(****************************************)
+
+(* Read status *****************************************)
+	NotSentFrameSkipped						:= FrameState.0;
+	ErrorFrameOversized						:= FrameState.1;
+	SubscriberMissing						:= FrameState.2;
+
+(*******************************************************)]]></ST>
+    </Implementation>
+    <Property Name="disableSending" Id="{abf4973d-dcc7-4e61-8527-414d6fa86bb1}">
+      <Declaration><![CDATA[PROPERTY PUBLIC disableSending : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4ffa6b3a-8ffb-4f35-bf1d-306bd930374e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[disableSending		:= FrameCtrl.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{07f9fc1b-f32d-42d8-800b-c0bd2a640d5c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[FrameCtrl.1				:= disableSending;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="removeDestMacFromARPCache" Id="{cfa48344-16e2-440f-b25b-79d2c3f4a35c}">
+      <Declaration><![CDATA[PROPERTY PUBLIC removeDestMacFromARPCache : BOOL]]></Declaration>
+      <Get Name="Get" Id="{767ada1f-dd21-4c38-9612-70f352a1ced6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[RemoveDestMacFromARPCache		:= FrameCtrl.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{565655ba-1d15-43aa-93f6-0658bc3713af}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[FrameCtrl.1				:= RemoveDestMacFromARPCache;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="EAP_PUB_SUB_IO">
+      <LineId Id="3" Count="1" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_PUB_SUB_IO.disableSending.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_PUB_SUB_IO.disableSending.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_PUB_SUB_IO.removeDestMacFromARPCache.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_PUB_SUB_IO.removeDestMacFromARPCache.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_S_0219" Id="{7c9768d4-a7e5-437d-b7f9-bda05bc5001b}">
+    <Declaration><![CDATA[TYPE AX5000_S_0219 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	IDN_list_of_parameter_set:ARRAY[0..44] OF UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

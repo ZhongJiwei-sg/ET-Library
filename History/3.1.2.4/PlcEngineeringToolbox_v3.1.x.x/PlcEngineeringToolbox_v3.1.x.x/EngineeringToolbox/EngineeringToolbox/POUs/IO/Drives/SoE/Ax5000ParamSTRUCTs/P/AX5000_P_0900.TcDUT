@@ -1,0 +1,197 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0900" Id="{56777f23-7f5d-4867-8cc8-f39877696fb9}">
+    <Declaration><![CDATA[TYPE AX5000_P_0900 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+(*Control Pcb*)
+	Safety_test_status:UINT;
+//	{attribute 'hide'}
+	Rsvd1:UINT;
+	Channel0_offset:INT;
+	Channel0_gain:UINT;
+	Channel1_offset:INT;
+	Channel1_gain:UINT;
+	Channel2_offset:INT;
+	Channel2_gain:UINT;
+	Channel3_offset:INT;
+	Channel3_gain:UINT;
+	Channel4_offset:INT;
+	Channel4_gain:UINT;
+	Channel5_offset:INT;
+	Channel5_gain:UINT;
+	Channel6_offset:INT;
+	Channel6_gain:UINT;
+	Channel7_offset:INT;
+	Channel7_gain:UINT;
+	Channel8_offset:INT;
+	Channel8_gain:UINT;
+	Channel9_offset:INT;
+	Channel9_gain:UINT;
+//	{attribute 'hide'}
+	Rsvd2:ARRAY[0..6] OF UINT;
+	Checksum:UINT;
+
+(*Power Pcb*)
+	(*Ch A*)
+	ChA_Calibration_type:UINT;
+	ChA_V_Offset:INT;
+	ChA_W_Offset:INT;
+	ChA_V_resistor_value1:UINT;
+	ChA_W_resistor_value1:UINT;
+	ChA_V_resistor_value2:UINT;
+	ChA_W_resistor_value2:UINT;
+	ChA_V_resistor_value3:UINT;
+	ChA_W_resistor_value3:UINT;
+	ChA_V_resistor_value4:UINT;
+	ChA_W_resistor_value4:UINT;
+	ChA_V_current_value1:UINT;
+	ChA_W_current_value1:UINT;
+	ChA_V_current_value2:UINT;
+	ChA_W_current_value2:UINT;
+	ChA_V_current_value3:UINT;
+	ChA_W_current_value3:UINT;
+	ChA_V_current_value4:UINT;
+	ChA_W_current_value4:UINT;
+	(*Ch B*)
+	ChB_Calibration_type:UINT;
+	ChB_V_Offset:INT;
+	ChB_W_Offset:INT;
+	ChB_V_resistor_value1:UINT;
+	ChB_W_resistor_value1:UINT;
+	ChB_V_resistor_value2:UINT;
+	ChB_W_resistor_value2:UINT;
+	ChB_V_resistor_value3:UINT;
+	ChB_W_resistor_value3:UINT;
+	ChB_V_resistor_value4:UINT;
+	ChB_W_resistor_value4:UINT;
+	ChB_V_current_value1:UINT;
+	ChB_W_current_value1:UINT;
+	ChB_V_current_value2:UINT;
+	ChB_W_current_value2:UINT;
+	ChB_V_current_value3:UINT;
+	ChB_W_current_value3:UINT;
+	ChB_V_current_value4:UINT;
+	ChB_W_current_value4:UINT;
+//	{attribute 'hide'}
+	Rsvd3:UINT;
+	Checksum2:UINT;
+
+(*Driver Pcb*)
+	Safety_test_status2:UINT;
+	Calibration_type2:UINT;
+//	{attribute 'hide'}
+	Rsvd4:UINT;
+	Udclink_offset:UINT;
+	Udclink_gain:UINT;
+	Udclink_offset1:UINT;
+	Udclink_gain1:UINT;
+	Udclink_offset2:UINT;
+	Udclink_gain2:UINT;
+	Udclink_offset3:UINT;
+	Udclink_gain3:UINT;
+//	{attribute 'hide'}
+	Rsvd5:ARRAY[0..17] OF UINT;
+	Checksum3:UINT;
+
+(*Front Pcb*)
+	Vendor:UDINT;
+	Product_code:UDINT;
+	Revision_No:UDINT;
+	Serial_No:UDINT;
+	Year:USINT;
+	Week:USINT;
+	Fan_profiltype_internalbrakeresistor_rsvd:UINT;		(*jeweils 4 Bit*)
+	Hardware_device_id_2:UINT;
+	Hardware_device_id_3:UINT;
+	Hardware_device_id_4:UINT;
+//	{attribute 'hide'}
+	Rsvd6:ARRAY[0..2] OF UINT;
+	Customized_id:UINT;
+	ModificationId:UINT;
+//	{attribute 'hide'}
+	Rsvd7:ARRAY[0..3] OF UINT;
+	Free_switch_code1:UINT;
+	Free_switch_code2:UINT;
+//	{attribute 'hide'}
+	Rsvd8:ARRAY[0..3] OF UINT;
+	ST_CONV_Version:UINT;
+//	{attribute 'hide'}
+	Rsvd9:UINT;
+	(*ChA*)
+	ChA_Sin_offset:DINT;
+	ChA_Cos_offset:DINT;
+	ChA_Sin_gain:UDINT;
+	ChA_Cos_gain:UDINT;
+	ChA_Excitation_voltage_Gain:UINT;
+	ChA_rsvd10:ARRAY[0..2] OF UINT;
+	(*ChB*)
+	ChB_Sin_offset:DINT;
+	ChB_Cos_offset:DINT;
+	ChB_Sin_gain:UDINT;
+	ChB_Cos_gain:UDINT;
+	ChB_Excitation_voltage_Gain:UINT;
+	ChB_rsvd11:ARRAY[0..2] OF UINT;
+//{attribute 'hide'}
+	Rsvd12:ARRAY[0..24] OF UINT;
+	Checksum4:UINT;
+
+(*Option Pcb*)
+	Vendor2:UDINT;
+	Product_code2:UDINT;
+	Revision_No2:UDINT;
+	Serial_No2:UDINT;
+	Year2:USINT;
+	Week2:USINT;
+	Fan_profiltype_internalbrakeresistor_rsvd2:UINT;		(*jeweils 4 Bit*)
+	Hardware_device_id_22:UINT;
+	Hardware_device_id_32:UINT;
+	Hardware_device_id_42:UINT;
+//	{attribute 'hide'}
+	Rsvd13:ARRAY[0..2] OF UINT;
+	Customized_id2:UINT;
+	ModificationId2:UINT;
+//	{attribute 'hide'}
+	Rsvd14:ARRAY[0..3] OF UINT;
+	Free_switch_code12:UINT;
+	Free_switch_code22:UINT;
+//	{attribute 'hide'}
+	Rsvd15:ARRAY[0..3] OF UINT;
+	Version2:UINT;
+//	{attribute 'hide'}
+	Rsvd16:UINT;
+	(*ChA*)
+	ChA_Sin_offset2:DINT;
+	ChA_Cos_offset2:DINT;
+	ChA_Sin_gain2:UDINT;
+	ChA_Cos_gain2:UDINT;
+	ChA_Excitation_voltage_Gai2n:UINT;
+	ChA_rsvd17:ARRAY[0..2] OF UINT;
+	(*ChB*)
+	ChB_Sin_offset2:DINT;
+	ChB_Cos_offse2t:DINT;
+	ChB_Sin_gain2:UDINT;
+	ChB_Cos_gain2:UDINT;
+	ChB_Excitation_voltage_Gai2n:UINT;
+	ChB_rsvd18:ARRAY[0..2] OF UINT;
+//{attribute 'hide'}
+	Rsvd19:ARRAY[0..24] OF UINT;
+	Checksum5:UINT;
+
+(*Safety Pcb*)
+//{attribute 'hide'}
+	Rsvd20:ARRAY[0..8] OF UINT;
+	Checksum6:UINT;
+
+	Control_Pcb_data_valid:UINT;
+	Power_Pcb_data_valid:UINT;
+	Driver_Pcb_data_valid:UINT;
+	Front_Pcb_data_valid:UINT;
+	Option_Pcb_data_valid:UINT;
+	Safety_Pcb_data_valid:UINT;
+
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

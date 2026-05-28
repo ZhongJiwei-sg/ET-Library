@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <DUT Name="U_KIN_POSITIONS" Id="{e76fc335-95fa-42e5-9218-aaba774de71d}">
+    <Declaration><![CDATA[TYPE U_KIN_POSITIONS :  //Union datatype for kinematic positions in different identifier
+UNION
+	MCS							:	KIN_POSITIONS_MCS_DUT; //XYZ ABC Q1,Q2
+	ACS							:	KIN_POSITIONS_ACS_DUT; //A1..A6,Q1,Q2
+	Joints						:	ARRAY[1..8] OF LREAL; //Array 1..8
+END_UNION
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

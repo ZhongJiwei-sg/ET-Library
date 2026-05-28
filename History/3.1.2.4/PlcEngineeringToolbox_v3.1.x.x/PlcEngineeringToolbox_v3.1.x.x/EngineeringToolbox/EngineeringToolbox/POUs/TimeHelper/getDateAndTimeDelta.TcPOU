@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="getDateAndTimeDelta" Id="{19516243-0f83-4aa7-a4c1-befc6ea96071}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//calcualte the difference between two DATE_AND_TIME variables
+FUNCTION getDateAndTimeDelta : TIMESTRUCT
+VAR_INPUT
+	IN1														: DATE_AND_TIME;
+	IN2														: DATE_AND_TIME;
+END_VAR             										
+VAR                 										
+	diff													:	DWORD;
+	Result													:	TIMESTRUCT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF IN1 > IN2 
+THEN
+	diff 													:= DT_TO_DWORD(IN1) - DT_TO_DWORD(IN2);
+	Result 													:= DT_TO_SYSTEMTIME(DWORD_TO_DT(diff));
+	Result.wYear											:= Result.wYear - 1970;
+	Result.wDay 											:= Result.wDay - 1;
+	Result.wDayOfWeek 										:= 0;
+	Result.wMonth 											:= Result.wMonth - 1;
+ELSIF IN1 < IN2 
+THEN
+	diff 													:= DT_TO_DWORD(IN2) - DT_TO_DWORD(IN1);
+	Result 													:= DT_TO_SYSTEMTIME(DWORD_TO_DT(diff));
+	Result.wYear 											:= Result.wYear - 1970;
+	Result.wDay 											:= Result.wDay - 1;
+	Result.wDayOfWeek 										:= 0;
+	Result.wMonth 											:= Result.wMonth - 1;
+ELSE
+	MEMSET(ADR(Result),0,SIZEOF(Result));
+END_IF
+getDateAndTimeDelta 										:= Result;]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="getDateAndTimeDelta">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

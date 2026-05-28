@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FbBaseOutputs" Id="{5c3ab134-7a08-43bd-8dd2-76fcdabb883c}" SpecialFunc="None">
+    <Declaration><![CDATA[//Template for PlcOpen FB implementations - Extend final implementations from this FB
+FUNCTION_BLOCK FbBaseOutputs
+VAR_INPUT
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	Busy													: BOOL; // Busy is TRUE at the rising edge of Execute and stays TRUE as long as the FB is performing any action and must be called cyclically to be executed.
+	Done													: BOOL; // Is TRUE if FB was executed successfully and stays TRIE for min one cylce or as long as Execute is set to true  
+	Error													: BOOL;	// Is TRUE when an error occurred during the execution of the Function Block 
+{attribute 'displaymode':='hex'}  
+	ErrorId													: UDINT; //Error identification - see e.g. ADS return codes at Beckhoff infosys for further information 
+END_VAR
+VAR 
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+]]></ST>
+    </Implementation>
+    <LineIds Name="FbBaseOutputs">
+      <LineId Id="90" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

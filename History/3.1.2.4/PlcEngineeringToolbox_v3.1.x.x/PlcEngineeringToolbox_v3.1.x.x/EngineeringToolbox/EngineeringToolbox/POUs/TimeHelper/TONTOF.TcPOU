@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="TONTOF" Id="{c7e2f0e7-787f-470b-9a33-ce865e95a1f9}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Timer with on off-delay
+FUNCTION_BLOCK TONTOF
+VAR_INPUT
+	IN														:	BOOL := FALSE; //Return value TRUE = starts delay on (TON), FALSE starts delay of in case output Q is TRUE
+	RST														:	BOOL := FALSE; //Reset timer and set Q to false
+	PT_ON													:	TIME := T#0MS; //time to pass, before Q is set TRUE
+	PT_OFF													:	TIME := T#0MS; //time to pass, before Q is set back to FALSE
+END_VAR         											
+VAR_OUTPUT      											
+	Q														:	BOOL := FALSE;//TRUE if time is passed 
+END_VAR         											
+VAR             	
+	TON														:	TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF RST
+THEN
+	reset();
+ELSIF NOT Q 
+THEN
+	TON(IN := IN, PT := PT_ON , Q => Q);
+	IF Q 
+	THEN 
+		TON(IN := FALSE); 
+	END_IF
+ELSE
+	TON(IN := NOT IN, PT := PT_OFF);
+	Q := NOT TON.Q;
+	IF NOT Q 
+	THEN 
+		TON(IN := FALSE); 
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="BT" Id="{c1f45050-1b9d-4675-ba9e-6dd9b7e41fc9}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC BT : TIME]]></Declaration>
+      <Get Name="Get" Id="{26543371-b3d4-4833-9767-3b992926a897}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF ton.IN
+	AND NOT ton.Q
+THEN
+	BT 														:= ton.PT - ton.ET;
+ELSE       													
+	BT 														:= T#0MS;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{bed71727-f699-4532-b8a2-b96914d6f8be}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q 															:= FALSE;
+TON(IN := FALSE);
+reset													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="TONTOF">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TONTOF.BT.Get">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="TONTOF.reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

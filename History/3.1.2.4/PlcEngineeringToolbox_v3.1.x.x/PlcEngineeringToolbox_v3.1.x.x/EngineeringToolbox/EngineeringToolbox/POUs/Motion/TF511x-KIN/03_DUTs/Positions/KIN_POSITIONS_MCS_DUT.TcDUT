@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <DUT Name="KIN_POSITIONS_MCS_DUT" Id="{1c13653a-745d-4f93-b845-31f8e4f05a02}">
+    <Declaration><![CDATA[TYPE KIN_POSITIONS_MCS_DUT EXTENDS VALUE_6D_DUT:
+STRUCT
+	Q1					: LREAL; //Auxiliary axis 1
+	Q2					: LREAL; //Auxiliary axis 2 	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

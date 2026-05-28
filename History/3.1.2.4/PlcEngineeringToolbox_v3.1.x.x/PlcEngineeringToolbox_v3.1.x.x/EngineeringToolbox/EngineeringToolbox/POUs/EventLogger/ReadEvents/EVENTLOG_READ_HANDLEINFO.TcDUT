@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.3">
+  <DUT Name="EVENTLOG_READ_HANDLEINFO" Id="{1ba37464-4320-4354-b26e-595dd0fe5106}">
+    <Declaration><![CDATA[TYPE EVENTLOG_READ_HANDLEINFO :
+STRUCT
+	Enum			: DWORD;
+	Count			: DWORD;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="EL3403" Id="{508d8ca6-1fee-44f4-9c30-b02cd8048e96}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EL3403 Extends EcSlaveInfoData
+VAR CONSTANT
+	MIN_PHASE												:	INT := 1;
+	MAX_PHASE												:	INT := 3;
+END_VAR  
+VAR_INPUT
+	IndexOut										AT %Q*	:	ARRAY[MIN_PHASE..MAX_PHASE] OF USINT;
+	Transmission											:	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL;	//Transmission current transformator for each phase e.g. 750 *)
+END_VAR
+VAR_OUTPUT
+	(* Inputs Channel 1-3 *)
+	TxPDOToggle										AT %I*	: 	ARRAY[MIN_PHASE..MAX_PHASE] OF BOOL;
+	IndexIn											AT %I*	: 	ARRAY[MIN_PHASE..MAX_PHASE] OF USINT;
+	Current													: 	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//Unit: 0,000001 A
+	Voltage													: 	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//Unit: 0,0001 V
+	ActivePower												: 	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//Unit: 0,01 W
+
+	(* PM Status Data *)
+	MissingZeroCrossingA							AT %I*	: 	BOOL;
+	MissingZeroCrossingB							AT %I* 	: 	BOOL;
+	MissingZeroCrossingC							AT %I* 	: 	BOOL;
+	PhaseSequenceError								AT %I* 	: 	BOOL;
+//	SyncError										AT %I* 	: 	BOOL;
+                                                              	
+	(* MultiplexValues	*)
+	ApparentPower											:	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//apparent power unit: 0,01 VA
+	ReactivePower											:	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//reactive power unit: 0,01 VAr
+	PowerFactor												:	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//effective power cos phi Unit: 0,001
+	EnergyConsumption										:	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//energy unit: 0,001 Wh
+	EnergyConsumptionInvers									:	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//energy unit: 0,001 Wh
+	TimestampDistClocks										:	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//timestamp unit : 1 ns
+	Frequency												:	ARRAY[MIN_PHASE..MAX_PHASE] OF LREAL; 	//frequenzy unit : 0,1 Hz
+
+END_VAR
+VAR (* Internal IOs *)
+	_Current										AT %I* 	: 	ARRAY[MIN_PHASE..MAX_PHASE] OF DINT; 	//Unit: 0,000001 A
+	_Voltage										AT %I* 	: 	ARRAY[MIN_PHASE..MAX_PHASE] OF DINT; 	//Unit: 0,0001 V
+	_ActivePower									AT %I* 	: 	ARRAY[MIN_PHASE..MAX_PHASE] OF DINT; 	//Unit: 0,01 W
+
+	_VariantValue									AT %I* 	: 	ARRAY[MIN_PHASE..MAX_PHASE] OF DINT;
+//	_SyncErrorChannel								AT %I* 	: 	ARRAY[MIN_PHASE..MAX_PHASE] OF BOOL; 	//reserved
+//	_SyncErrorTerminal										: 	BOOL;	//reserved
+END_VAR                       							
+VAR
+	i														:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EL 3403 IO 									*)
+(************************************************)
+
+(* Get Index Values *****************************)
+	FOR i := MIN_PHASE TO MAX_PHASE DO
+		Current[i]											:= Transmission[i] * DINT_TO_LREAL(_Current[i]) / 1000000.0; //A
+		Voltage[i]											:= (*Uebersetzung[i] **) DINT_TO_LREAL(_Voltage[i]) / 10000.0; //V
+		ActivePower[i]										:= Transmission[i] * DINT_TO_LREAL(_ActivePower[i]) / 100.0; //W
+                                            				
+		CASE IndexIn[i] OF                  				
+		0:(*Scheinleistung*)                				
+			ApparentPower[i]								:= Transmission[i] * DINT_TO_LREAL(_VariantValue[i]) / 100.0; //VA
+                                            				
+		1:(*Blindleistung*)                 				
+			ReactivePower[i]								:= Transmission[i] * DINT_TO_LREAL(_VariantValue[i]) / 100.0; //VAr
+                                            				
+		2:(*Energie*)                       				
+			EnergyConsumption[i]							:= Transmission[i] * DINT_TO_LREAL(_VariantValue[i]) / 1000.0; //Wh
+                                            				
+		3:(*Wirkleistungsfaktor*)           				
+			PowerFactor[i]									:= DINT_TO_LREAL(_VariantValue[i]) / 1000.0; //cos phi
+                                            				
+		4:(*Frequenz*)                      	
+			Frequency[i]									:= DINT_TO_LREAL(_VariantValue[i]) / 10.0; //Hz
+                                            				
+		5:(*Energie Invers*)                				
+			EnergyConsumptionInvers[i]						:= Transmission[i] * DINT_TO_LREAL(_VariantValue[i]) / 1000.0;
+                                            				
+		100:(*Zeitstempel*)                 				
+			TimestampDistClocks[i]							:= DINT_TO_LREAL(_VariantValue[i]);
+	
+		END_CASE
+
+	END_FOR
+
+(***********************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="EL3403">
+      <LineId Id="3" Count="34" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

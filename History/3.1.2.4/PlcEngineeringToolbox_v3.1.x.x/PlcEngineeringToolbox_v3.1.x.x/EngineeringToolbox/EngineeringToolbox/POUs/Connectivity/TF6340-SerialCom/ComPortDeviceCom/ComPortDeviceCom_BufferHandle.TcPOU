@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="ComPortDeviceCom_BufferHandle" Id="{06d44f9f-de92-46a6-b54b-5d50d34635bf}" SpecialFunc="None">
+    <Declaration><![CDATA[//TxRxBuffer provided by ComPortEL6x22BEasyConnect FB to be sued by ComPortDeviceCom_SendRecBytes/String
+FUNCTION_BLOCK ComPortDeviceCom_BufferHandle
+VAR CONSTANT										
+END_VAR
+VAR_INPUT
+	TXBuffer												: 	COMbuffer ;	
+	RXBuffer												: 	COMbuffer ;
+END_VAR		
+VAR_OUTPUT
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	ClearComBuf												:	ClearComBuffer;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* RS232 Device Com										 *)
+	(*********************************************************)
+	
+]]></ST>
+    </Implementation>
+    <Method Name="clear" Id="{8d873f97-1b9d-48f9-91c0-6505919965ec}">
+      <Declaration><![CDATA[METHOD PUBLIC clear : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ClearComBuf(Buffer := RXBuffer);
+ClearComBuf(Buffer := TXBuffer);
+Clear 										:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="clearRxBuffer" Id="{57e27e13-6568-4040-81b5-f2610cce5d43}">
+      <Declaration><![CDATA[METHOD PUBLIC clearRxBuffer : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ClearComBuf(Buffer := RXBuffer);
+ClearRxBuffer 									:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="clearTxBuffer" Id="{2dd28c3b-7bc4-4aaf-be15-9db1c4c71ad8}">
+      <Declaration><![CDATA[METHOD PUBLIC clearTxBuffer : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+ClearComBuf(Buffer := TXBuffer);
+ClearTxBuffer 										:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ComPortDeviceCom_BufferHandle">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortDeviceCom_BufferHandle.clear">
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortDeviceCom_BufferHandle.clearRxBuffer">
+      <LineId Id="8" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="ComPortDeviceCom_BufferHandle.clearTxBuffer">
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

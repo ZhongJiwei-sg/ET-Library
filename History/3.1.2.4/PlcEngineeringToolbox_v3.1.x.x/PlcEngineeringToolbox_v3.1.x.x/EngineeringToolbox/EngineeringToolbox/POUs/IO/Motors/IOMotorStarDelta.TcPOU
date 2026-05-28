@@ -1,0 +1,217 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="IOMotorStarDelta" Id="{5594a7dd-ad46-4be3-a1e3-b417ee472759}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK IOMotorStarDelta EXTENDS IOMotor
+VAR_INPUT
+	PT_RestartDel											:	TIME := T#0S; //Delay to restart motor to avoid over heating
+	PT_Delta												: 	TIME := T#5S; 
+	ProtSwitchOK2											: 	FUSE;
+END_VAR                 						
+VAR_OUTPUT              						
+	Q_StarContactor									AT %Q* 	: 	BOOL;
+	Q_DeltaContactor								AT %Q* 	: 	BOOL;
+	RestartDelActive										:	BOOL;
+	ET_RestartDel											: 	TIME;	(* waiting-time of start interlock *)
+END_VAR                 						
+VAR                     						
+	TON_StarDelta											:	TON;
+	TP_RestartDel											:	TP;
+END_VAR                     					]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Start Delta Motor IO	 				 	V1.1	*)
+(****************************************************)
+
+(* Protection Switch *****************************************)
+	IF ResetTrig  THEN reset(); END_IF
+
+	ProtSwitchOK();
+	ProtSwitchOK2();
+	
+(* Start ****************************************************)
+	IF Start THEN
+		switchOn();
+                       										
+		Q_StarContactor 									:= 	Q_Contactor
+																AND NOT TON_StarDelta.Q
+																AND NOT Q_DeltaContactor;
+
+		Q_DeltaContactor 									:= 	Q_Contactor
+																AND TON_StarDelta.Q;
+
+		TP_RestartDel();
+	ELSE
+		switchOff();
+	END_IF
+
+(* Timer *****************************************************)
+	TON_StarDelta(IN := Q_Contactor, PT := PT_Delta);
+
+	//Restart delay
+	TP_RestartDel(IN := TP_RestartDel.Q,PT := PT_RestartDel); //Execute restart delay
+	RestartDelActive										:= TP_RestartDel.Q;
+	
+	IF TP_RestartDel.ET > T#0MS 
+	THEN
+		ET_RestartDel		:= TP_RestartDel.PT - TP_RestartDel.ET;
+	ELSE
+		ET_RestartDel		:= t#0ms;
+	END_IF
+	
+(* HMI status *********************************************)
+	_writeStatus();
+	
+(********************************************************)
+
+
+	]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{2e5d18e9-6e6b-4b99-8234-3df068e0315a}" />
+    <Folder Name="properties" Id="{112a5dee-3d35-48bd-9279-d7ddffb47044}" />
+    <Method Name="_writeStatus" Id="{79726a8d-7726-48b4-9ea3-651b47611184}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PROTECTED _writeStatus : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* HmiStatus **************************************************)
+	Status.0												 := NOT Q_Contactor;
+	Status.1												 := Q_Contactor;
+	Status.2												 := Q_DeltaContactor;
+	Status.3												 := RestartDelActive;
+	Status.4												 := FALSE;
+	Status.5												 := Feed;
+	Status.6												 := NOT Error AND NOT RestartDelActive;
+	Status.7												 := Error;
+
+	(* Result *)
+	_writeStatus											:= TRUE;
+    												
+(**************************************************************)]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isOn" Id="{bef2792d-5e46-42d6-8dbf-c707fb15b0e1}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{edb5fbdc-dc43-48db-831c-53f38e4c2449}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOn := Q_Contactor;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ok" Id="{ca66fcbf-83e4-473a-a4fd-739f355c28f0}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY ok : bool]]></Declaration>
+      <Get Name="Get" Id="{f1da9116-cec2-4f81-ac8a-6ab2bf977ef3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ok := Q_Contactor and Q_DeltaContactor ;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{5caacf8f-eac6-4896-8ee5-6c07cd6f77d1}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC reset : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+reset									:= ProtSwitchOK.reset() AND ProtSwitchOK2.reset();
+Error									:= FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resetRestartTmr" Id="{75d4b8cc-d3b2-45a2-8101-3838b9dde8c9}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC resetRestartTmr : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(TP_RestartDel),0,SIZEOF(TP_RestartDel));
+resetRestartTmr										:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOff" Id="{536de95d-0054-4a35-91a0-970e9238f4a9}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD public switchOff : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start														:= FALSE;
+TP_RestartDel(IN := Q_Contactor , PT := PT_RestartDel);
+Q_Contactor 												:= FALSE;
+Q_StarContactor												:= FALSE;
+Q_DeltaContactor											:= FALSE;
+Busy														:= FALSE;
+Error														:= NOT ProtSwitchOK.Q OR NOT ProtSwitchOK2.Q;
+switchOff													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{51f40b2f-5381-44ef-9be2-0ff9eeae70df}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD public switchOn : BOOL //True if motor is switched on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start														:= TRUE;
+Q_Contactor		 											:= ProtSwitchOK.Q AND ProtSwitchOK2.Q AND Feed AND NOT TP_RestartDel.Q;
+switchOn													:= Q_Contactor;
+Busy														:= switchOn;
+Error														:= NOT ProtSwitchOK.Q OR NOT ProtSwitchOK2.Q;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="IOMotorStarDelta">
+      <LineId Id="3" Count="4" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="3" />
+      <LineId Id="26" Count="10" />
+      <LineId Id="40" Count="3" />
+      <LineId Id="116" Count="1" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="49" Count="8" />
+      <LineId Id="106" Count="5" />
+      <LineId Id="104" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotorStarDelta._writeStatus">
+      <LineId Id="30" Count="12" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotorStarDelta.isOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotorStarDelta.ok.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotorStarDelta.reset">
+      <LineId Id="4" Count="1" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotorStarDelta.resetRestartTmr">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotorStarDelta.switchOff">
+      <LineId Id="9" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="IOMotorStarDelta.switchOn">
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="2" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

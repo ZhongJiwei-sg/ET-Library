@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="setNoOfBits" Id="{9e6e71d3-d30b-4117-b32d-48cbae29e9ff}" SpecialFunc="None">
+    <Declaration><![CDATA[//Returns a LWORD variable with number (no) of bits set to TRUE starting from lowest significant bit (.0)  
+{attribute 'displaymode':='binary'}		
+FUNCTION setNoOfBits : LWORD 
+VAR_INPUT
+	No														:	INT;
+END_VAR
+VAR
+	u64														:	U_64BIT_DATATYPE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF No <= 0
+THEN
+	setNoOfBits												:= 0;
+ELSIF No <= 32
+THEN
+	setNoOfBits												:= TO_LWORD((EXPT(2,No) - 1));
+ELSE
+	u64._DWORDs[0]											:= 16#FFFFFFFF;
+	u64._DWORDs[1]											:= TO_DWORD((EXPT(2,No - 32) - 1));
+	setNoOfBits												:= u64._LWORD;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="setNoOfBits">
+      <LineId Id="8" Count="9" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

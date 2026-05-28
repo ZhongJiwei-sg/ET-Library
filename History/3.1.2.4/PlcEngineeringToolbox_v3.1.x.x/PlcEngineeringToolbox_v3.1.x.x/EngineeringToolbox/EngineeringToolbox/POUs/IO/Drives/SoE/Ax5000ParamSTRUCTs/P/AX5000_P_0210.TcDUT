@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0210" Id="{b0f9fd83-dac3-4cff-91a9-a309ebfbeec2}">
+    <Declaration><![CDATA[TYPE AX5000_P_0210 :
+STRUCT
+	External_brak_resistor_actual_continouse_power:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

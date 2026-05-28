@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <DUT Name="VALUE_6D_DUT" Id="{606427c5-3ba3-4168-bafb-cd3f6f691ec3}">
+    <Declaration><![CDATA[TYPE VALUE_6D_DUT EXTENDS VALUE_3D_DUT:
+STRUCT
+	A					:		LREAL; //Rx
+	B					:		LREAL; //Ry
+	C					:		LREAL; //Rz	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

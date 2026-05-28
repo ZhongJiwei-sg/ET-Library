@@ -1,0 +1,671 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxDriveSoE_Ax5000CommutationCalib" Id="{3494ae2a-1d76-4bfc-bc1f-332b8a4562e2}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxDriveSoE_Ax5000CommutationCalib EXTENDS FbBase
+VAR CONSTANT
+	STEP_COUNT											:	INT := 1;
+	P150_NAMEPLATE_TYPE									:	E_AX5000_P_0150_DigitalNamePlate := E_AX5000_P_0150_DigitalNamePlate.EAX5000_P_0150_DIGITALNAMEPLATE_BECKHOFF; //1= Digital nameplate = Beckhoff
+	P150_COMMUTATION_MODE_FEEDBACK						:	UINT := 1; //1= Feedback commutation offset
+	
+//	P150_NO_NAMEPLATE									:	UINT := 0; //0= Digital nameplate = no nameplate
+//	P150_COMMUTATION_MODE_ADJUSTABLE					:	UINT := 3; //3= Adjustable mechanical offset 
+END_VAR
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}
+	OPTION_READ_ONLY									:	BYTE  := 2#0000_0001; //Read actual commutation offset of the motor (not stored value in drive)
+{attribute 'displaymode':='binary'}
+	OPTION_P98_IS_EMPTY									:	BYTE  := 2#0000_0010; //Digital nameplate not initialized, skip check if entries. Select this option for first time setup
+END_VAR
+VAR_INPUT
+	AdsAddr												: 	AMSADDR; //Terminal AMS Net Addr.	
+	Channel												:	USINT;
+
+{attribute 'displaymode':='binary'}         			
+	Options												:	BYTE  := 2#0000_0000; (* Option constants are predefined, so they can accordingly be passed symbolically to the block 
+																					.0 = TRUE read only 
+																					*)
+
+	
+	MaxComPosDifference									:	LREAL := 15.0; //Maximal commutation position offset (Parameter P167, result of command P166)
+END_VAR
+VAR_IN_OUT
+	axis												: AXIS_REF;
+END_VAR
+VAR_OUTPUT
+
+	P0053												: AX5000_P_0053; // Configured motor type
+	P0058												: AX5000_P_0058; // Mechanical commutation offset after command P166
+	P0150												: AX5000_P_0150; // Feedback type form startup list
+	P0167												: AX5000_P_0167; //Motor and feedback connection check parameter
+	P0098												: AX5000_P_0098_beckhoff := (	
+															Id_prat_1:= 1113940843,
+															Id_prat_2:= 1752131174,	
+														//	Name_plate_type := , 
+															Version_no:=2,
+															Motor_vendor:= 0, //None
+															Serial_number:= 999999); //Digital nameplate
+	Offset												:	LREAL; //Scaled value
+
+	SercosErrId											: UDINT;
+END_VAR
+VAR
+(*  Memory *****************************************************)
+	lastState											: INT := 0;
+
+(*  Timer ******************************************************)
+(*  Trigger ****************************************************)
+
+(*  Blocks *****************************************************)
+	SoECommand 											: FB_SoEExecuteCommand 	:= (Timeout := t#30s);
+	SoEWritePassword 									: FB_SoEWritePassword 	:= (Password :=(strData := 'AX5000', iActualSize := 128, iMaxSize := 128), Timeout := DEFAULT_ADS_TIMEOUT);
+	SoEReset											: FB_SoEReset 			:= (Timeout := DEFAULT_ADS_TIMEOUT);
+	SoEWrite											: FB_SoEWrite 			:= (Timeout := T#30S);
+	SoERead												: FB_SoERead 			:= (Timeout := DEFAULT_ADS_TIMEOUT);
+	
+(*  Error ******************************************************)
+(*  Dummys *****************************************************)
+	{attribute 'hide' := ''}
+	i,j													: INT := 0;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(*********************************************************)
+	
+(* state machine ********************************************************)
+	rtExecute(CLK := Execute);
+	CASE state OF
+	0 : 
+		Busy 											:= FALSE;
+		
+		IF NOT Execute THEN
+			Done 										:= FALSE;
+			Error 										:= FALSE;
+			ErrorID 									:= 0;
+			SercosErrId									:= 0;
+		END_IF
+		IF rtExecute.Q THEN
+			IF axis.status.ControlLoopClosed AND NOT Options.1 THEN
+				Error 									:= TRUE;
+				ErrorID 								:= 19266; //xis is enabled but should not be enabled for this process.
+
+			ELSIF AdsAddr.netId[0] = 0
+			THEN
+ 				Error 									:= TRUE;
+				ErrorID 								:= 15; //Invalid AMS net id
+	
+			ELSIF AdsAddr.port = 0
+			THEN
+				Error 									:= TRUE;
+				ErrorID 								:= 24; //Invalid ADS Port
+						
+			ELSE
+				Busy									:= TRUE;	
+				Done 									:= FALSE;
+				Error 									:= FALSE;
+				ErrorID 								:= 0;
+				SercosErrId								:= 0;	
+				
+				Offset									:= 0.0;
+				MEMSET(ADR(P0053),0,SIZEOF(P0053));
+				MEMSET(ADR(P0058),0,SIZEOF(P0058));
+				MEMSET(ADR(P0150),0,SIZEOF(P0150));
+				MEMSET(ADR(P0167),0,SIZEOF(P0167));
+				
+				SoECommand(Execute := FALSE, Axis := axis);
+				SoEWrite(Execute := FALSE, Axis := axis);
+				SoERead(Execute := FALSE, Axis := axis);
+				SoEReset(Execute := FALSE, Axis := axis);
+				SoEWritePassword(Execute := FALSE, Axis := axis);
+		
+					
+				state									:= state + STEP_COUNT;
+			END_IF
+		END_IF
+	
+	1:	(*write drive password *)
+		SoEWritePassword(
+			NetId:= , 
+			Execute:=TRUE , 
+			Timeout:= , 
+			Password:= , //See declaration 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> );
+	
+		IF NOT SoEWritePassword.busy
+		THEN
+			IF SoEWritePassword.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoEWritePassword.AdsErrId;
+				SercosErrId								:= SoEWritePassword.SercosErrId;
+				state 									:= 0;
+			ELSE
+				
+				state									:= state + STEP_COUNT;
+			END_IF		
+			SoEWritePassword(Execute := FALSE, Axis := axis);
+		END_IF
+			
+	2:	(* Reset active errors *)
+		SoEReset(
+			NetId:= , 
+			Execute:=TRUE , 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> );
+			
+		IF NOT SoEReset.Busy
+		THEN
+			IF SoEReset.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoEReset.AdsErrId;
+				SercosErrId								:= SOEReset.SercosErrId;
+				state 									:= 0;
+			ELSE
+				
+				state									:= state + STEP_COUNT;
+			END_IF	
+			SoEReset(Execute := FALSE, Axis := axis);	
+		END_IF
+
+	3: // read configured motor type
+		SoERead(
+			NetId:= , 
+			Idn:=P_0_IDN+53 , // IDN P-0-0053 Configured motor type
+			Element:=EC_SOE_ELEMENT_VALUE , 
+			pDstBuf:=ADR(P0053) , 
+			BufLen:=SIZEOF(P0053) , 
+			Execute:=TRUE , 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> , 
+			Attribute=> );
+			
+		IF NOT SoERead.Busy
+		THEN
+			IF SoERead.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoERead.AdsErrId;
+				SercosErrId								:= SoERead.SercosErrId;
+				state 									:= 0;
+			ELSE		
+				
+				state									:= state + STEP_COUNT;
+			END_IF	
+			SoERead(Execute := FALSE, Axis := axis);	
+		END_IF
+		
+	4: //Read feedback type form startup list
+		SoERead(
+			NetId:= , 
+			Idn:=P_0_IDN+150 , 
+			Element:=EC_SOE_ELEMENT_VALUE , 
+			pDstBuf:=ADR(P0150) , 
+			BufLen:=SIZEOF(P0150) , 
+			Execute:=TRUE , 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> , 
+			Attribute=> );
+			
+		IF NOT SoERead.Busy
+		THEN
+			IF SoERead.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoERead.AdsErrId;
+				SercosErrId								:= SoERead.SercosErrId;
+				state 									:= 0;
+			ELSE				
+				state									:= state + STEP_COUNT;
+			END_IF		
+			SoERead(Execute := FALSE, Axis := axis);
+		END_IF		
+		
+	5: (* Reserved *****************************************************)
+		state											:= state + STEP_COUNT;
+		
+	6: //Read nameplate to check content (must be initialized) *************************
+		SoERead(
+			NetId:= , 
+			Idn:=P_0_IDN+98 , 
+			Element:=EC_SOE_ELEMENT_VALUE , 
+			pDstBuf:=ADR(P0098) , 
+			BufLen:=SIZEOF(P0098) , 
+			Execute:=TRUE, 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> , 
+			Attribute=> );	
+		
+		IF NOT SoERead.Busy
+		THEN
+			IF SoERead.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoERead.AdsErrId;
+				SercosErrId								:= SoERead.SercosErrId;
+				state 									:= 0;
+			ELSE
+				Offset									:= TO_LREAL(P0098.Position_offset) * 0.01;
+				SoERead(Execute := FALSE, Axis := axis);	
+				//Check parameter of P150
+				IF Options.0
+				THEN //Read only
+					Busy								:= FALSE;
+					Done								:= TRUE;
+					state 								:= 0;
+					
+				ELSIF Options.1
+				THEN //Nameplate not active, ignore current setting
+					state								:= 10;	
+					
+				ELSIF TO_UINT(P0150.ParameterChannel.CommutationMode0) <> P150_COMMUTATION_MODE_FEEDBACK 
+				THEN
+					Busy								:= FALSE;
+					Error								:= TRUE;
+					ErrorId								:= E_AdsErr.DEVICE_INVALIDPARM;
+					SercosErrId							:= 16#F749; //Feedback parameter invalid
+					state 								:= 0;	
+				ELSIF P0150.ParameterChannel.DigitalNamePlate <> P150_NAMEPLATE_TYPE
+				THEN
+					Busy								:= FALSE;
+					Error								:= TRUE;
+					ErrorId								:= E_AdsErr.DEVICE_INVALIDPARM;
+					SercosErrId							:= 16#F749; //Invalid nameplate
+					state 								:= 0;			
+			
+				ELSIF P0098.Name_plate_type <> P0150.ParameterChannel.DigitalNamePlate 
+				THEN
+					Busy								:= FALSE;
+					Error								:= TRUE;
+					ErrorId								:= E_AdsErr.DEVICE_INVALIDPARM;
+					SercosErrId							:= 16#F803; //Unknow nameplate
+					state 								:= 0;					
+				
+				ELSIF P0098.Position_offset = 0.0 
+				THEN
+					Busy								:= FALSE;
+					Error								:= TRUE;
+					ErrorId								:= E_AdsErr.DEVICE_INVALIDPARM;
+					SercosErrId							:= 16#F742; //Invalid commutation offset
+					state 								:= 0;
+						
+				ELSIF P0098.Feedback_typ <> P0150.FeedbackTypeString 
+				THEN
+					Busy								:= FALSE;
+					Error								:= TRUE;
+					ErrorId								:= E_AdsErr.DEVICE_INVALIDPARM;
+					SercosErrId							:= 16#F708; //Feedback type invalid
+					state 								:= 0;		
+				ELSIF P0098.Motor_type <> P0053.Configures_motor_type 
+				THEN
+					Busy								:= FALSE;
+					Error								:= TRUE;
+					ErrorId								:= E_AdsErr.DEVICE_INVALIDPARM;
+					SercosErrId							:= 16#FD09; //Motor type invalid
+					state 								:= 0;				
+				ELSE
+					state								:= 10;	
+				END_IF	
+			END_IF
+		END_IF
+		
+	10:	// Start command P-0-0160 - calibrate commutation offset ***********************************************	
+		SoECommand(
+			NetId:='' , 
+			Idn:=P_0_IDN+160 , //command P-0-0160 = calibrate commutation offset 
+			Execute:= TRUE, 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> );
+		
+		IF NOT SoECommand.Busy
+		THEN
+			IF SoECommand.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoECommand.AdsErrId;
+				SercosErrId								:= SoECommand.SercosErrId;
+				state 									:= 0;
+			ELSE
+				state									:= state + STEP_COUNT;
+			END_IF		
+			SoECommand(Execute := FALSE, Axis := axis);
+		END_IF
+	
+	11: // read mechanical commutation offset result of command P160
+		SoERead(
+			NetId:= , 
+			Idn:=P_0_IDN+58 , // IDN P-0-0167 = parameters to check commutation and rotation direction
+			Element:=EC_SOE_ELEMENT_VALUE , 
+			pDstBuf:=ADR(P0058) , 
+			BufLen:=SIZEOF(P0058) , 
+			Execute:= TRUE , 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> , 
+			Attribute=> );	
+		
+		IF NOT SoERead.Busy
+		THEN
+			IF SoERead.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoERead.AdsErrId;
+				SercosErrId								:= SoERead.SercosErrId;
+				state 									:= 0;
+			ELSE
+				//Init nameplate information - see also declaration
+				P0098.Motor_type						:= P0053.Configures_motor_type;
+				P0098.Feedback_typ						:= P0150.FeedbackTypeString;	
+				P0098.Name_plate_type					:= P0150.ParameterChannel.DigitalNamePlate;
+				P0098.Position_offset					:= P0058.Mechanical_commutation_offset;
+				Offset									:= TO_LREAL(P0058.Mechanical_commutation_offset) * 0.01;		
+	
+				state									:= state + STEP_COUNT;
+			END_IF	
+			SoERead(Execute := FALSE, Axis := axis);	
+		END_IF
+		
+	12: // Start command P-0-0166 - Motor and feedback connection check 
+		SoECommand(
+			NetId:='' , 
+			Idn:=P_0_IDN+166 , //command P-0-0166 = motor and feedback connection check 
+			Execute:= TRUE, 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> );
+		
+		IF NOT SoECommand.Busy
+		THEN
+			IF SoECommand.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoECommand.AdsErrId;
+				SercosErrId								:= SoECommand.SercosErrId;
+				state 									:= 0;
+			ELSE
+				
+				state									:= state + STEP_COUNT;
+			END_IF		
+			SoECommand(Execute := FALSE, Axis := axis);
+		END_IF
+	
+	13: // read P-0-0167 read connection check results
+		SoERead(
+			NetId:= , 
+			Idn:=P_0_IDN+167 , // IDN P-0-0167 = parameters to check commutation and rotation direction
+			Element:=EC_SOE_ELEMENT_VALUE , 
+			pDstBuf:=ADR(P0167) , 
+			BufLen:=SIZEOF(P0167) , 
+			Execute:= TRUE , 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> , 
+			Attribute=> );
+				
+		IF NOT SoERead.Busy
+		THEN
+			IF SoERead.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoERead.AdsErrId;
+				SercosErrId								:= SoERead.SercosErrId;
+				state 									:= 0;
+			ELSE				
+				IF P0167.EqualDirektions <> 1
+					OR
+					TO_LREAL(P0167.Commutation_position_difference) * 0.01 > MaxComPosDifference 
+					AND TO_LREAL(P0167.Commutation_position_difference) * 0.01 < 360.0 - MaxComPosDifference
+				THEN
+					Busy								:= FALSE;
+					Error								:= TRUE;
+					ErrorId								:= E_AdsErr.DEVICE_INVALIDPARM;
+					SercosErrId							:= 16#F702; //Feedback position invalid
+					state 								:= 0;
+				ELSE                                	
+					state								:= state + STEP_COUNT;
+				END_IF
+			END_IF		
+			SoERead(Execute := FALSE, Axis := axis);
+		END_IF
+		
+	14:	// Write digital motor plate with commutation offset
+		SoEWrite(
+			NetId:= , 
+			Idn:=P_0_IDN+98, // P0-0-0098 = digital motor plate 
+			Element:=EC_SOE_ELEMENT_VALUE , 
+			pSrcBuf:=ADR(P0098) ,
+			BufLen:=SIZEOF(P0098) ,
+			Execute:=TRUE,
+			Timeout:= , 
+			Password:= SoEWritePassword.Password, 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> );
+			
+		IF NOT SoEWrite.Busy
+		THEN
+			IF SoEWrite.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoEWrite.AdsErrId;
+				SercosErrId								:= SoEWrite.SercosErrId;
+				state 									:= 0;
+			ELSE
+				
+				state									:= state + STEP_COUNT;
+			END_IF	
+			SoEWrite(Execute := FALSE, Axis := axis);	
+		END_IF
+
+	15: // Command P-0-0162 - Save digital name plate
+		SoECommand(
+			NetId:= , 
+			Idn:=P_0_IDN+162 , //save digital name plate 
+			Execute:=TRUE , 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> );
+	
+		IF NOT SoECommand.Busy
+		THEN
+			IF SoECommand.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoECommand.AdsErrId;
+				SercosErrId								:= SoECommand.SercosErrId;
+				state 									:= 0;
+			ELSE
+				
+				state									:= state + STEP_COUNT;
+			END_IF		
+			SoECommand(Execute := FALSE, Axis := axis);
+		END_IF
+
+	16: // Write digital motor plate with commutation offset again
+		SoEWrite(
+			NetId:= , 
+			Idn:=P_0_IDN+98 , 
+			Element:=EC_SOE_ELEMENT_VALUE , 
+			pSrcBuf:=ADR(P0098) ,
+			BufLen:=SIZEOF(P0098) ,
+			Execute:= TRUE,
+			Timeout:= , 
+			Password:=SoEWritePassword.Password  , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> );
+				
+		IF NOT SoEWrite.Busy
+		THEN
+			IF SoEWrite.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoEWrite.AdsErrId;
+				SercosErrId								:= SoEWrite.SercosErrId;
+				state 									:= 0;
+			ELSE
+				
+				state									:= state + STEP_COUNT;
+			END_IF	
+			SoEWrite(Execute := FALSE, Axis := axis);	
+		END_IF
+
+	17: //Start command P-0-0161 - Save commutation offset in feedback 1
+		SoECommand(
+			NetId:= , 
+			Idn:=P_0_IDN+161 , //save commutation offset 
+			Execute:=TRUE , 
+			Timeout:= , 
+			Axis:=axis , 
+			Busy=> , 
+			Error=> , 
+			AdsErrId=> , 
+			SercosErrId=> );
+		
+		IF NOT SoECommand.Busy
+		THEN
+			IF SoEWrite.Error
+			THEN
+				Busy									:= FALSE;
+				Error									:= TRUE;
+				ErrorId									:= SoEWrite.AdsErrId;
+				SercosErrId								:= SoEWrite.SercosErrId;
+				state 									:= 0;
+			ELSE
+				Busy									:= FALSE;
+				Done									:= TRUE;
+				state 									:= 0;					
+			END_IF		
+			SoECommand(Execute := FALSE, Axis := axis);
+		END_IF
+	
+	ELSE
+		;
+	END_CASE
+
+(* Record last state ******************************************)
+IF state <> lastState AND state <> 0 AND NOT Error
+THEN 
+	lastState											:= state;
+END_IF
+
+(*************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="optP98IsEmpty" Id="{56c586a5-8bc2-4fcf-8819-485f3e8b4918}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optP98IsEmpty : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b84dda00-7f9a-4ede-b19b-21ed68885c94}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optP98IsEmpty := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{75efdb2d-a135-4881-b651-e2bdbc82326b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optP98IsEmpty;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optReadOnly" Id="{526e60a4-647e-4ee4-b218-0939107421f5}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC optReadOnly : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6e9b1e9a-ffe8-48c6-80ee-92e2a78f4b48}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optReadOnly := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{79c29cb1-ba80-4230-89a9-ad25780992fa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optReadOnly;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="AxDriveSoE_Ax5000CommutationCalib">
+      <LineId Id="4266" Count="201" />
+      <LineId Id="4792" Count="4" />
+      <LineId Id="4801" Count="0" />
+      <LineId Id="4797" Count="0" />
+      <LineId Id="4799" Count="0" />
+      <LineId Id="4798" Count="0" />
+      <LineId Id="4800" Count="0" />
+      <LineId Id="4468" Count="44" />
+      <LineId Id="4518" Count="273" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000CommutationCalib.optP98IsEmpty.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000CommutationCalib.optP98IsEmpty.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000CommutationCalib.optReadOnly.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000CommutationCalib.optReadOnly.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,86 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="CylinderExt" Id="{2b722628-ffee-4ec8-9c64-bdd463427979}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Cylinder with runtime status, extended from FB Cylinder
+FUNCTION_BLOCK CylinderExt EXTENDS Cylinder 
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT  
+
+END_VAR                                     			
+VAR_OUTPUT     			
+	RuntimeWP												:	TIME;
+	RuntimeBP												:	TIME;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Cylinder	with runtime status 												*)
+	(********************************************************************************)
+
+(* Call super ********************************************************)
+	SUPER^();
+	
+(*********************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="_runtimeChk" Id="{548c6c7d-1913-470d-ae27-f4e9c92353ee}">
+      <Declaration><![CDATA[METHOD PROTECTED _runtimeChk : BOOL
+VAR_INPUT
+END_VAR
+VAR
+	memRtBP												:	TIME;
+	memRtWP												:	TIME;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Record current runtime **********************************************)
+	memRtBP													:= tonErrBasePos.ET;
+	memRtWP													:= TonErrWorkPos.ET;
+	
+(* Call time *********************************************************)
+	SUPER^._runtimeChk();
+	
+(* Record last runtime *********************************************)
+	IF memRtWP > T#0MS AND NOT tonErrWorkPos.IN AND NOT tonErrWorkPos.Q
+	THEN
+		RuntimeWP											:= memRtWP;
+	END_IF
+	
+	IF memRtBP > T#0MS AND NOT tonErrBasePos.IN AND NOT tonErrBasePos.Q
+	THEN
+		RuntimeBP											:= memRtBP;
+	END_IF
+					
+(*********************************************************************)
+	_runtimeChk												:= TRUE;
+
+(**********************************************************************)	]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CylinderExt">
+      <LineId Id="472" Count="0" />
+      <LineId Id="474" Count="0" />
+      <LineId Id="664" Count="0" />
+      <LineId Id="508" Count="0" />
+      <LineId Id="624" Count="0" />
+      <LineId Id="665" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="CylinderExt._runtimeChk">
+      <LineId Id="22" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="29" Count="8" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="25" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

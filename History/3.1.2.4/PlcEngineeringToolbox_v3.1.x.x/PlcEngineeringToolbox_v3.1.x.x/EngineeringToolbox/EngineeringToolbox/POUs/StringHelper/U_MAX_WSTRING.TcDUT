@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.3">
+  <DUT Name="U_MAX_WSTRING" Id="{742dd617-4862-46ae-9749-201fe4771007}">
+    <Declaration><![CDATA[TYPE U_MAX_WSTRING :
+UNION
+	text				:	WSTRING(MAX_STRING_LENGTH);
+	{attribute 'displaymode':='hex'}
+	_BYTES				:	ARRAY[0..MAX_STRING_LENGTH] OF WORD;	
+END_UNION
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

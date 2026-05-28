@@ -1,0 +1,78 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EAP_SUB_VAR" Id="{1d89217e-2ede-408e-af3d-21e90d76abeb}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Default IOs of a Subscriber network variable 
+FUNCTION_BLOCK EAP_SUB_VAR 
+VAR_OUTPUT CONSTANT
+END_VAR
+VAR_INPUT
+	VarId					AT %Q*:	UINT;	
+	{attribute 'displaymode':='hex'}
+	VarCtrl					AT %Q*:	UINT;
+END_VAR		
+VAR_OUTPUT	
+	{attribute 'displaymode':='hex'}
+	VarState				AT %I*:	UINT;
+	Quality					AT %I*:	UINT;//Duration the variable is not refreshed (in 100µs/0.1ms)	
+	CycleIndex				AT %I*:	UINT;//Incremented each publisher cycle
+	
+	QualityLT					 : LTIME;
+	QualityLTMax				 : LTIME;
+	
+	InvalidHashValueReceived		:	BOOL;
+	InvalidVarLengthReceived		:	bool;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* IOs 									*)
+	(****************************************)
+
+	QualityLT 								:= TO_LTIME(quality * 100000); //Quality in 100µs to ms
+	IF QualityLT > QualityLTMax
+	THEN
+		QualityLTMax						:= QualityLT;
+	END_IF
+	
+	InvalidHashValueReceived				:= VarState.0;
+	InvalidVarLengthReceived				:= VarState.1;]]></ST>
+    </Implementation>
+    <Property Name="ignoreHashValue" Id="{a91cca7c-afe1-48f7-a31f-0d31359bb048}">
+      <Declaration><![CDATA[PROPERTY PUBLIC ignoreHashValue : BOOL]]></Declaration>
+      <Get Name="Get" Id="{22cfd3fb-3957-48c1-a59c-fa96946b9bab}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ignoreHashValue		:= VarCtrl.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1b302adc-19f6-4ddd-926a-07a6beb40be2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[VarCtrl.0				:= ignoreHashValue;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="EAP_SUB_VAR">
+      <LineId Id="3" Count="1" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="51" Count="1" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="64" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_SUB_VAR.ignoreHashValue.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EAP_SUB_VAR.ignoreHashValue.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

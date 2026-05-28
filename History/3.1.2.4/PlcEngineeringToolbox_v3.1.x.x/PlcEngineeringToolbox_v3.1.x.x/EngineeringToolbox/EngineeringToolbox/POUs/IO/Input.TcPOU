@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="Input" Id="{26dca7dc-1620-41d4-b796-46d4e2664dc6}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK Input
+VAR_INPUT
+	Force													:	BOOL := FALSE; 	//simulates Input
+	Invert													:	BOOL := FALSE; 	//inverts the Hardware Input
+	PT_ON													:	TIME := T#0MS;	//on delay
+	PT_OFF													:	TIME := T#0MS;	//off delay
+END_VAR             										
+VAR_OUTPUT          										
+	Q														:	BOOL;	//Signal Delay
+	Q_RT													:	BOOL;	//R_Trig Signal of Q
+	Q_FT													:	BOOL;	//F_Trig Signal of Q
+	Q_DIRECT												:	BOOL; 	//Signal direct
+	In												AT  %I* : 	BOOL; 	//Hardware Input
+END_VAR
+VAR
+	TON														:	TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Input/Sensor Functionblock with On/Off	attenuation and rising / fallen edge 	V2.0	*)
+(********************************************************************************************)
+
+(************************************)
+IF NOT Q THEN
+	TON(IN := (IN OR Force) XOR Invert, PT := PT_ON);
+	Q 														:= TON.Q;
+	Q_RT 													:= Q;
+	Q_FT 													:= FALSE;
+	Q_DIRECT 												:= TON.IN;
+ELSE
+	TON(IN := NOT ((IN OR Force) XOR Invert), PT := PT_OFF);
+	Q 														:= Q AND NOT TON.Q;
+	Q_RT 													:= FALSE;
+	Q_FT 													:= NOT Q;
+	Q_DIRECT 												:= Q AND NOT TON.IN;
+END_IF
+(********************************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="Input">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

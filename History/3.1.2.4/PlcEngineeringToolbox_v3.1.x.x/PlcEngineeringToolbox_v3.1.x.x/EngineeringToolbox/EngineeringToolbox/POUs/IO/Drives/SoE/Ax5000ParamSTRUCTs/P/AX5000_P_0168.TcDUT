@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0168" Id="{4ab109cc-b815-4dbf-abb9-8e56a44819ad}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0168 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Phase_shift:UINT;
+	Sin_offset_correction:UINT;
+	Cos_offset_correction:UINT;
+//{attribute 'hide'}
+	Rsvd:ARRAY[0..6] OF UINT;
+	Vector_length:UINT;
+	Sin_max:UINT;
+	Sin_min:UINT;
+	Cos_max:UINT;
+	Cos_min:UINT;
+//{attribute 'hide'}
+	Rsvd2:ARRAY[0..4] OF UINT;
+
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

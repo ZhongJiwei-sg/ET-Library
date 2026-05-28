@@ -1,0 +1,1439 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FileHandling" Id="{dae55abb-af00-4a41-a520-7aaeca58f196}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Wrapper for all file fucntions provided by lib Tc2_TcSystem.Lib, see Beckhoff information system for detailed information of each function. 
+FUNCTION_BLOCK FileHandling EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	FNC_OPEN												:	INT := 0; //With this function a new file can be created, or a closed existing file can be re-opened for further processing
+	FNC_READ												:	INT := 1; //With this function  the contents of an already opened file can be read. The file must have been already opened for read access
+	FNC_WRITE												:	INT := 2; //Data can be written into a file with this function if it is opened in write mode
+	FNC_PUTS												:	INT := 3; //The function writes strings to the file if it is opened in write mode
+	FNC_GETS												:	INT := 4; //The function reads zero terminated strings from a file and moves the file pointer to the next line.(if pBuffer is <> 0, the read line will copied to the buffer as well)
+	FNC_CLOSE												:	INT := 5; //With this function the file can be closed, and thereby placed into a defined state for further processing by other programs
+	FNC_DELETE												:	INT := 6; //With this function the existing file can be deleted
+	FNC_RENAME												:	INT := 7; //With this function the existing file can be renamed.
+	FNC_REMOVEDIR											:	INT := 8; //This function removes a directory from the data medium. A directory containing data can not be removed!
+	FNC_CREATEDIR											:	INT := 9; //This function creates new directories on the data medium.
+	FNC_SEEK												:	INT := 10;//With this function the file pointer of an opened file can be set to a definable position
+	FNC_TELL												:	INT := 11;//The function gets the current position of the file pointer. The position is expressed as an offset relative to the beginning of the stream.
+	FNC_EOF													:	INT := 12;//The function tests for the end-of-file.
+	FNC_LOAD												:	INT := 13;//The file is opened implicitly in binary mode, the contents are read out and the file is then closed again.
+END_VAR             										                 										
+VAR_INPUT           										
+	Fnc														:	INT (FNC_OPEN..FNC_LOAD) := FNC_OPEN; //Parameter for requested function
+	AMSNetId												:	T_AmsNetId := ''; //Ams Net Id 
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT; //Ads timeout 
+	Mode													:	DWORD := FOPEN_MODEAPPEND OR FOPEN_MODEPLUS OR FOPEN_MODETEXT; 
+																			(* 	FOPEN_MODEREAD "r": Opens for reading. If the file does not exist or cannot be found, the call fails.
+																				FOPEN_MODEWRITE  "w": Opens an empty file for writing. If the given file exists, its contents are destroyed.
+																				FOPEN_MODEAPPEND  "a": Opens for writing at the end of the file (appending) without removing the EOF marker before writing new data to the file; creates the file first if it doesn’t exist.
+																				FOPEN_MODEREAD OR FOPEN_MODEPLUS  "r+": Opens for reading and writing. The file must exist.
+																				FOPEN_MODEWRITE OR FOPEN_MODEPLUS  "w+": Opens an empty file for both reading and writing. If the given file exists, its contents are destroyed.
+																				FOPEN_MODEAPPEND OR FOPEN_MODEPLUS  "a+": 	Opens for reading and appending; the appending operation includes the removal of the EOF marker before new data is written to the file and the EOF marker is restored after writing is complete; creates the file first if it doesn’t exist.
+																															When a file is opened with the "a" or "a+" access type, all write operations occur at the end of the file. The file pointer can be repositioned using FB_FileSeek, but is always moved back to the end of the file before any write operation is carried out. Thus, existing data cannot be overwritten. 																				                                    								
+																				FOPEN_MODEBINARY  "b": Open in binary (untranslated) mode.
+																				FOPEN_MODETEXT  "t": Open in text (translated) mode. *)
+	Path													:	T_MaxString; // \\PC-Name\Folder\ 
+	FileName												:	T_MaxString := ''; // NewFile.xyz 
+	OldFileName												:	T_MaxString := ''; // File.xyz 
+	pBuffer													:	PVOID; //pointer to data section 
+	Length													: 	UDINT; // sizeof data section for read and write. Note to use "LEN" while writing-command, beacause otherwise the whole datasection and not only the string will be written 
+	SeekOrigin												: 	E_SeekOrigin := SEEK_SET; //Seek function parameter - Contains the relative position for the move.
+	SeekPos													:	DINT; //Seek function parameter - Contains the desired (new) target position of the file pointer.
+END_VAR
+VAR_OUTPUT
+	EOF														:	BOOL;	//This output is switched to TRUE if the end of file is reached.
+	WorkedLen												:	UDINT;	//Contains the number of bytes currently read or written
+	hFile													:	UINT;	//File handle of currently opened file
+	ActSeekPos												:	DINT;	//Act file pointer position of filled by Tell function
+	Line   													: T_MaxString; //Read line of file - filled by function Gets
+
+END_VAR
+VAR
+(* internal used variables ************************************************************)
+	MemErrorText											:	STRING(50);
+	MemFnc													:	INT := -1;
+	
+(* trigger ******************************************************************************)
+
+(* function-block instances ************************************************************)
+	File_Open												:	FB_FileOpen;
+	File_Close												: 	FB_FileClose;
+	File_Read 												: 	FB_FileRead;
+	File_Write												:	FB_FileWrite;
+	File_Delete												:	FB_FileDelete;
+	File_Rename												:	FB_FileRename;
+	File_Puts												:	FB_FilePuts;
+	File_Gets												:	FB_FileGets;
+	File_CreateDir											:	FB_CreateDir;
+	File_RemoveDir											:	FB_RemoveDir;
+	File_Tell												:	FB_FileTell ;
+	File_Seek												:	FB_FileSeek ;
+	File_EoF												:	FB_EOF;
+	File_Load												:	FB_FileLoad;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* FileHandling												V2.0	*)
+	(********************************************************************)
+
+(* Sequence **********************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		CASE fnc OF                     					
+		FNC_OPEN:		MemFnc 								:= fnc;
+		FNC_READ:		MemFnc 								:= fnc;
+		FNC_WRITE:		MemFnc 								:= fnc;
+		FNC_PUTS:		MemFnc 								:= fnc;
+		FNC_GETS:		MemFnc 								:= fnc;
+		FNC_CLOSE:		MemFnc 								:= fnc;
+		FNC_DELETE:		MemFnc 								:= fnc;
+		FNC_RENAME:		MemFnc 								:= fnc;
+		FNC_REMOVEDIR: 	MemFnc 								:= fnc;
+		FNC_CREATEDIR: 	MemFnc 								:= fnc;
+		FNC_SEEK:		MemFnc 								:= fnc;
+		FNC_TELL:		MemFnc 								:= fnc;
+		FNC_EOF:		MemFnc 								:= fnc;
+		FNC_LOAD:		MemFnc 								:= fnc;
+		ELSE                            					
+			ErrorId											:= E_AdsErr.DEVICE_INVALIDPARM;
+			Error											:= TRUE;
+			Done											:= FALSE;
+			Busy											:= FALSE;
+		END_CASE
+	END_IF
+
+	CASE MemFnc OF
+		FNC_OPEN:		Open(Execute := Execute);
+		FNC_READ:		Read(Execute := Execute);
+		FNC_WRITE:		Write(Execute := Execute);
+		FNC_PUTS:		Puts(Execute := Execute);
+		FNC_GETS:		Gets(Execute := Execute);
+		FNC_CLOSE:		Close(Execute := Execute);
+		FNC_DELETE:		Delete(Execute := Execute);
+		FNC_RENAME:		Rename(Execute := Execute);
+		FNC_REMOVEDIR: 	RemoveDir(Execute := Execute);
+		FNC_CREATEDIR: 	CreateDir(Execute := Execute);
+		FNC_SEEK:		Seek(Execute := Execute);
+		FNC_TELL:		Tell(Execute := Execute);
+		FNC_EOF:		IsEof(Execute := Execute);
+		FNC_LOAD:		Load(Execute := Execute);
+	
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+		END_IF
+	END_CASE
+(*************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="close" Id="{cd5ab46b-6f5d-4e2d-b2a6-ab614f5b6df9}">
+      <Declaration><![CDATA[METHOD PUBLIC close : Bool //Return value = TRUE if busy
+VAR_INPUT
+	Execute		:	BOOL	:= FALSE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Close.bExecute 								:= TRUE;
+	ELSIF NOT File_Close.bBusy      						
+	THEN                            						
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Close.bExecute 								:= FALSE;
+	END_IF                          						
+                                    	
+	MemFnc 													:= FNC_CLOSE;
+	THIS^.Execute											:= Execute;
+
+	File_Close(
+		sNetId		:= AMSNetId,
+		hFile		:= hFile,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	IF NOT File_Close.bBusy
+		AND NOT File_Close.bError
+		AND File_Close.bExecute
+	THEN
+		Done												:= TRUE;
+		hFile 												:= 0;
+	ELSE                            						
+		Done												:= FALSE;
+	END_IF
+
+	IF NOT Busy
+	THEN
+		IF File_Close.bExecute
+		THEN
+			Error											:=	File_Close.bError;
+			ErrorId											:= File_Close.nErrId;
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:=  -1;
+			File_Close(bExecute 							:= FALSE);
+		END_IF
+	END_IF
+
+	(* Fehler speichern *)
+	IF Error
+	THEN
+		MemErrorText										:= CONCAT('File_Close ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF
+	
+	Close													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="createDir" Id="{1455a7ed-60aa-4e5a-bceb-8a8023fcc8c7}">
+      <Declaration><![CDATA[METHOD PUBLIC createDir : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_CreateDir.bExecute 							:= TRUE;
+	ELSIF NOT File_CreateDir.bBusy      					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_CreateDir.bExecute								:= FALSE;
+	END_IF                              					
+                                        	
+	MemFnc 													:= FNC_CREATEDIR;
+	THIS^.Execute											:= Execute;
+
+	File_CreateDir(
+		sNetId		:= AMSNetId,
+		sPathName	:= Path,
+		ePath		:= ,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	Done													:= NOT File_CreateDir.bBusy
+																AND NOT File_CreateDir.bError
+																AND File_CreateDir.bExecute;
+	IF NOT Busy
+	THEN
+		IF File_CreateDir.bExecute
+		THEN
+			Error											:=	File_CreateDir.bError;
+			ErrorId											:= File_CreateDir.nErrId;
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:=  -1;
+			File_CreateDir(bExecute := FALSE);
+		END_IF
+	END_IF
+
+
+	IF Error
+	THEN
+		MemErrorText										:= CONCAT('File_CreateDir ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF
+	
+	CreateDir												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="delete" Id="{3bd714ec-5c89-4daa-98cd-d66f75ee1d78}">
+      <Declaration><![CDATA[METHOD PUBLIC delete : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+//FileName
+VAR_INPUT
+	Execute			:	bool;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Delete.bExecute 								:= TRUE;
+	ELSIF NOT File_Delete.bBusy         					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Delete.bExecute 								:= FALSE;
+	END_IF                              					
+                                        	
+	MemFnc 													:= FNC_DELETE;
+	THIS^.Execute											:= Execute;
+
+	File_Delete(
+		sNetId		:= AMSNetId,
+		sPathName	:= CONCAT(Path,FileName),
+		ePath		:= ,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	Done													:= 	NOT File_Delete.bBusy
+																AND NOT File_Delete.bError
+																AND File_Delete.bExecute;
+	IF NOT Busy
+	THEN
+		IF File_Delete.bExecute
+		THEN
+			Error											:=	File_Delete.bError;
+			ErrorId											:= File_Delete.nErrId;
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			File_Delete(bExecute := FALSE);
+		END_IF
+	END_IF
+
+
+	IF Error
+	THEN
+		MemErrorText										:= CONCAT('File_Delete ErrorID: ', UDINT_TO_STRING(ErrorID));
+	End_if
+	
+	Delete													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="gets" Id="{b070ed3b-0c91-4597-b6af-0502b090f4c7}">
+      <Declaration><![CDATA[METHOD PUBLIC gets : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+//Filename
+//Mode
+//pBuffer
+VAR_INPUT
+	Execute			:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pBuffer = 0 THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;                             					
+END_IF                                  					
+                                        					
+	MemFnc 													:= FNC_GETS;
+	THIS^.Execute											:= Execute;
+                                        					
+	CASE State OF                       	
+	0:                                  	
+		IF Execute                      	
+		THEN                            	
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId 										:= 0;
+			
+			File_Open(bExecute := FALSE);
+			File_Gets(bExecute := FALSE);
+			File_Close(bExecute := FALSE);
+			
+			EOF												:= FALSE;
+			WorkedLen										:= 0;
+			
+			IF hFile = 0
+			THEN
+				File_Open(
+					sNetId		:= AMSNetId,
+					sPathName	:= CONCAT(Path,FileName),
+					nMode		:= Mode ,
+					ePath		:= (* Default *),
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> ,
+					hFile		=> );
+
+				State 										:= 10;
+			ELSE                							
+				State 										:= 10;
+			END_IF
+		ELSE
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId 										:= 0;
+		END_IF
+
+	10:
+		File_Open();
+
+		IF NOT File_Open.bBusy
+		THEN
+			IF File_Open.bError
+			THEN
+				State 										:= 99;
+			ELSE
+				IF File_Open.bExecute THEN hFile := File_Open.hFile; END_IF
+				File_Gets(
+					sNetId		:= AMSNetId,
+					hFile		:= hFile,
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					sLine		=> ,
+					bEOF		=> ,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> );
+
+				State 										:= 20;
+			END_IF
+		END_IF
+
+	20:
+		File_Gets(bEOF		=> EOF);
+		IF NOT File_Gets.bBusy
+		THEN
+			IF NOT File_Gets.bError
+			THEN
+				IF pBuffer <> 0 AND Length <> 0
+				THEN
+					 MEMCPY(pBuffer , ADR(File_Gets.sLine), MIN(TO_UDINT(Length), SIZEOF(File_Gets.sLine)));
+				END_IF
+				Line										:= File_Gets.sLine;
+			END_IF
+			IF File_Open.bExecute
+			THEN
+				File_Close(
+					sNetId	:= AMSNetId,
+					hFile	:= hFile,
+					bExecute:= TRUE,
+					tTimeout:= Timeout,
+					bBusy	=> ,
+					bError	=> ,
+					nErrId	=> );
+				State										:= 30;
+			ELSE
+				State										:= 99;
+			END_IF
+
+		END_IF
+
+	30:
+		File_Close();
+		IF NOT File_Close.bBusy
+		THEN
+			hFile											:= 0;
+			State											:= 99;
+		END_IF
+
+	99:
+		IF NOT Execute
+		THEN
+			Memfnc											:= -1;
+			state 											:= 0;
+		END_IF
+	END_CASE
+
+	Done													:= state = 99
+																AND NOT File_Gets.bError
+																AND NOT File_Close.bError
+																AND NOT File_Open.bError;
+                                        					
+	Error													:= state = 99
+																AND(
+																File_Gets.bError
+																OR File_Close.bError
+																OR File_Open.bError);
+                                        					
+	Busy													:= state <> 0
+																AND NOT Done
+																AND NOT Error;
+
+	IF Error
+	THEN
+		IF File_Close.bError 	THEN 	ErrorId :=  File_Close.nErrId; 	END_IF
+		IF File_Gets.bError 	THEN 	ErrorId :=  File_Gets.nErrId; 	END_IF
+		IF File_Open.bError 	THEN	ErrorId :=  File_Open.nErrId; 	END_IF
+	ELSE
+		ErrorId 											:= 0;
+	END_IF                              					
+                                        					
+	IF NOT Execute                      					
+		AND state = 99                  					
+	THEN                                					
+			MemFnc											:= -1;
+		state 												:= 0;
+	END_IF                              	
+                                        	
+	IF Error                            	
+	THEN                                	
+		MemErrorText										:= CONCAT('File_Gets ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF                              					
+                                        					
+	Gets													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isEoF" Id="{50c59296-53fe-41a7-b5cf-ea865c2cb091}">
+      <Declaration><![CDATA[METHOD PUBLIC isEoF : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_EoF.bExecute 									:= TRUE;
+	ELSIF NOT File_EoF.bBusy           					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_EoF.bExecute 									:= FALSE;
+	END_IF                              							
+	                                    	
+	MemFnc 													:= FNC_EOF;
+	THIS^.Execute											:= Execute;
+                                        	
+	File_EoF(
+		sNetId		:= AMSNetId,
+		hFile		:= hFile ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> ,
+		bEoF		=> EoF);
+
+	Done													:= NOT File_EoF.bBusy
+																AND NOT File_EoF.bError
+																AND File_EoF.bExecute;
+	IF NOT Busy                         					
+	THEN                        					
+		IF File_EoF.bExecute           					
+		THEN                            	
+			Error											:=	File_EoF.bError;
+			ErrorId											:= File_EoF.nErrId;
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= 1;
+			File_EoF(bExecute := FALSE);
+		END_IF
+	END_IF
+
+
+	IF Error
+	THEN
+		MemErrorText										:= CONCAT('File_EoF ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF
+	
+	IsEoF													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="load" Id="{7872904f-a641-4cd0-8949-1440284204c2}">
+      <Declaration><![CDATA[METHOD PUBLIC load : BOOL //Result = Busy
+//required parameter
+//Path
+//FileName
+VAR_INPUT
+	Execute				:	BOOL; 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Execute
+THEN
+	Error													:= FALSE;
+	ErrorId													:= 0;
+	File_Load.bExecute 										:= TRUE;
+ELSIF NOT File_Load.bBusy           						
+THEN                                						
+	Error													:=	FALSE;
+	ErrorId													:= 0;
+	File_Load.bExecute 										:= FALSE;
+END_IF	
+
+MemFnc 														:= FNC_LOAD;
+THIS^.Execute												:= Execute;
+
+(* Work File Load *)
+File_Load(
+	sNetId		:= AMSNetId, 
+	sPathName	:= CONCAT(Path,FileName), 
+	pReadBuff	:= pBuffer, 
+	cbReadLen	:= Length, 
+	bExecute	:= , 
+	tTimeout	:= Timeout, 
+	bBusy		=> Busy, 
+	bError		=> , 
+	nErrId		=> , 
+	cbRead		=> WorkedLen);
+Done														:= NOT File_Load.bBusy
+																AND NOT File_Load.bError
+																AND File_Load.bExecute;
+IF NOT Busy
+THEN
+	IF File_Load.bExecute
+	THEN
+		Error												:= File_Load.bError;
+		ErrorId												:= File_Load.nErrId;
+	END_IF
+	IF NOT Execute
+	THEN
+		MemFnc												:= -1;
+		File_Load(bExecute := FALSE);
+	END_IF
+END_IF
+
+IF Error
+THEN
+	MemErrorText											:= CONCAT('File_Load ErrorID: ', UDINT_TO_STRING(ErrorID));
+END_IF                              						
+                                    	
+load														:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="open" Id="{69b46970-de1a-4b34-b124-bea538e5f1d0}">
+      <Declaration><![CDATA[METHOD PUBLIC open : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+//FileName
+//Mode
+VAR_INPUT
+	Execute				:	BOOL; 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Execute
+THEN
+	Error													:= FALSE;
+	ErrorId													:= 0;
+	File_Open.bExecute 										:= TRUE;
+ELSIF NOT File_Open.bBusy           						
+THEN                                						
+	Error													:=	FALSE;
+	ErrorId													:= 0;
+	File_Open.bExecute 										:= FALSE;
+END_IF	
+
+MemFnc 														:= FNC_OPEN;
+THIS^.Execute												:= Execute;
+
+(* Work File Open *)
+File_Open(
+	sNetId		:= AMSNetId,
+	sPathName	:= CONCAT(Path,FileName),
+	nMode		:= Mode ,
+	ePath		:= (* Default *),
+	bExecute	:= ,
+	tTimeout	:= Timeout,
+	bBusy		=> Busy,
+	bError		=> ,
+	nErrId		=> ,
+	hFile		=> hFile);
+
+Done														:= NOT File_Open.bBusy
+																AND NOT File_Open.bError
+																AND File_Open.bExecute;
+IF NOT Busy
+THEN
+	IF File_Open.bExecute
+	THEN
+		Error												:=	File_Open.bError;
+		ErrorId												:= File_Open.nErrId;
+	END_IF
+	IF NOT Execute
+	THEN
+		MemFnc												:= -1;
+		File_Open(bExecute := FALSE);
+	END_IF
+END_IF
+
+IF Error
+THEN
+	MemErrorText											:= CONCAT('File_Open ErrorID: ', UDINT_TO_STRING(ErrorID));
+END_IF                              						
+                                    	
+Open														:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="puts" Id="{34d35e64-c0c8-4e52-97d2-34f8c83e716b}">
+      <Declaration><![CDATA[METHOD PUBLIC puts : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+//FileName
+//Mode
+//pBuffer
+//Lenght
+VAR_INPUT
+	Execute				:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pBuffer = 0 THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;
+END_IF
+
+	MemFnc 													:= FNC_PUTS;
+	THIS^.Execute											:= Execute;
+
+	CASE State OF
+	0:
+		IF Execute
+		THEN
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId 										:= 0;
+			
+			File_Open(bExecute := FALSE);
+			File_Puts(bExecute := FALSE);
+			File_Close(bExecute := FALSE);
+			
+			EOF												:= FALSE;
+			WorkedLen										:= 0;
+			
+			IF hFile = 0
+			THEN
+				File_Open(
+					sNetId		:= AMSNetId,
+					sPathName	:= CONCAT(Path,FileName),
+					nMode		:= Mode ,
+					ePath		:= (* Default *),
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> ,
+					hFile		=> );
+
+				State 										:= 10;
+			ELSE                							
+				State 										:= 10;
+			END_IF              							
+		ELSE                    							
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId 										:= 0;
+		END_IF
+
+	10:
+		File_Open();
+
+		IF NOT File_Open.bBusy
+		THEN
+			IF File_Open.bError
+			THEN
+				State 										:= 99;
+			ELSE
+				IF File_Open.bExecute THEN hFile := File_Open.hFile; END_IF
+				MEMCPY(ADR(File_Puts.sLine),  pBuffer, MIN(TO_UDINT(Length), SIZEOF(File_Puts.sLine)));
+				File_Puts(
+					sNetId		:= AMSNetId,
+					hFile		:= hFile,
+					sLine		:= (* siehe oben *),
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> );
+
+				State 										:= 20;
+			END_IF
+		END_IF
+
+	20:
+		MEMCPY(ADR(File_Puts.sLine),  pBuffer, MIN(TO_UDINT(Length), SIZEOF(File_Puts.sLine)));
+		File_Puts();
+
+		IF NOT File_Puts.bBusy
+		THEN
+			IF File_Open.bExecute
+			THEN
+				File_Close(
+					sNetId	:= AMSNetId,
+					hFile	:= hFile,
+					bExecute:= TRUE,
+					tTimeout:= Timeout,
+					bBusy	=> ,
+					bError	=> ,
+					nErrId	=> );
+				State										:= 30;
+			ELSE
+				State										:= 99;
+			END_IF
+
+		END_IF
+
+	30:
+		File_Close();
+		IF NOT File_Close.bBusy
+		THEN
+			hFile						:= 0;
+			State						:= 99;
+		END_IF
+
+	99:
+		IF NOT Execute
+		THEN
+			Memfnc					:= -1;
+			state 					:= 0;
+		END_IF
+	END_CASE
+
+	Done							:= state = 99
+										AND NOT File_Puts.bError
+										AND NOT File_Close.bError
+										AND NOT File_Open.bError;
+
+	Error							:= state = 99
+										AND(
+										File_Puts.bError
+										OR File_Close.bError
+										OR File_Open.bError);
+
+	Busy							:= state <> 0
+										AND NOT Done
+										AND NOT Error;
+
+	IF Error
+	THEN
+		IF File_Close.bError 	THEN	ErrorId :=  File_Close.nErrId; 	END_IF
+		IF File_Puts.bError 	THEN 	ErrorId :=  File_Puts.nErrId; 	END_IF
+		IF File_Open.bError 	THEN 	ErrorId :=  File_Open.nErrId;	END_IF
+	ELSE
+		ErrorId 					:= 0;
+	END_IF
+
+	IF NOT Execute
+		AND state = 99
+	THEN
+		MemFnc						:= -1;
+		state 						:= 0;
+	END_IF
+
+	IF Error
+	THEN
+		MemErrorText				:= CONCAT('File_Puts ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF
+	
+	Puts							:= Busy;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="read" Id="{e3159707-cb10-4ed1-9ecf-e0cb39297e5b}">
+      <Declaration><![CDATA[METHOD PUBLIC read : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+//FileName
+//Mode
+//pBuffer
+//Lenght
+VAR_INPUT
+	Execute			:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pBuffer = 0 THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;                             					
+END_IF                                  					
+                                        	
+	MemFnc 													:= FNC_READ;
+	THIS^.Execute											:= Execute;
+
+	CASE State OF
+	0:
+		IF Execute
+		THEN
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId 										:= 0;
+			
+			File_Open(bExecute := FALSE);
+			File_Read(bExecute := FALSE);
+			File_Close(bExecute := FALSE);
+			
+			EOF												:= FALSE;
+			WorkedLen										:= 0;
+			
+			IF hFile = 0
+			THEN
+				File_Open(
+					sNetId		:= AMSNetId,
+					sPathName	:= CONCAT(Path,FileName),
+					nMode		:= Mode ,
+					ePath		:= (* Default *),
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> ,
+					hFile		=> );
+
+				State 										:= 10;
+			ELSE                    						
+				State 										:= 10;
+			END_IF                  						
+		ELSE                        						
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId 										:= 0;
+		END_IF
+
+	10:
+		File_Open();
+		IF NOT File_Open.bBusy
+		THEN
+			IF File_Open.bError
+			THEN
+				State 										:= 99;
+			ELSE
+				IF File_Open.bExecute THEN hFile := File_Open.hFile; END_IF
+				File_Read(
+					sNetId		:= AmsNetId,
+					hFile		:= hFile,
+					pReadBuff	:= pBuffer,
+					cbReadLen	:= Length,
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> ,
+					cbRead		=> ,
+					bEOF		=> );
+
+				State 										:= 20;
+			END_IF
+		END_IF
+
+	20:
+		File_Read(
+			pReadBuff	:= pBuffer,
+			cbReadLen	:= Length,
+			bExecute	:= TRUE,
+			cbRead		=> WorkedLen,
+			bEOF		=> EOF);
+
+		IF NOT File_Read.bBusy
+		THEN
+			IF File_Open.bExecute
+			THEN
+				File_Close(
+					sNetId	:= AMSNetId,
+					hFile	:= hFile,
+					bExecute:= TRUE,
+					tTimeout:= Timeout,
+					bBusy	=> ,
+					bError	=> ,
+					nErrId	=> );
+				State										:= 30;
+			ELSE                        						
+				State										:= 99;
+			END_IF                      						
+                                        						
+		END_IF                          						
+                                        						
+	30:                                 						
+		File_Close();                   						
+		IF NOT File_Close.bBusy         						
+		THEN                            						
+			hFile											:= 0;
+			State											:= 99;
+		END_IF                          						
+                                        						
+	99:                                 						
+		IF NOT Execute                  						
+		THEN                            				
+			Memfnc											:= -1;
+			state 											:= 0;
+		END_IF                          	
+	END_CASE                            	
+                                        	
+	Done													:= state = 99
+																AND NOT File_Read.bError
+																AND NOT File_Close.bError
+																AND NOT File_Open.bError;
+	                                    						
+	Error													:= state = 99
+																AND(
+																File_Read.bError
+																OR File_Close.bError
+																OR File_Open.bError);
+	                                    						
+	Busy													:= state <> 0
+																AND NOT Done
+																AND NOT Error;
+
+	IF Error
+	THEN
+		IF File_Close.bError	THEN 	ErrorId :=  File_Close.nErrId;	END_IF
+		IF File_Read.bError 	THEN	ErrorId :=  File_Read.nErrId; 	END_IF
+		IF File_Open.bError		THEN	ErrorId :=  File_Open.nErrId; 	END_IF
+	ELSE
+		ErrorId 											:= 0;
+	END_IF                              						
+                                        						
+	IF NOT Execute                      						
+		AND state = 99                  						
+	THEN                                						
+		MemFnc												:=  -1;
+		state 												:= 0;
+	END_IF                              	
+                                        	
+	IF Error                            	
+	THEN                                	
+		MemErrorText										:= CONCAT('File_Read ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF                              						
+	                                    						
+	Read													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="removeDir" Id="{63d40121-76ec-4ffe-957f-bb3d9f657012}">
+      <Declaration><![CDATA[METHOD PUBLIC removeDir : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+VAR_INPUT
+	Execute				:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		File_RemoveDir.bExecute 							:= TRUE;
+	ELSIF NOT File_RemoveDir.bBusy      					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_RemoveDir.bExecute 							:= FALSE;
+	END_IF                              					
+                                        	
+	MemFnc 													:= FNC_REMOVEDIR;
+	THIS^.Execute											:= Execute;
+
+	File_RemoveDir(
+		sNetId		:= AMSNetId,
+		sPathName	:= Path,
+		ePath		:= ,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	Done													:= NOT File_RemoveDir.bBusy
+																AND NOT File_RemoveDir.bError
+																AND File_RemoveDir.bExecute;
+	IF NOT Busy                         					
+	THEN                                					
+		IF File_RemoveDir.bExecute      					
+		THEN                            					
+			Error											:=	File_RemoveDir.bError;
+			ErrorId											:= File_RemoveDir.nErrId;
+		END_IF                          	
+		IF NOT Execute                  	
+		THEN                            	
+			MemFnc											:=  -1;
+			File_RemoveDir(bExecute := FALSE);
+		END_IF
+	END_IF
+
+
+	IF Error
+	THEN
+		MemErrorText										:= CONCAT('File_RemoveDir ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF                              					
+	                                    	
+	RemoveDir												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="rename" Id="{ab728d1f-b119-47c6-8524-fe87bbbb2d24}">
+      <Declaration><![CDATA[METHOD PUBLIC rename : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+//OldFileName
+//FileName
+VAR_INPUT
+	Execute			:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Rename.bExecute 								:= TRUE;
+	ELSIF NOT File_Rename.bBusy         					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Rename.bExecute 								:= FALSE;
+	END_IF                              					
+                                        	
+	MemFnc 													:= FNC_RENAME;
+	THIS^.Execute											:= Execute;
+
+	File_Rename(
+		sNetId		:= AMSNetId,
+		sOldName	:= CONCAT(Path,OldFileName),
+		sNewName	:= CONCAT(Path,FileName),
+		ePath		:= ,
+		bExecute	:=	,
+		tTimeout	:=	Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	Done													:= NOT File_Rename.bBusy
+																AND NOT File_Rename.bError
+																AND File_Rename.bExecute;
+	IF NOT Busy                         					
+	THEN                                					
+		IF File_Rename.bExecute         					
+		THEN                            	
+			Error											:=	File_Rename.bError;
+			ErrorId											:= File_Rename.nErrId;
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= -1;
+			File_Rename(bExecute := FALSE);
+		END_IF
+	END_IF
+
+
+	IF Error
+	THEN
+		MemErrorText										:= CONCAT('File_Rename ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF
+	
+	Rename													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="seek" Id="{c398125a-e9db-42c0-bac6-3f6f75a7f3c1}">
+      <Declaration><![CDATA[METHOD PUBLIC seek : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+//SeekPos
+//SeekOrigin
+VAR_INPUT
+	Execute			:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Seek.bExecute 									:= TRUE;
+	ELSIF NOT File_Seek.bBusy           					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Seek.bExecute 									:= FALSE;
+	END_IF                              							
+	                                    	
+	MemFnc 													:= FNC_SEEK;
+	THIS^.Execute											:= Execute;
+                                        	
+	File_Seek(
+		sNetId		:= AMSNetId,
+		hFile		:= hFile ,
+		nSeekPos	:= SeekPos,
+		eOrigin		:= SeekOrigin,
+		bExecute	:= ,
+		tTimeout	:= Timeout,
+		bBusy		=> Busy,
+		bError		=> ,
+		nErrId		=> );
+
+	Done													:= NOT File_Seek.bBusy
+																AND NOT File_Seek.bError
+																AND File_Seek.bExecute;
+	IF NOT Busy                         					
+	THEN                    
+		ActSeekPos											:= File_Seek.nSeekPos;           					
+		IF File_Seek.bExecute           					
+		THEN                            	
+			Error											:=	File_Seek.bError;
+			ErrorId											:= File_Seek.nErrId;
+		END_IF
+		IF NOT Execute
+		THEN
+			MemFnc											:= 1;
+			File_Seek(bExecute := FALSE);
+		END_IF
+	END_IF
+
+
+	IF Error
+	THEN
+		MemErrorText										:= CONCAT('File_Seek ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF
+	
+	Seek													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="tell" Id="{d63a1b22-867a-47d3-b1da-5c132b9f7283}">
+      <Declaration><![CDATA[METHOD PUBLIC tell : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	IF Execute
+	THEN
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Tell.bExecute 									:= TRUE;
+	ELSIF NOT File_Tell.bBusy           					
+	THEN                                					
+		Error												:=	FALSE;
+		ErrorId												:= 0;
+		File_Tell.bExecute 									:= FALSE;
+	END_IF                              					
+                                        					
+	MemFnc 													:= FNC_TELL;
+	THIS^.Execute											:= Execute;
+                                        			
+	File_Tell(                          			
+		sNetId		:= AMSNetId,        			
+		hFile		:= hFile ,          			
+		bExecute	:= ,                			
+		tTimeout	:= Timeout,         			
+		nSeekPos	=> ActSeekPos,      			
+		bBusy		=> Busy,            			
+		bError		=> ,                			
+		nErrId		=> );               			
+                                        			
+	Done														:= NOT File_Tell.bBusy
+																AND NOT File_Tell.bError
+																AND File_Tell.bExecute;
+	IF NOT Busy                         						
+	THEN                                						
+		IF File_Tell.bExecute           						
+		THEN                            						
+			Error												:=	File_Tell.bError;
+			ErrorId												:= File_Tell.nErrId;
+		END_IF                          						
+		IF NOT Execute                  						
+		THEN                            						
+			MemFnc												:= -1;
+			File_Tell(bExecute := FALSE);               	
+		END_IF                                          	
+	END_IF                                              	
+                                                        	
+                                                        	
+	IF Error                                            	
+	THEN                                                	
+		MemErrorText											:= CONCAT('File_Tell ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF                                              	
+	                                                    	
+	Tell 														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="write" Id="{5ce6f0d6-3bee-421f-baeb-130cb04845a1}">
+      <Declaration><![CDATA[METHOD PUBLIC write : BOOL //Return value = TRUE if busy
+//required parameter
+//Path
+//Filename
+//Mode
+//pBuffer
+//Length
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pBuffer = 0 THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Done													:= FALSE;
+	MemFnc													:= -1 ;
+	RETURN;                             					
+END_IF                                  					
+                                        					
+	MemFnc 													:= FNC_WRITE;
+	THIS^.Execute											:= Execute;
+                                        					
+	CASE State OF                       	
+	0:                                  	
+		IF Execute                      	
+		THEN                            	
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId 										:= 0;
+			
+			File_Open(bExecute := FALSE);
+			File_Write(bExecute := FALSE);
+			File_Close(bExecute := FALSE);	
+			
+			WorkedLen										:= 0;
+			
+			IF hFile = 0
+			THEN
+				File_Open(
+					sNetId		:= AMSNetId,
+					sPathName	:= CONCAT(Path,FileName),
+					nMode		:= Mode ,
+					ePath		:= (* Default *),
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> ,
+					hFile		=> );
+
+				State 										:= 10;
+			ELSE	                    					
+				State 										:= 10;
+			END_IF                      					
+		ELSE                            					
+			Done											:= FALSE;
+			Error											:= FALSE;
+			ErrorId 										:= 0;
+		END_IF
+
+	10:
+		File_Open(hFile		=> hFile);
+
+		IF NOT File_Open.bBusy
+		THEN
+			IF File_Open.bError
+			THEN
+				State 										:= 99;
+			ELSE
+				IF File_Open.bExecute THEN hFile := File_Open.hFile; END_IF
+				File_Write(
+					sNetId		:= AMSNetId,
+					hFile		:= hFile,
+					pWriteBuff	:= pBuffer,
+					cbWriteLen	:= Length,
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> ,
+					cbWrite		=> );
+				State 										:= 20;
+			END_IF
+		END_IF
+
+	20:
+		File_Write(
+			pWriteBuff	:= pBuffer,
+			cbWriteLen	:= Length,
+			bExecute	:= TRUE,
+			cbWrite		=> WorkedLen);
+
+		IF NOT File_Write.bBusy
+		THEN
+			IF File_Open.bExecute
+			THEN
+				File_Close(
+					sNetId		:= AMSNetId,
+					hFile		:= hFile,
+					bExecute	:= TRUE,
+					tTimeout	:= Timeout,
+					bBusy		=> ,
+					bError		=> ,
+					nErrId		=> );
+				State										:= 30;
+			ELSE  //Exit without closing the file as the file was opended externaly                     					
+				State										:= 99;
+			END_IF                  					
+		ELSE                            					
+			;                           					
+		END_IF                          					
+                                        	
+	30:                                 	
+		File_Close();                   	
+		IF NOT File_Close.bBusy         	
+		THEN                       	
+			hFile											:= 0;
+			State											:= 99;
+		END_IF
+
+	99:
+		IF NOT Execute
+		THEN	
+			Memfnc											:= -1;
+			state 											:= 0;
+		END_IF
+	END_CASE
+
+	Done													:= state = 99
+																AND NOT File_Write.bError
+																AND NOT File_Close.bError
+																AND NOT File_Open.bError;
+                                    						
+	Error													:= state = 99
+																AND(
+																File_Write.bError
+																OR File_Close.bError
+																OR File_Open.bError);
+                                    						
+	Busy													:= state <> 0
+																AND NOT Done
+																AND NOT Error;
+                                    					
+	IF Error
+	THEN
+		IF File_Close.bError 	THEN 	ErrorId :=  File_Close.nErrId;	END_IF
+		IF File_Write.bError 	THEN 	ErrorId :=  File_Write.nErrId;	END_IF
+		IF File_Open.bError 	THEN 	ErrorId :=  File_Open.nErrId; 	END_IF
+	ELSE
+		ErrorId 											:= 0;
+	END_IF                          						
+                                    						
+	IF NOT Execute                  						
+		AND state = 99              						
+	THEN                            						
+		MemFnc												:=  -1;
+		state 												:= 0;
+	END_IF                          						
+                                    	
+	IF Error                        	
+	THEN                            	
+		MemErrorText										:= CONCAT('File_Write ErrorID: ', UDINT_TO_STRING(ErrorID));
+	END_IF                          	
+	                                	
+	Write													:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

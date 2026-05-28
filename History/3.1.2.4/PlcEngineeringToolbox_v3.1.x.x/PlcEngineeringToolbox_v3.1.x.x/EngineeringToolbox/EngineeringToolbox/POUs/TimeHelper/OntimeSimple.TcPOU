@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="OntimeSimple" Id="{fe6321db-bef0-404c-8d33-98b46a30d352}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Simple ontime function, FB is not persistent as default and output as LTIME is limited to :LTIME#1000d15h23m12s34ms2us44ns
+FUNCTION_BLOCK OntimeSimple
+VAR_INPUT
+	IN 														: BOOL	:= FALSE;
+	ResetTrig 													: BOOL	:= FALSE;
+END_VAR         											
+VAR_OUTPUT      											
+	Q														: LTIME;
+END_VAR         											
+VAR             											
+	txSys													: 	TIME;
+	tx														:	DWORD;
+	last 													: 	DWORD;
+END_VAR         	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* read system time *)
+txSys 														:= TIME();
+tx 															:= TIME_TO_DWORD(txSys);
+
+(* make sure the first cycle works correctly *)
+IF ResetTrig 
+THEN
+	reset();
+ELSIF IN 
+THEN
+	(* add the current milliseconds *)
+	Q		 												:= TO_LTIME(tx - last)*1000000 + Q; //convert time ms to ns of LTIME
+ELSE
+	;
+END_IF;
+
+last 														:= tx;]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{7196fa36-c5e8-4a6f-a406-20386201dc09}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	Q	 													:= LTIME#0MS;
+	last 													:= tx;
+	reset													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="OntimeSimple">
+      <LineId Id="84" Count="15" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="OntimeSimple.reset">
+      <LineId Id="6" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

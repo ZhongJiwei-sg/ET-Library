@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="DWORD_TO_BINSTR_EXT" Id="{4af0aabc-44f2-43fe-ad48-a7cf26a278d5}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+FUNCTION DWORD_TO_BINSTR_EXT : T_MaxString //This function converts a decimal number into a binary string (base 2), where the digits are separated according to the selected mode 
+//e.g. 1111000011110000 -> 1111_0000_1111_0000 
+VAR_INPUT
+	In														: DWORD;//The decimal number requiring conversion.
+	Precision												: INT; //Minimum number of displayed digits (digits), filled up with 0 from left if significant digits are less then that
+	Mode													: INT; //1=Separate high and low word / 2=Separate bytes / 3=Separate nibbles /ELSE no separation | Separator = Param.DOWRD_TO_XXXSTR_EXT_SEPARATOR
+END_VAR
+VAR		
+	k														:	INT;											
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[DWORD_TO_BINSTR_EXT 										:= DWORD_TO_BINSTR(in,precision);
+
+CASE mode OF
+1:// Separate by low word and high word
+	DWORD_TO_BINSTR_EXT										:= INSERT_EXT(DWORD_TO_BINSTR_EXT, PARAM.XWORD_TO_XXXSTR_EXT_SEPARATOR ,16);
+	
+2://Separate by bytes
+	DWORD_TO_BINSTR_EXT										:= INSERT_EXT(DWORD_TO_BINSTR_EXT,PARAM.XWORD_TO_XXXSTR_EXT_SEPARATOR,8);
+	
+3://Separate by nibble
+	DWORD_TO_BINSTR_EXT										:= INSERT_EXT(DWORD_TO_BINSTR_EXT,PARAM.XWORD_TO_XXXSTR_EXT_SEPARATOR,4);
+END_CASE
+
+//Cut seperator at the end
+k 															:= LEN(DWORD_TO_BINSTR_EXT);
+IF k > 0 AND_THEN DWORD_TO_BINSTR_EXT[k-1] = PARAM.XWORD_TO_XXXSTR_EXT_SEPARATOR[0]
+THEN
+	DWORD_TO_BINSTR_EXT[k-1]								:= 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="DWORD_TO_BINSTR_EXT">
+      <LineId Id="138" Count="11" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="150" Count="4" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

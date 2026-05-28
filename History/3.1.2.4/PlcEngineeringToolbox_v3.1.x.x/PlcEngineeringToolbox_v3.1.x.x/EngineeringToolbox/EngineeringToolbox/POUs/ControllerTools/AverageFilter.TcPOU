@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AverageFilter" Id="{48cfc97c-e9b1-41f1-ba51-69be3fe79492}" SpecialFunc="None">
+    <Declaration><![CDATA[//LREAL average filter
+FUNCTION_BLOCK AverageFilter
+VAR_INPUT	
+	IN														: LREAL;		// Adds value for average calculation
+END_VAR
+VAR_OUTPUT
+	Q														: LREAL:=0.0;	// Result of average calculation
+	Valid													: BOOL:=FALSE;	// Is TRUE once a value is inserted
+END_VAR         											
+VAR             											
+	Total													: LREAL:=0.0;
+	Count													: LREAL:=0;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Insert(IN);
+]]></ST>
+    </Implementation>
+    <Method Name="clear" Id="{65255996-d613-4b5c-8168-5ad802a98d02}">
+      <Declaration><![CDATA[METHOD PUBLIC clear : booL; //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q:=Total	:=0.0;
+Valid		:=FALSE;
+Count		:=0.0;
+Clear		:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="insert" Id="{c7f0bd30-a4a0-40e3-a4b5-6e8af2e34e9e}">
+      <Declaration><![CDATA[METHOD PUBLIC insert : LREAL //Result = actual average value
+VAR_INPUT
+	Value								:	LREAL ;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Total		:=Total+Value;
+Count		:=Count+1.0;
+Q			:=Total/Count;
+Valid		:=TRUE;
+Insert 		:= Q;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="AverageFilter">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AverageFilter.clear">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AverageFilter.insert">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

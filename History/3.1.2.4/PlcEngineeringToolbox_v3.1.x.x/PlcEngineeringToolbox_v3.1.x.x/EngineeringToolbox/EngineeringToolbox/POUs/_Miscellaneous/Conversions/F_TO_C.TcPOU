@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="F_TO_C" Id="{39138260-d853-4518-808f-1b11a35f75dd}" SpecialFunc="None">
+    <Declaration><![CDATA[//Convert Fahrenheit into Celsius
+FUNCTION F_TO_C : LREAL
+VAR_INPUT
+	F														:	LREAL; //Fahrenheit
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[F_TO_C := (F - 32.0) * 0.5555555555555;]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="polynomial" Id="{cc0d9fa6-4dec-488b-87c3-5a8e9f197130}" SpecialFunc="None">
+    <Declaration><![CDATA[//calculate polynomial of certain degree
+// y := p0 + p1*x^1 + p2*x^2 + p3*x^3 + p4*x^4 + p5*x^5 + p6*x^6 + p7*x^7 + p8*x^8;
+FUNCTION polynomial : LREAL 							
+VAR_INPUT
+	X			: LREAL;
+	Degree		: INT;
+
+	p0			: LREAL;
+	p1			: LREAL;
+	p2			: LREAL;
+	p3			: LREAL;
+	p4			: LREAL;
+	p5			: LREAL;
+	p6			: LREAL;
+	p7			: LREAL;
+	p8			: LREAL;
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+IF degree >= 0 THEN Polynomial := 				p0 			  ; 	ELSE RETURN; END_IF
+IF degree >= 1 THEN Polynomial := Polynomial + 	p1 * EXPT(x,1); 	ELSE RETURN; END_IF
+IF degree >= 2 THEN Polynomial := Polynomial + 	p2 * EXPT(x,2); 	ELSE RETURN; END_IF
+IF degree >= 3 THEN Polynomial := Polynomial + 	p3 * EXPT(x,3); 	ELSE RETURN; END_IF
+IF degree >= 4 THEN Polynomial := Polynomial + 	p4 * EXPT(x,4); 	ELSE RETURN; END_IF
+IF degree >= 5 THEN Polynomial := Polynomial + 	p5 * EXPT(x,5); 	ELSE RETURN; END_IF
+IF degree >= 6 THEN Polynomial := Polynomial + 	p6 * EXPT(x,6); 	ELSE RETURN; END_IF
+IF degree >= 7 THEN Polynomial := Polynomial + 	p7 * EXPT(x,7); 	ELSE RETURN; END_IF
+IF degree >= 8 THEN Polynomial := Polynomial + 	p8 * EXPT(x,8); 	ELSE RETURN; END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="polynomial">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

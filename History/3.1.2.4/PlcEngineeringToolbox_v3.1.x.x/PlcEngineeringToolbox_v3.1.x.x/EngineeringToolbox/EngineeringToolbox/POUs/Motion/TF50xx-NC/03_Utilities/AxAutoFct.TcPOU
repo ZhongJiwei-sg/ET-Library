@@ -1,0 +1,258 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxAutoFct" Id="{e2492fa4-709d-4189-919d-bf30d0b41111}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK AxAutoFct
+VAR_INPUT
+	Enable													:	BOOL := FALSE;(* Enable block *)
+	AutoInit												:	BOOL := TRUE; (* TRUE=With Enable force status will be written to axis / FALSE=Force values will only be written on change *) 
+	AxisId													: 	DWORD; (* ID der Achse *)
+	ForceSoftLimit											:	BOOL := TRUE; (* TRUE => SoftLimitMonitoring = True *)
+	ForceCalibration										:	BOOL := FALSE;(* TRUE => Calibrated = True  *)
+	ForcePosLagMon											:	BOOL := TRUE; (* TRUE => Position Lag Monitoring = True  *)
+	ForcePosMon												:	BOOL := TRUE; (* TRUE => In Position Monitoring = True  *)
+	ForceTargetMon											:	BOOL := TRUE; (* TRUE => In Target Monitoring = True  *)
+END_VAR                         							
+VAR_IN_OUT                      							
+END_VAR                         							
+VAR_OUTPUT        
+	{attribute 'displaymode':='binary'}              							
+	Status													:	BYTE := 0;
+	Busy													:	BOOL := FALSE;
+	Error													:	BOOL := FALSE;
+	ErrorID													:	UDINT := 0;
+END_VAR                         	
+
+VAR
+(* Cache **********************************************************************)
+	State													: 	INT;
+	InitDone												:	BYTE;
+	LastErrText												:	STRING(20);
+	
+(* Instances *******************************************************************)
+	WriteAdsPara											: 	ADSWRITE := (NetID:= '' , Port:=AMSPORT_R0_NC, TmOut	:= DEFAULT_ADS_TIMEOUT);
+
+(* Dummy  *********************************************************************)
+	tmpWORD													:	UINT;
+
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Enable/Disable of: Soft limit monitoring, Target monitoring, Pos. Lag monitoring,  Calibration 	*)
+	(*																									*)
+	(****************************************************************************************************)
+
+(* writing parameters *******************************************************************************)
+IF NOT Enable 
+THEN
+	Status.0 												:= NOT forceSoftLimit;
+	Status.1 												:= NOT forceCalibration;
+	Status.2 												:= NOT forcePosLagMon;
+	Status.3 												:= NOT forcePosMon;
+	Status.4 												:= NOT forceTargetMon;
+	            											
+	InitDone 												:= SEL(AutoInit , 2#0001_1111 , 2#0000_0000);
+                											
+	State 													:= 0;
+	Error													:= FALSE;
+	ErrorID													:= 0;
+	Busy 													:= FALSE;
+ELSIF AxisId = 0 
+THEN
+	ErrorID													:= E_AdsErr.DEVICE_INVALIDPARM;
+	Error													:= FALSE;
+	Busy													:= FALSE;
+ELSE
+	CASE State OF
+	0:	(* Init *)
+
+		Busy := FALSE;
+
+		IF NOT WriteAdsPara.BUSY
+			AND NOT WriteAdsPara.WRITE
+		 	AND NOT Error
+		THEN
+			IF (forceSoftLimit XOR status.0) OR NOT InitDone.0 THEN
+				InitDone.0 									:= TRUE;
+				status.0 									:= forceSoftLimit;
+				tmpWord 									:= BOOL_TO_UINT(forceSoftLimit);
+				State 										:= 1;
+				Busy 										:= TRUE;
+
+			ELSIF(forceCalibration XOR status.1) OR NOT InitDone.1 THEN
+				InitDone.1 									:= TRUE;
+				status.1 									:= forceCalibration;
+				tmpWord 									:= BOOL_TO_UINT(forceCalibration);
+				State 										:= 10;
+				Busy 										:= TRUE;
+	
+			ELSIF(forcePosLagMon XOR status.2) OR NOT InitDone.2 THEN
+				InitDone.2 									:= TRUE;
+				status.2 									:= forcePosLagMon;
+				tmpWord 									:= BOOL_TO_UINT(forcePosLagMon);
+				State 										:= 20;
+				Busy 										:= TRUE;
+			ELSIF(forcePosMon XOR status.3) OR NOT InitDone.3 THEN
+				InitDone.3 									:= TRUE;
+				status.3 									:= forcePosMon;
+				tmpWord 									:= BOOL_TO_UINT(forcePosMon);
+				State 										:= 30;
+				Busy 										:= TRUE;
+			ELSIF(forceTargetMon XOR status.4) OR NOT InitDone.4 THEN
+				InitDone.4 									:= TRUE;
+				status.4 									:= forceTargetMon;
+				tmpWord 									:= BOOL_TO_UINT(forceTargetMon);
+				State 										:= 40;
+				Busy 										:= TRUE;
+		
+			END_IF
+		ELSE
+			WriteAdsPara	(Write := FALSE);
+		END_IF
+
+	1: (* toggle positive limit switches ****************************************************************)
+		IF NOT WriteAdsPara.Busy
+			AND WriteAdsPara.Write
+		THEN
+			IF WriteAdsPara.Err THEN
+				State 										:= 9999;  // goto Error-state 
+			ELSE           									
+				State 										:= State + 1;
+			END_IF         	
+		END_IF
+
+		WriteAdsPara(
+			IdxGrp	:=16#4000+AxisId,
+			IdxOffs	:=16#1000C,
+			LEN		:=SIZEOF(tmpWord),
+			SrcAddr	:=ADR(tmpWord),
+			Write 	:= State = 1);
+
+	2: (* toggle negative limit switches *****************************************************************)
+		IF NOT WriteAdsPara.Busy
+			AND WriteAdsPara.Write
+		THEN
+			IF WriteAdsPara.Err THEN
+				State 										:= 9999; // goto Error-state 
+			ELSE
+				State 										:= 99; // done 
+			END_IF
+		END_IF
+
+		WriteAdsPara(
+			IdxGrp	:=16#4000+AxisId,
+			IdxOffs	:=16#1000B,
+			LEN		:=SIZEOF(tmpWord),
+			SrcAddr	:=ADR(tmpWord),
+			Write 	:= State = 2);
+
+	10: (* set referenceflag *****************************************************************)
+		IF NOT WriteAdsPara.Busy
+			AND WriteAdsPara.Write
+		THEN
+			IF WriteAdsPara.Err THEN
+				State 										:= 9999;  	// goto Error-state 
+			ELSE           									
+				State 										:= 99; 		// done 
+			END_IF
+		END_IF
+
+		WriteAdsPara(
+			IdxGrp	:=16#5100+AxisId,
+			IdxOffs	:=16#9,
+			LEN		:=SIZEOF(tmpWord),
+			SrcAddr	:=ADR(tmpWord),
+			Write 	:= State = 10 );
+			
+	20: (* lagdistance monitoring *****************************************************************)
+		IF NOT WriteAdsPara.Busy
+			AND WriteAdsPara.Write
+		THEN
+			IF WriteAdsPara.Err THEN
+				State 										:= 9999;  	// goto Error-state 
+			ELSE           									
+				State 										:= 99; 		// done
+			END_IF
+		END_IF
+
+		WriteAdsPara(
+			IdxGrp	:=16#6000+AxisId,
+			IdxOffs	:=16#10,
+			LEN		:=SIZEOF(tmpWord),
+			SrcAddr	:=ADR(tmpWord),
+			Write 	:= State = 20);
+			
+	30: (* Position Monitoring *****************************************************************)
+		IF NOT WriteAdsPara.Busy
+			AND WriteAdsPara.Write
+		THEN
+			IF WriteAdsPara.Err THEN
+				State 										:= 9999;  	// goto Error-state 
+			ELSE           									
+				State 										:= 99; 		// done
+			END_IF
+		END_IF
+
+		WriteAdsPara(
+
+			IdxGrp	:=16#4000+AxisId,
+			IdxOffs	:=16#F,
+			LEN		:=SIZEOF(tmpWord),
+			SrcAddr	:=ADR(tmpWord),
+			Write 	:= State = 30 );
+
+	40: (* Target Monitoring *****************************************************************)
+		IF NOT WriteAdsPara.Busy
+			AND WriteAdsPara.Write
+		THEN
+			IF WriteAdsPara.Err THEN
+				State 										:= 9999;  	// goto Error-state 
+			ELSE           									
+				State 										:= 99; 		// done
+			END_IF
+		END_IF
+
+		WriteAdsPara(
+			IdxGrp	:=16#4000+AxisId,
+			IdxOffs	:=16#15,
+			LEN		:=SIZEOF(tmpWord),
+			SrcAddr	:=ADR(tmpWord),
+			Write 	:= State = 40 );
+			
+	ELSE (* case else *)
+		IF WriteAdsPara.ERR THEN
+			Error											:= TRUE;
+			ErrorID											:= WriteAdsPara.ERRID;
+			LastErrText										:= CONCAT('Err WriteAdsPara ID: ', UDINT_TO_STRING(ErrorID));
+		ELSE            									
+			State 											:= 0;
+		END_IF
+	END_CASE
+END_IF
+
+(************************************************************************************************************************)]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxAutoFct">
+      <LineId Id="3" Count="191" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

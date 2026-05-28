@@ -1,0 +1,176 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EventHandlingGrp50" Id="{adc83239-8125-4283-9b83-bb42ff07a577}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Event group with single source id - for a convenient control of <MAX_EVENTS>
+//Each single event handling FB is accessible, so that signal flag, information text and alarm class could be used
+FUNCTION_BLOCK EventHandlingGrp50
+VAR_OUTPUT CONSTANT
+	MIN_EVENT												:	INT := 1; 
+	MAX_EVENT												:	INT := 50;
+END_VAR                                                 	
+VAR_INPUT                                               	
+	ConfirmTrig												:	BOOL := FALSE; //Acknowledge event
+	SourceId												: 	UDINT := 0; //Source id for all events of this group
+	no														:	ARRAY [MIN_EVENT..MAX_EVENT] OF EventHandling; //Array of single event handling FBs 
+	Disable													:	BOOL := FALSE; //Disable all events 
+	AutoConfirm												:	BOOL := FALSE; //All events will be acknowledged if flag is gone *)
+	SetClass												:	E_TcEventClass := TC2_SYSTEM.TCEVENTCLASS_ALARM;// if set class is <> ALARM -> all events set to this Eventclass
+	MsgOffset												:	INT := 0; //Offset to change default message id to MIN_EVENT to MsgOffset
+END_VAR                                                 	
+VAR_OUTPUT    
+{attribute 'displaymode':='binary'}
+	Status													:	DWORD; (*	.0 - .8 = event of <class id> is active / .15 confirm required / .16 = Level 0 , .17 = Level 1 , .18 = Level 2, ..........
+																			TCEVENTCLASS_NONE			:=0,	(* No class *)
+																			TCEVENTCLASS_MAINTENANCE	:=1,	(* Maintenance hint *)
+																			TCEVENTCLASS_MESSAGE		:=2,	(* Message *)
+																			TCEVENTCLASS_HINT			:=3,	(* Hint *)
+																			TCEVENTCLASS_STATEINFO		:=4,	(* State information *)
+																			TCEVENTCLASS_INSTRUCTION	:=5,	(* Instruction *)
+																			TCEVENTCLASS_WARNING		:=6,	(* Warning *)
+																			TCEVENTCLASS_ALARM			:=7,	(* Alarm *)
+																			TCEVENTCLASS_PARAMERROR		:=8		(* Parameter error *)  *)
+	NoOfActiveEvents										:	INT;
+END_VAR                                                 	
+VAR                                                     	
+	_Mem													:	BYTE;
+	Disabled												:	BOOL;
+	i 														:	INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EventHandlingGrp			V4.1	*)
+(************************************)
+
+(* status ***************************)
+Status  													:= 0;
+NoOfActiveEvents											:= 0;
+
+IF(Disable OR SourceId = 0)AND Disabled
+THEN
+	RETURN;
+ELSE
+	Disabled												:= Disable OR SourceId = 0;
+	
+	FOR i := MIN_EVENT TO MAX_EVENT 
+	DO
+		(* Init Default Class *)
+		IF SetClass <> TC2_SYSTEM.TCEVENTCLASS_ALARM
+			AND NOT _Mem.7
+		THEN
+			no[i].eClass										:= SetClass;
+			_Mem.7											:= i = MAX_EVENT;
+		END_IF                                  			
+		                                        			
+		IF Disable OR SourceId = 0              			
+		THEN                                    			
+			no[i].Flag 										:= FALSE;
+			no[i].ConfirmTrig 								:= no[i].State <> TCEVENTSTATE_INVALID AND no[i].State <> TCEVENTSTATE_RESETCON;
+		ELSIF Confirmtrig                             			
+		THEN                                    	
+			no[i].ConfirmTrig 								:= TRUE;
+			_Mem.0 											:= Confirmtrig;
+                                                			
+		ELSIF _Mem.0                            			
+		THEN                                    			
+			no[i].ConfirmTrig 								:= FALSE;
+			_Mem.0 											:= i <> MAX_EVENT;
+
+		ELSIF AutoConfirm
+		THEN
+			IF NOT no[i].Flag
+				AND no[i].State <> TCEVENTSTATE_INVALID
+				AND no[i].State <> TCEVENTSTATE_RESETCON
+			THEN
+				no[i].ConfirmTrig 							:= TRUE;
+			ELSE                                			
+				no[i].ConfirmTrig 							:= FALSE;
+			END_IF                              			
+		END_IF                                  	
+                                                	
+		(* Mem current Event *)                 	
+		IF no[i].State <> TCEVENTSTATE_INVALID OR no[i].Flag 
+		THEN
+			_Mem.1											:= TRUE;
+			(* Call Event *)
+			no[i](
+				Flag	:= ,
+				ConfirmTrig := ,
+				MsgId	:= TO_UINT(i + MsgOffset),
+				SourceId:= SourceId,
+				eClass	:= (* see grp call *),
+				Text1	:= (* see grp call *),
+				Text2	:= (* see grp call *),
+				pText3	:= (* see grp call *),
+				State	=> );
+		END_IF
+
+		(* Set info flags *)
+		IF	no[i].State <> TCEVENTSTATE_INVALID 
+		THEN
+			NoOfActiveEvents								:= NoOfActiveEvents + 1;
+			Status											:= Status OR no[i].Status;
+			Disabled										:= FALSE;
+		ELSIF _Mem.1
+		THEN (* Send one time info event is gone *)
+			; 
+		END_IF
+	END_FOR	
+END_IF
+(*****************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="confirm" Id="{8d06d971-6bc6-430d-afc0-daae4a03985a}">
+      <Declaration><![CDATA[METHOD PUBLIC confirm : booL  //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NoOfActiveEvents > 0
+THEN
+	FOR i := MIN_EVENT TO MAX_EVENT 
+	DO
+		no[i](ConfirmTrig := TRUE);
+	END_FOR
+	_Mem.0			:= TRUE;
+END_IF
+
+confirm		:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="confirmIsReq" Id="{06be0e93-9bb9-4743-bca6-fc3e24f77351}">
+      <Declaration><![CDATA[PROPERTY PUBLIC confirmIsReq : BOOL]]></Declaration>
+      <Get Name="Get" Id="{02e4efab-774a-48c0-999c-15b5d32998f9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[confirmIsReq							:= Status.15;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isActive" Id="{adec672f-b231-4609-9bab-c6bdc2bc2c10}">
+      <Declaration><![CDATA[PROPERTY PUBLIC isActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2ba1f3d7-7197-4206-81fd-8038533e192a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IsActive 								:= Status <> 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="EventHandlingGrp50">
+      <LineId Id="441" Count="77" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingGrp50.confirm">
+      <LineId Id="27" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingGrp50.confirmIsReq.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventHandlingGrp50.isActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

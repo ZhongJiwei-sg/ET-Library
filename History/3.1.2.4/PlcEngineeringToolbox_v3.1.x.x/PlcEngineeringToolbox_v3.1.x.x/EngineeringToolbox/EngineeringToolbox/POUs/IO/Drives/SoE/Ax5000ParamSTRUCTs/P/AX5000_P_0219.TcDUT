@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0219" Id="{696d138a-31df-47ec-8dd3-0d43b6a8c57e}">
+    <Declaration><![CDATA[TYPE AX5000_P_0219 :
+STRUCT
+	External_brake_resistor_actual_peak_energy:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

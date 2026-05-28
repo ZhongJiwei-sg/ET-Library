@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0110" Id="{532f3c9e-b32e-437c-9c77-ef892d9cc550}">
+    <Declaration><![CDATA[TYPE AX5000_P_0110 :
+STRUCT
+	ASM_motor_magnetzing_inductance:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

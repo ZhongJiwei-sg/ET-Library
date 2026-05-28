@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_S_0085" Id="{b2449582-db2a-4612-9668-b8232a8f6fd2}">
+    <Declaration><![CDATA[TYPE AX5000_S_0085 EXTENDS ST_AX5000_S_0085:
+STRUCT
+//	Torque_polarity_parameter:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

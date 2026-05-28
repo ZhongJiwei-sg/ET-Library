@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0216" Id="{057a075d-d2ec-4b47-bc13-e3ea6edcbeae}">
+    <Declaration><![CDATA[TYPE AX5000_P_0216 :
+STRUCT
+	Max_DC_Link_voltage:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

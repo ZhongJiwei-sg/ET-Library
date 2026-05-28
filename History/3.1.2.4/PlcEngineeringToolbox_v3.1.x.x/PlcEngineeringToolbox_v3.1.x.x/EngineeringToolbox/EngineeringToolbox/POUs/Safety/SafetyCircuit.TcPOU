@@ -1,0 +1,175 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SafetyCircuit" Id="{90e1853d-caf7-42fe-a02b-36512c144181}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK SafetyCircuit (*  *)
+VAR_INPUT  
+(* periphery Outputs *)
+	Demo													:	BOOL := FALSE;		//Return value TRUE = Demo mode for testing
+	Enable											AT  %Q*	: 	BOOL := TRUE;		//Enable saftey circuit from PLC - map to first input of AND FB  
+	Restart											AT  %Q* :	BOOL;				//Restart safety circuit  - map to restart input of estop/monitoring FB 
+                                            	
+(* Sequence Times *)                        	
+	PT_OnOK													:	TIME := T#3S;
+	PT_OnOK_2												:	TIME := T#1S500MS;
+	PT_OffOK_2												:	TIME := T#1S500MS;  //be sure that then delay off time is not longer then the safety delay time
+END_VAR                                     	
+VAR_OUTPUT  
+(* periphery Inputs *)      	
+	Status													:	SAFETY_CIRCUIT_STATUS;	//Process info from EL69xx                                            	
+END_VAR
+VAR
+	ReadyToRestart									AT  %I*	:	 BOOL; 	//TRUE when restart of safety circuit is executable
+	MonOut											AT  %I*	:	 BOOL; 	//Safety estop/monitoring output direct 
+	MonDelOut										AT  %I* :	 BOOL;	//Safety estop/monitoring output delay - see EStop/Monitoring FB time settings	
+END_VAR
+VAR
+	TON_OK_1												:	TON;
+	TON_OK_2												:	TON;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Safetycicrut-control with IOs and stantemachine						*)
+(************************************************************************)
+
+(* Safety circuit status *******************************************************)
+IF Demo
+THEN //Simulation mode 
+	CASE status.state OF
+	eSTATE.IDLE:	
+		TON_OK_1(IN := FALSE); TON_OK_2(IN := FALSE);
+		Status.RT											:= FALSE;
+
+	eSTATE.CLEARING:
+		TON_OK_2(IN := TRUE, PT := MIN(PT_OnOK_2,PT_OnOK ), Q => Status.OK_2);	
+		TON_OK_1(IN := TRUE, PT := PT_OnOK , Q => Status.OK);	
+		IF TON_OK_1.Q AND TON_OK_2.Q
+		THEN
+			Status.RT										:= TRUE;
+			status.state 									:= eSTATE.IDLE;
+		END_IF
+	ELSE
+		status.state 										:= eSTATE.CLEARING;
+	END_CASE
+
+	Status.FT												:= FALSE;
+	Status.InAborting										:= status.state = eSTATE.ABORTING;
+	Status.InAborted										:= status.state = eSTATE.ABORTED;
+	Status.InClearing										:= status.state = eSTATE.CLEARING;
+	Status.InIdle											:= status.state = eSTATE.IDLE;
+	
+	Status.ReadyToRestart									:= TRUE;
+	Status.MonOut											:= TRUE;
+	Status.MonDelOut										:= TRUE;
+	
+ELSE (* statemachine active mode *********************************************************)
+	CASE status.state OF
+	eSTATE.IDLE:
+		status.RT 											:= FALSE;
+		IF NOT MonOut OR NOT MonDelOut
+		THEN
+			TON_OK_1(IN := FALSE); TON_OK_2(IN := FALSE);
+			status.state 									:= eSTATE.ABORTING;
+		ELSE
+			;
+		END_IF
+
+	eSTATE.ABORTING:
+		IF NOT MonDelOut 
+		THEN
+			status.OK := status.OK_2 						:= FALSE;
+			status.FT 										:= TRUE;
+			status.state 									:= eSTATE.ABORTED;
+		ELSIF MonOut 
+		THEN
+			status.FT 										:= TRUE;
+			status.state 									:= eSTATE.ABORTED;
+		ELSE
+			TON_OK_2(IN := TRUE, PT := PT_OffOK_2);
+			IF TON_OK_2.Q 
+			THEN 
+				status.OK_2 								:= FALSE; 
+			END_IF
+		END_IF
+
+	eSTATE.ABORTED:
+		status.FT 											:= FALSE;
+		IF 	MonOut AND MonDelOut
+		THEN
+			TON_OK_1(IN := FALSE); TON_OK_2(IN := FALSE);
+			status.state 									:= eSTATE.CLEARING;
+		ELSE
+			;
+		END_IF
+
+	eSTATE.CLEARING:
+		IF MonOut AND MonDelOut
+		THEN
+			TON_OK_1(IN := TRUE, PT := PT_OnOK ,Q => Status.OK );					
+			TON_OK_2(IN := TRUE, PT := MIN(PT_OnOK_2,PT_OnOK) ,Q => Status.OK_2);			
+			IF status.OK AND status.OK_2 
+			THEN
+				status.state 								:= eSTATE.IDLE;
+				status.RT 									:= TRUE;
+			ELSE
+				;
+			END_IF
+		ELSE
+			TON_OK_1(IN := FALSE); 
+			TON_OK_2(IN := FALSE);
+			status.state 									:= eSTATE.ABORTING;
+		END_IF
+	ELSE
+		status.state 										:= eSTATE.ABORTING;
+	END_CASE
+
+(* signals *************************************************************)	
+	Status.InAborting										:= status.state = eSTATE.ABORTING;
+	Status.InAborted										:= status.state = eSTATE.ABORTED;
+	Status.InClearing										:= status.state = eSTATE.CLEARING;
+	Status.InIdle											:= status.state = eSTATE.IDLE;
+                                							
+	Status.ReadyToRestart									:= ReadyToRestart;
+	Status.MonOut											:= MonOut;
+	Status.MonDelOut										:= MonDelOut;		
+END_IF
+
+(*********************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="SafetyCircuit">
+      <LineId Id="3" Count="1" />
+      <LineId Id="242" Count="0" />
+      <LineId Id="164" Count="1" />
+      <LineId Id="219" Count="0" />
+      <LineId Id="222" Count="0" />
+      <LineId Id="238" Count="1" />
+      <LineId Id="228" Count="0" />
+      <LineId Id="230" Count="4" />
+      <LineId Id="237" Count="0" />
+      <LineId Id="236" Count="0" />
+      <LineId Id="235" Count="0" />
+      <LineId Id="224" Count="1" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="209" Count="4" />
+      <LineId Id="215" Count="3" />
+      <LineId Id="241" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="12" Count="4" />
+      <LineId Id="18" Count="27" />
+      <LineId Id="47" Count="8" />
+      <LineId Id="57" Count="1" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="72" Count="10" />
+      <LineId Id="226" Count="0" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="170" Count="1" />
+      <LineId Id="174" Count="6" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="94" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

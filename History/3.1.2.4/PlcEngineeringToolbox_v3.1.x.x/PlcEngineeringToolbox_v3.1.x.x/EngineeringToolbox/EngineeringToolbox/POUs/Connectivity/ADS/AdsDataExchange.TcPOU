@@ -1,0 +1,222 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AdsDataExchange" Id="{a5604da7-8a24-461d-9f42-b5933fb2522b}" SpecialFunc="None">
+    <Declaration><![CDATA[//"DataExchange" enables a ADS communication by symbol name between two TwinCAT runtime system
+//based on Tc2_System
+{attribute 'no_check'}
+FUNCTION_BLOCK AdsDataExchange
+VAR_OUTPUT CONSTANT
+	MODE_FETCH_CONTINOUS									:	INT := 0;
+	MODE_FETCH_BY_EVENT										:	INT := 1;
+	MODE_SEND_CONTINOUS										:	INT := 2;
+	MODE_SEND_BY_EVENT										:	INT := 3;
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_INPUT
+	Enable													:	BOOL := FALSE;	// FB will be processed as long as enable is TRUE 
+	Transmit												:	BOOL := FALSE;	// TRUE or a rising edge starts the data exchange - depends on requested mode 
+	Mode													:	INT (MODE_FETCH_CONTINOUS..MODE_SEND_BY_EVENT ) := MODE_SEND_BY_EVENT; //requested modes
+	NetId													:	T_AmsNetId := ''; // Target AMS-NetID or '' for local-target
+	Port													:	T_AmsPort := 851; 	// ADS-Communication-Port (PLC Runtime Port)
+	DestSymbol												:	STRING;			//Desination symbol name to fetch or send - depends on requested mode
+	pData													:	PVOID := 0;		//Pointer of data to send or target to fetch data - depends on requested mode 
+	cbData													:	UDINT := 0;		//Data size of data to send or target to fetch data - depends on requested mode 
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;// timeout for ADS request
+END_VAR
+VAR_OUTPUT
+	hSymbol													:	UDINT;	//Symbol handle
+	Ready													:	BOOL;	//ADS Route initialized successfully and ready to send/fetch											
+	Active													:	BOOL;	//communication data exchange is in process (transmit triggered=
+	Busy													:	BOOL; 	//Busy is TRUE at the rising edge of Enable and stays TRUE as long as the FB is performing any action. 
+	Error													:	BOOL;	//Rising edge of Error informs that an error occurred during the execution of the Function Block  
+{attribute 'displaymode':='hex'}
+	ErrorID													:	UDINT; 	//Error identification - see ADS return codes at Beckhoff infosys for further information 
+END_VAR
+VAR
+(* local variables *****************************************************)
+	state													: 	INT := 0;
+	MemErrorId												:	UDINT := 0;
+	
+(* trigger **********************************************************)
+	FT_Enable												:	F_TRIG;
+	RT_Transmit												:	R_TRIG;
+
+(* timer ************************************************************)
+
+(* finstances ***************************************************************)
+	AdsRdWr_CreateVar_H										:	ADSRDWRT;
+	FetchVal_ReqVar											:	ADSREAD;
+	SendVal_ReqVar											:	ADSWRITE;
+	ReleaseSymHandle										:	ADSWRITE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FT_Enable(CLK 	:= Enable); // necessary for handle release 
+RT_Transmit(CLK := Transmit AND Ready); // necessary for event mode
+
+(* Sequence ********************************************************************************)
+IF Enable THEN
+	CASE state OF
+	0: //Start creating symbol handle
+		//Init fbs		
+		AdsRdWr_CreateVar_H(WRTRD := FALSE);
+		FetchVal_ReqVar(READ := FALSE);
+		SendVal_ReqVar(WRITE := FALSE);
+		ReleaseSymHandle(WRITE := FALSE);
+		
+		Busy 												:= TRUE;
+		
+		IF NOT AdsRdWr_CreateVar_H.BUSY AND NOT FetchVal_ReqVar.BUSY
+			AND NOT SendVal_ReqVar.BUSY AND NOT ReleaseSymHandle.BUSY
+		THEN
+			AdsRdWr_CreateVar_H(NETID := NETID, PORT := PORT,
+								IDXGRP := ADSIGRP_SYM_HNDBYNAME, IDXOFFS := 0,
+								WRITELEN := SIZEOF(DestSymbol),// max. no. of chars req. variable
+								READLEN := SIZEOF(hSymbol),
+								SRCADDR := ADR(DestSymbol)	, DESTADDR := ADR(hSymbol), WRTRD := TRUE, TMOUT := Timeout);
+			state											:= state + 1;						
+		END_IF
+
+
+	1://Wait for symbol handle 
+		AdsRdWr_CreateVar_H(NETID := NETID, PORT := PORT,
+							IDXGRP := ADSIGRP_SYM_HNDBYNAME, IDXOFFS := 0,
+							WRITELEN := SIZEOF(DestSymbol),// max. no. of chars req. variable
+							READLEN := SIZEOF(hSymbol),
+							SRCADDR := ADR(DestSymbol)	, DESTADDR := ADR(hSymbol), WRTRD := TRUE, TMOUT := Timeout);	
+		IF NOT AdsRdWr_CreateVar_H.BUSY
+		THEN
+			IF AdsRdWr_CreateVar_H.ERR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= AdsRdWr_CreateVar_H.ERRID;
+				state										:= state * -1;
+			ELSE
+				Ready										:= TRUE;
+				state										:= state + 1;
+			END_IF
+			AdsRdWr_CreateVar_H(WRTRD := FALSE);
+		END_IF
+		
+	2: //Start fetch or send data 
+		IF RT_Transmit.Q AND Mode = MODE_FETCH_BY_EVENT 
+			OR Mode = MODE_FETCH_CONTINOUS
+		THEN	
+		 	FetchVal_ReqVar(	
+				NETID 	:= NETID, 
+				PORT 	:= PORT, 
+				TMOUT 	:= Timeout,
+				IDXGRP 	:= ADSIGRP_SYM_VALBYHND, 
+				IDXOFFS := hSymbol, 	
+				LEN 	:= cbData, 	
+				DESTADDR:= pData,
+				READ 	:= TRUE);
+			Active											:= TRUE;
+			state											:= state + 1;
+		ELSIF RT_Transmit.Q AND Mode = MODE_SEND_BY_EVENT 
+			OR Mode = MODE_SEND_CONTINOUS
+		THEN 
+			SendVal_ReqVar( 
+				NETID 	:= NETID, 
+				PORT 	:= PORT, 
+				TMOUT 	:= Timeout,
+				IDXGRP 	:= ADSIGRP_SYM_VALBYHND, 
+				IDXOFFS	:= hSymbol, 
+				SRCADDR := pData,
+				LEN		:= cbData,  
+				WRITE 	:= TRUE);		
+			Active											:= TRUE;
+			state											:= state + 1;
+		END_IF
+		
+	3: //Wait for send/fetch done 
+		IF FetchVal_ReqVar.READ
+		THEN
+		 	FetchVal_ReqVar(LEN 	:= cbData, DESTADDR:= pData, READ 	:= TRUE);		
+			IF NOT FetchVal_ReqVar.BUSY
+			THEN
+				Active										:= FALSE;
+				IF FetchVal_ReqVar.ERR
+				THEN
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					ErrorId									:= FetchVal_ReqVar.ERRID;
+					state									:= state * -1;					
+				ELSE
+					Ready									:= TRUE;
+					state 									:= state - 1;
+				END_IF
+				FetchVal_ReqVar(READ 	:= FALSE);
+			END_IF
+		
+		ELSE
+			SendVal_ReqVar( SRCADDR := pData,LEN := cbData,  WRITE 	:= TRUE);	
+			IF NOT SendVal_ReqVar.BUSY
+			THEN		
+				Active										:= FALSE;
+				IF SendVal_ReqVar.ERR
+				THEN
+					Busy									:= FALSE;
+					Error									:= TRUE;
+					ErrorId									:= SendVal_ReqVar.ERRID;
+					state									:= state * -1;					
+				ELSE
+					Ready									:= TRUE;
+					state 									:= state - 1;
+				END_IF
+				SendVal_ReqVar(WRITE 	:= FALSE);		
+			END_IF
+		END_IF
+	ELSE //Error - wait for enable = FALSE	
+		MemErrorId											:= ErrorId;
+ 	END_CASE
+ELSE //Enable = FALSE	
+	Active													:= FALSE;
+	Ready													:= FALSE;
+	IF FT_Enable.Q 
+	THEN  
+		ReleaseSymHandle(WRITE:= FALSE);
+		ReleaseSymHandle(NETID := NETID, 
+						PORT 	:= PORT, 
+						TMOUT 	:= Timeout,
+						IDXGRP 	:= ADSIGRP_SYM_RELEASEHND, 
+						IDXOFFS := hSymbol, 
+						LEN 	:= 0, 
+						WRITE 	:= hSymbol <> 0);
+	ELSE
+		ReleaseSymHandle();
+		IF NOT ReleaseSymHandle.BUSY
+		THEN
+			ReleaseSymHandle(Write := FALSE);
+			hSymbol											:= 0;
+			Error 											:= FALSE;		
+			ErrorID 										:= 0;
+			Busy 											:= FALSE;
+			State	 										:= 0;				
+		END_IF
+	END_IF
+
+END_IF
+	
+(*********************************************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="AdsDataExchange">
+      <LineId Id="3" Count="0" />
+      <LineId Id="5" Count="40" />
+      <LineId Id="200" Count="0" />
+      <LineId Id="46" Count="49" />
+      <LineId Id="203" Count="0" />
+      <LineId Id="96" Count="8" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="106" Count="6" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="113" Count="8" />
+      <LineId Id="197" Count="0" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="122" Count="24" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

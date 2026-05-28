@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0105" Id="{a43b7fd6-3102-4ac4-b148-3a7dccc9eff3}">
+    <Declaration><![CDATA[TYPE AX5000_P_0105 :
+STRUCT
+	ASM_Rotor_time_constant:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

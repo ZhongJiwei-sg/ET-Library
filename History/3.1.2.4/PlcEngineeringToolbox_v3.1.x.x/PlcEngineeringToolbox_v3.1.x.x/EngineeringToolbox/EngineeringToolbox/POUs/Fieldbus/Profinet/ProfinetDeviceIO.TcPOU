@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="ProfinetDeviceIO" Id="{394577fa-cc18-4ae0-a356-3681d1b22579}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EL6631-0010 Profinet Device IOs via EtherCAT
+// it´s possible to set up multi device for diffrent master
+FUNCTION_BLOCK ProfinetDeviceIO EXTENDS EcSlaveInfoDataExt
+VAR_OUTPUT CONSTANT
+	MIN_BOX													:	INT := 1;
+	MAX_BOX													:	INT := PARAM.PROFINET_DEVICE_DEV_IO_MAX_BOX;
+																
+END_VAR
+VAR_INPUT
+	PnIoBoxCtrl										AT %Q*	:	ARRAY[MIN_BOX ..MAX_BOX] OF UINT;
+END_VAR
+VAR_OUTPUT                       				
+	AoeNetId										AT %I*	:	AMSNETID;		//Link to master AoeNetID
+//Box states	             	
+	{attribute 'displaymode':='binary'}
+	PnIoBoxState									AT %I*	:	ARRAY[MIN_BOX ..MAX_BOX] OF UINT; //Link to box state
+END_VAR                     					             	
+VAR       
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();
+]]></ST>
+    </Implementation>
+    <LineIds Name="ProfinetDeviceIO">
+      <LineId Id="56" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

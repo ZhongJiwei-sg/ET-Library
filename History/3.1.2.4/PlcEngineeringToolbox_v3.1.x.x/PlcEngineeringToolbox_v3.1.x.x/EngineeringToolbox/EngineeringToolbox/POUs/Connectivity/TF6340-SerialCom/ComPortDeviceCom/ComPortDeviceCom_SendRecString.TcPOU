@@ -1,0 +1,223 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="ComPortDeviceCom_SendRecString" Id="{7300e4f7-cfdf-4b0b-92fa-ee313b3c80fe}" SpecialFunc="None">
+    <Declaration><![CDATA[//FB sends a "command" out and waits for response of the connected device (handshake mode)
+//By changing the Fnc the FB mode can be switched into only send or only receive
+FUNCTION_BLOCK ComPortDeviceCom_SendRecString
+VAR CONSTANT
+	TIMEOUT_COM												: TIME 		:= T#10S;
+END_VAR
+VAR_OUTPUT CONSTANT
+	FNC_SEND_REC											:	INT := 0; //Send command and wait for response
+	FNC_SEND												:	INT := 1; //Send only
+	FNC_REC													:	INT := 2; //Receive only
+END_VAR
+VAR_INPUT
+	Execute													: BOOL;
+	Fnc														:	INT(FNC_SEND_REC..FNC_SEND_REC) := FNC_SEND_REC;
+	ClrComBuffer											: BOOL; //TRUE Clears com buffer before start
+	RecTimeout												: TIME := DEFAULT_ADS_TIMEOUT; 
+	Command													: T_MAxSTRing;	//Suffix will be added
+	Prefix													: STRING(5) := '';
+	Suffix													: STRING(5) := '$r$n';  //Will be addet to send data and removed from response
+END_VAR
+VAR_IN_OUT
+	Handle													:	ComPortDeviceCom_BufferHandle;
+END_VAR
+VAR_OUTPUT
+	ResponseLen												: UDINT;
+	Response												: T_MaxString;
+	Done													: BOOL;
+	Busy													: BOOL;
+	Error													: BOOL;
+	ErrorID													: ComError_t := ComError_t.COMERROR_NOERROR;
+END_VAR
+VAR
+(* Memory *****************************************************)
+	state													: INT := 0;
+	
+(* Timer ******************************************************)
+	timeout													:	ton := (PT := TIMEOUT_COM);
+(* Trigger ****************************************************)
+	rtExecute												: R_TRIG;
+	
+(* Blocks *****************************************************)
+	Rec														: ReceiveString255 := (Timeout := T#10S);
+	Send													: SendString255;
+	
+(* Error ******************************************************)
+(* Dummys *****************************************************)
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Send text and receive response						 *)
+	(*********************************************************)
+	
+(* state machine ********************************************************)
+	rtExecute(CLK := Execute);
+	CASE state OF
+	0 : 
+		Busy 												:= FALSE;
+		IF NOT Execute THEN
+			Done 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorID 										:= 0;
+		END_IF
+		IF rtExecute.Q THEN
+			Busy 											:= TRUE;		
+			timeout(IN := FALSE, PT := TIMEOUT_COM + RecTimeout);
+			ResponseLen 									:= 0;
+			Error 											:= FALSE;
+			ErrorID 										:= ComError_t.COMERROR_NOERROR;
+			Rec(Reset := TRUE,Timeout := RecTimeout, rxBuffer := Handle.RxBUffer , ReceivedString := Response, Prefix := Prefix, Suffix := Suffix  );
+			
+			IF ClrComBuffer
+			THEN
+				handle.Clear();
+			END_IF
+			
+			IF Fnc = FNC_REC
+			THEN //only receive 
+				MemSet(ADR(Response),0,SIZEOF(Response));
+				Rec(Reset := FALSE, rxBuffer := handle.RxBUffer , ReceivedString := Response );
+				State										:= 2;				
+			ELSE
+				Send(SendString := CONCAT(Command, Suffix),TxBuffer := Handle.TXBuffer);	
+				state 										:= state + 1;
+			END_IF
+				
+		END_IF
+		
+	1 : //Send tag 
+		IF Send.Busy 
+		THEN  //Call FB only if still busy after call in state 0
+			Send(SendString := CONCAT(Command, Suffix),TxBuffer := handle.TxBuffer); 
+		END_IF
+		IF NOT Send.Busy 
+		THEN
+			IF Send.Error <> ComError_t.COMERROR_NOERROR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				Errorid										:= Send.Error;
+				state										:= 0;
+			ELSIF Fnc = FNC_SEND
+			THEN
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				state										:= 0;				
+			ELSE
+				MemSet(ADR(Response),0,SIZEOF(Response));
+				Rec(Reset := FALSE, rxBuffer := handle.RxBUffer , ReceivedString := Response );
+				state 										:= state + 1;
+			END_IF
+		END_IF
+
+	2: //Wair for response
+		timeout(IN := TRUE);
+		Rec(ReceivedString	:= Response,RXbuffer := Handle.RxBuffer);	
+		IF NOT Rec.Busy
+		THEN
+			IF Rec.StringReceived
+			THEN
+				IF LEN(Response) > 0
+				THEN
+					IF Suffix[0] <> 0 //Cut suffix if selected 
+					THEN
+						Response							:= ReadStrToSeperator(Suffix,Response);
+					END_IF
+					ResponseLen								:= TO_UDINT(LEN(Response));	
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 0;	
+				ELSE
+					; //Nothing received, continue to read until done or timeout kicks in
+				END_IF
+				
+			ELSIF Rec.Error <> ComError_t.COMERROR_NOERROR
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				Errorid										:= Rec.Error;
+				state										:= 0;					
+					
+			ELSIF Rec.RxTimeout
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				Errorid										:= ComError_t.COMERROR_TIMEOUT;
+				state										:= 0;	
+			ELSIF timeout.Q
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				Errorid										:= ComError_t.COMERROR_TIMEOUT;
+				state										:= 0;					
+			END_IF
+		END_IF
+	END_CASE
+(********************************************************************************)
+]]></ST>
+    </Implementation>
+    <LineIds Name="ComPortDeviceCom_SendRecString">
+      <LineId Id="3" Count="3" />
+      <LineId Id="8" Count="6" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="23" Count="3" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="613" Count="0" />
+      <LineId Id="566" Count="1" />
+      <LineId Id="569" Count="0" />
+      <LineId Id="568" Count="0" />
+      <LineId Id="815" Count="0" />
+      <LineId Id="920" Count="2" />
+      <LineId Id="927" Count="0" />
+      <LineId Id="924" Count="0" />
+      <LineId Id="928" Count="0" />
+      <LineId Id="925" Count="1" />
+      <LineId Id="930" Count="0" />
+      <LineId Id="923" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="39" Count="2" />
+      <LineId Id="817" Count="0" />
+      <LineId Id="816" Count="0" />
+      <LineId Id="818" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="577" Count="2" />
+      <LineId Id="586" Count="0" />
+      <LineId Id="581" Count="0" />
+      <LineId Id="585" Count="0" />
+      <LineId Id="587" Count="0" />
+      <LineId Id="582" Count="0" />
+      <LineId Id="722" Count="0" />
+      <LineId Id="931" Count="0" />
+      <LineId Id="934" Count="1" />
+      <LineId Id="932" Count="1" />
+      <LineId Id="612" Count="0" />
+      <LineId Id="583" Count="0" />
+      <LineId Id="580" Count="0" />
+      <LineId Id="588" Count="0" />
+      <LineId Id="590" Count="1" />
+      <LineId Id="765" Count="0" />
+      <LineId Id="592" Count="0" />
+      <LineId Id="605" Count="1" />
+      <LineId Id="628" Count="0" />
+      <LineId Id="991" Count="13" />
+      <LineId Id="990" Count="0" />
+      <LineId Id="1005" Count="0" />
+      <LineId Id="629" Count="0" />
+      <LineId Id="631" Count="3" />
+      <LineId Id="630" Count="0" />
+      <LineId Id="617" Count="0" />
+      <LineId Id="985" Count="4" />
+      <LineId Id="984" Count="0" />
+      <LineId Id="768" Count="4" />
+      <LineId Id="610" Count="0" />
+      <LineId Id="607" Count="0" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="185" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,122 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="Logbook_wEventClass" Id="{e3a91371-6dec-4603-bda2-5b26b3052bbc}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK Logbook_wEventClass EXTENDS Logbook             									
+VAR_OUTPUT CONSTANT     									
+END_VAR                 									
+VAR_INPUT               									                       		
+	eClass													:	E_TcEventClass := TC2_SYSTEM.TCEVENTCLASS_NONE; //Possible event class for the entry																							
+END_VAR             										
+VAR_OUTPUT
+END_VAR
+VAR
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* LogBook 									 *)
+(*********************************************)
+
+(* call method *********************************************)
+	Write(Msg);
+(***********************************************************)	]]></ST>
+    </Implementation>
+    <Method Name="getClassFromOption" Id="{fd70ea6b-444f-4a81-9953-349b775fafd9}">
+      <Declaration><![CDATA[METHOD PUBLIC getClassFromOption : E_TcEventClass
+VAR_INPUT
+	Msgidx														:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Msgidx >= MIN_DATA AND Msgidx <= MAX_DATA
+THEN
+	GetClassFromOption.0 										:= Data[Msgidx].Options.8;
+	GetClassFromOption.1 										:= Data[Msgidx].Options.9;
+	GetClassFromOption.2 										:= Data[Msgidx].Options.10;
+	GetClassFromOption.3 										:= Data[Msgidx].Options.11;
+ELSE
+	GetClassFromoption 											:= TCEVENTCLASS_ALARM;
+END_IF
+	
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="write" Id="{696c2b58-81a4-4721-8072-5036fb946e39}">
+      <Declaration><![CDATA[METHOD PUBLIC write : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	Msg														:	STRING(PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT);
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+IF _Write(Msg)
+THEN
+	//Store class as integer in logbook options
+	Data[MIN_DATA].Options.8								:= eClass.0;
+	Data[MIN_DATA].Options.9								:= eClass.1; 
+	Data[MIN_DATA].Options.10								:= eClass.2; 
+	Data[MIN_DATA].Options.11								:= eClass.3;	
+	write													:= TRUE;											
+	
+	IF options.2 
+	THEN
+		write												:= 0= adsLogwTcEventClass(Msg, eClass);
+	END_IF
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="writeWithClass" Id="{296a8693-eb4a-497c-a691-4f514c81a139}">
+      <Declaration><![CDATA[METHOD PUBLIC writeWithClass : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	Msg														:	STRING(PARAM.LOGBOOK_MAX_MSG_STRING_LENGHT);
+	Class													:	E_TcEventClass := TC2_SYSTEM.TCEVENTCLASS_NONE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _Write(Msg)
+THEN
+	//Store class as integer in logbook options
+	Data[MIN_DATA].Options.8								:= Class.0;
+	Data[MIN_DATA].Options.9								:= Class.1; 
+	Data[MIN_DATA].Options.10								:= Class.2; 
+	Data[MIN_DATA].Options.11								:= Class.3;	
+	writeWithClass											:= TRUE;
+	IF options.2 
+	THEN
+		writeWithClass 										:= 0 = adsLogwTcEventClass(Msg, Class);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Logbook_wEventClass">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook_wEventClass.getClassFromOption">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook_wEventClass.write">
+      <LineId Id="3" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="23" Count="3" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="Logbook_wEventClass.writeWithClass">
+      <LineId Id="10" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

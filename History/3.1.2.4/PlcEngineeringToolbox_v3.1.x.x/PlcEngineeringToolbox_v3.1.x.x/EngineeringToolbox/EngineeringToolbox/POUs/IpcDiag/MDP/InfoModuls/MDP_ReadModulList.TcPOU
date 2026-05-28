@@ -1,0 +1,130 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MDP_ReadModulList" Id="{c7519b76-1d13-4c9b-ae80-cc0f73d70760}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK MDP_ReadModulList EXTENDS FbBase
+VAR_INPUT
+	AmsNetId												: 	T_AmsNetId := '';	//AmsNetId as text
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;	//Ads timeout
+END_VAR                     								
+VAR_OUTPUT                  								
+	ModulCount												:	USINT;	//number of modules
+	ModulType												:	ARRAY[0..255] OF E_MDP_ModuleType; //Index = Modul ID
+	ErrorGrp												:	E_MDP_ErrGroup := eMDP_Err_NoError;
+END_VAR                     								
+VAR                         								
+	MDP_Read												: 	FB_MDP_Read		:= (stMDP_DynAddr := (nArea := INT_TO_BYTE(eMDP_Area_DeviceArea), nModuleId := 16#02, nTableId := 16#00, nFlag := 16#00, nSubIdx := 16#00));
+	SplitErrorId											:	FB_MDP_SplitErrorID;
+	dwData													:	ARRAY [1..2] OF WORD;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Read list ob available moduls			V1.0	*)
+(****************************************************)
+
+(* Start read ************************************************)
+	IF Execute
+		AND state = 0
+	THEN
+		IF FALSE
+		THEN (* Modultypen Liste *)
+			MDP_Read.stMDP_DynAddr.nModuleId				:= 16#01;
+		ELSE (* Modul ID Liste *)               			
+			MDP_Read.stMDP_DynAddr.nModuleId				:= 16#02;
+		END_IF                                  			
+		MDP_Read.stMDP_DynAddr.nSubIdx						:= 0;
+		MEMSET(ADR(ModulType),0,SIZEOF(ModulType));
+		ModulCount											:= 0;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+		
+		MDP_Read(
+			stMDP_DynAddr	:= ,		(* address to request subindex Count of AdressList *)
+			pDstBuf			:= ADR(dwData),
+			cbDstBufLen		:= SIZEOF(dwData),
+			bExecute		:= FALSE,
+			tTimeout		:= Timeout,
+			sAmsNetId		:= AmsNetId,
+			bBusy			=> ,
+			bError			=> ,
+			nErrId			=> );
+
+		MDP_Read(bExecute	:= TRUE);
+		state												:= 1;
+	ELSIF NOT Execute
+		AND State = 99
+	THEN
+		state												:= 0;
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+	END_IF
+
+
+	CASE state OF
+	0:
+		;
+	1:
+		MDP_Read(pDstBuf := ADR(dwData), cbDstBufLen := SIZEOF(dwData));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				IF ModulCount = 0
+				THEN (* Init Modul count *)
+					ModulCount								:= WORD_TO_USINT(dwData[1]);
+				ELSIF MDP_Read.stMDP_DynAddr.nSubIdx > 0
+				THEN (* copy emlement dat					a *)
+					ModulType[MDP_Read.stMDP_DynAddr.nSubIdx - 1] :=  dwData[2];					
+				END_IF
+				MDP_Read(bExecute := FALSE);
+				MDP_Read.stMDP_DynAddr.nSubIdx:= MDP_Read.stMDP_DynAddr.nSubIdx + 1;
+				IF MDP_Read.stMDP_DynAddr.nSubIdx > ModulCount
+					OR MDP_Read.stMDP_DynAddr.nSubIdx > 255
+				THEN
+					Busy									:= FALSE;
+					Done									:= TRUE;
+					state									:= 99;
+				ELSE
+					MDP_Read(bExecute := TRUE,	pDstBuf	:= ADR(dwData), cbDstBufLen := SIZEOF(dwData));
+				END_IF
+			END_IF
+
+		END_IF
+
+	99: ;
+
+	ELSE
+		;
+	END_CASE
+
+	(* reset state for next start *)
+	IF NOT Execute
+		AND state = 99
+	THEN
+		state												:= 0;
+	END_IF
+
+(****************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MDP_ReadModulList">
+      <LineId Id="3" Count="101" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,221 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="AxDriveSoE_Ax5000CalcPower" Id="{9dfbfc7f-86a8-498c-aef7-f18903a3dfe1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxDriveSoE_Ax5000CalcPower
+VAR_INPUT
+	Enable													:	BOOL;							// Enable functionblock
+	ConfirmTrig												:	BOOL;							// Reset internal error
+	ActParameterSet											:	INT := 0;						// Active arameter set of AX5000	Default := 0
+END_VAR
+VAR_IN_OUT	
+(* important for function *)	
+	AdsAddr													:	AMSADDR;						// AdsAddr of AX5000
+	Channel													:	USINT;							// DriveChannel
+END_VAR
+VAR_OUTPUT
+	AbsoluteVoltage								AT %I*		:	REAL;							// Need to be mapped!! Absolute Voltage read from parameter P-x-0469
+	AbsoluteCurrent											:	REAL;							// Absolute Current calculated
+	ActivePower												:	LREAL;							// Active power calculated in kW
+	ReactivePower											:	LREAL;							// Reactive power calculated in kvar
+	ApparentPower											:	LREAL;							// Apparent power calculated in kVA
+	Busy													:	BOOL;							// Busy while SoeRead
+	Error													:	BOOL;							// Error Bit
+{attribute 'displaymode':='hex'}
+	ErrorID													:	UDINT;							// ErrorID
+	ErrorText												:	T_MaxString;					// ErrorText
+END_VAR
+VAR
+	_AbsoluteCurrent							AT %I*		:	INT;		//	P-x-0461		// Need to be mapped!! Absolute Current: 1/1000% of PeakCurrent
+(* Memory **********************************************************)
+	State													:	INT;
+	MemPeakCurrent											:	DINT;		//	P-x-0092		// Channel peak current, read from AX5000
+	MemCosPhi												:	INT;		//	P-x-0104		// cos phi of motor, read from AX5000
+	MemParamSet												:	INT := 99;
+	
+(* Functionsblocks *************************************************)
+	rTrigExecute											:	R_TRIG;
+	SoERead													:	FB_SoERead_ByDriveRef	:= (tTimeOut := DEFAULT_ADS_TIMEOUT);
+(*******************************************************************)
+END_VAR
+VAR CONSTANT
+	ST_IDLE													:	INT := 0;
+	ST_PEAKCURRENT											:	INT := 10;
+	ST_COSPHI												:	INT := 20;
+	ST_ERROR												:	INT := 998;
+	ST_RESET												:	INT := 999;
+	
+	ERR_PEAKCURRENT											:	UDINT := 1;
+	ERR_COSPHI												:	UDINT := 2;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+(* Init drive ref **************************************************)
+	IF AdsAddr.port <> SoERead.stDriveRef.nSlaveAddr
+	THEN
+		SoERead.stDriveRef.sNetId							:= F_CreateAmsNetId(AdsAddr.netId);
+		SoERead.stDriveRef.nSlaveAddr						:= AdsAddr.port;
+		SoERead.stDriveRef.nDriveNo							:= Channel;
+	END_IF
+(* calculate  ******************************************************)
+	IF NOT busy
+		AND MemParamSet = ActParameterSet
+		AND Enable
+	THEN
+		AbsoluteCurrent										:= TO_REAL(_AbsoluteCurrent * (MemPeakCurrent / 1000)) / 1000;
+		ApparentPower										:= SQRT(3) * TO_LREAL(AbsoluteCurrent * AbsoluteVoltage)  / 1000;
+		ActivePower											:= ApparentPower * TO_LREAL(MemCosPhi) / 100.0;
+		ReactivePower										:= SQRT(EXPT(ApparentPower,2) - EXPT(ActivePower,2));
+	END_IF
+(* Trigger Execute *************************************************)
+	rTrigExecute(CLK := MemParamSet <> ActParameterSet AND Enable);
+	
+(* get params ******************************************************)
+	CASE state OF
+	ST_IDLE:	
+		IF rTrigExecute.Q
+		THEN
+			State											:= ST_PEAKCURRENT;
+		END_IF
+	ST_PEAKCURRENT:	// read P-x-0092 configured peak current
+		IF NOT SoERead.bBusy
+			AND SoERead.bExecute
+		THEN
+			state											:= SEL(SoERead.bError, ST_COSPHI, 99);
+			ErrorID											:= SEL(SoERead.bError, 0, ERR_PEAKCURRENT);
+			ErrorText										:= SEL(SoERead.bError, '', 'Fehler beim Lesen vom Kanal Spitzenstrom');
+		END_IF
+		SoERead(
+			stDriveRef	:= ,  //See init for drive ref
+			nIdn		:= Get_P_WORD(ActParameterSet) + 092,
+			nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+			pDstBuf		:= ADR(MemPeakCurrent),
+			cbBufLen	:= SIZEOF(MemPeakCurrent),
+			bExecute	:= State = 10,
+			tTimeout	:= ,
+			bBusy		=> ,
+			bError		=> ,
+			iAdsErrId	=> ,
+			iSercosErrId=> ,
+			dwAttribute	=> );
+	ST_COSPHI:	// read P-x-0104 cos phi
+		IF NOT SoERead.bBusy
+			AND SoERead.bExecute
+		THEN
+			MemParamSet										:= SEL(SoERead.bError, ActParameterSet, MemParamSet);
+			state											:= SEL(SoERead.bError, ST_IDLE, ST_ERROR);
+			ErrorID											:= SEL(SoERead.bError, 0, ERR_COSPHI);
+			ErrorText										:= SEL(SoERead.bError, '', 'Fehler beim Lesen vom cos phi Parameter');
+		END_IF
+		SoERead(
+			stDriveRef	:= ,  //See init for drive ref
+			nIdn		:= Get_P_WORD(ActParameterSet) + 104,
+			nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+			pDstBuf		:= ADR(MemCosPhi),
+			cbBufLen	:= SIZEOF(MemCosPhi),
+			bExecute	:= State = 20,
+			tTimeout	:= ,
+			bBusy		=> ,
+			bError		=> ,
+			iAdsErrId	=> ,
+			iSercosErrId=> ,
+			dwAttribute	=> );
+	ST_ERROR:			// wait till Error is quit
+		IF ConfirmTrig
+		THEN
+			ErrorText										:= '';
+			ErrorID											:= 0;
+			state											:= ST_RESET;
+		END_IF
+	ST_RESET:		
+		IF NOT SoERead.bBusy
+			AND NOT SoERead.bError
+		THEN
+			state											:= ST_IDLE;
+		END_IF
+		SoERead(
+			stDriveRef	:= ,  //See init for drive ref
+			nIdn		:= Get_P_WORD(ActParameterSet) + 092,
+			nElement	:= EC_SOE_ELEMENT_VALUE (* 16#40*),
+			pDstBuf		:= ADR(MemPeakCurrent),
+			cbBufLen	:= SIZEOF(MemPeakCurrent),
+			bExecute	:= FALSE,
+			tTimeout	:= ,
+			bBusy		=> ,
+			bError		=> ,
+			iAdsErrId	=> ,
+			iSercosErrId=> ,
+			dwAttribute	=> );
+	END_CASE
+	
+	Error		:= state = ST_ERROR;
+	Busy		:= state <> 0 OR SoERead.bBusy;
+(*******************************************************************)		]]></ST>
+    </Implementation>
+    <Method Name="get_P_WORD" Id="{a8cf7b22-07ee-43ce-98d9-6d4fb3d9aa5a}">
+      <Declaration><![CDATA[METHOD PRIVATE get_P_WORD : WORD
+VAR_INPUT
+	SetNumber			:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Get P-Word dependent of parameter set *)
+	IF SetNumber = 0 THEN
+		Get_p_WORD			:= P_0_IDN;
+	ELSIF SetNumber = 1 THEN
+		Get_P_WORD			:= P_1_IDN;
+	ELSIF SetNumber = 2 THEN
+		Get_P_WORD			:= P_2_IDN;
+	ELSIF SetNumber = 3 THEN
+		Get_P_WORD			:= P_3_IDN;
+	ELSIF SetNumber = 4 THEN
+		Get_P_WORD			:= P_4_IDN;
+	ELSIF SetNumber = 5 THEN
+		Get_P_WORD			:= P_5_IDN;
+	ELSIF SetNumber = 6 THEN
+		Get_P_WORD			:= P_6_IDN;
+	ELSIF SetNumber = 7 THEN
+		Get_P_WORD			:= P_7_IDN;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="get_S_WORD" Id="{1d86bcb5-7636-4b69-88d6-7d42a53ee920}">
+      <Declaration><![CDATA[METHOD PRIVATE get_S_WORD : WORD
+VAR_INPUT
+	SetNumber			:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Get S-Word dependent of parameter set *)
+	IF SetNumber = 0 THEN
+		Get_S_WORD			:= S_0_IDN;
+	ELSIF SetNumber = 1 THEN
+		Get_S_WORD			:= S_1_IDN;
+	ELSIF SetNumber = 2 THEN
+		Get_S_WORD			:= S_2_IDN;
+	ELSIF SetNumber = 3 THEN
+		Get_S_WORD			:= S_3_IDN;
+	ELSIF SetNumber = 4 THEN
+		Get_S_WORD			:= S_4_IDN;
+	ELSIF SetNumber = 5 THEN
+		Get_S_WORD			:= S_5_IDN;
+	ELSIF SetNumber = 6 THEN
+		Get_S_WORD			:= S_6_IDN;
+	ELSIF SetNumber = 7 THEN
+		Get_S_WORD			:= S_7_IDN;
+	END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="AxDriveSoE_Ax5000CalcPower">
+      <LineId Id="10" Count="100" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000CalcPower.get_P_WORD">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AxDriveSoE_Ax5000CalcPower.get_S_WORD">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

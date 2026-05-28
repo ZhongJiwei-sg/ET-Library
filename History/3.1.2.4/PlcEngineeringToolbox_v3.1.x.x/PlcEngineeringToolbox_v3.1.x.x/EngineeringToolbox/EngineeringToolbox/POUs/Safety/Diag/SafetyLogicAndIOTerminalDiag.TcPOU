@@ -1,0 +1,174 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="SafetyLogicAndIOTerminalDiag" Id="{cf1fd92f-8b79-420d-b6b5-164d4b0359a6}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK SafetyLogicAndIOTerminalDiag EXTENDS SafetyLogicTerminalDiag
+VAR_OUTPUT CONSTANT
+	MIN_IN_MODULE											:	INT := 1;
+	MAX_IN_MODULE											:	INT := Param.SAFETY_LOGIC_IO_TERM_DIAG_MAX_MODULE; 
+	MIN_OUT_MODULE											:	INT := 1;
+	MAX_OUT_MODULE											:	INT := Param.SAFETY_LOGIC_IO_TERM_DIAG_MAX_MODULE; 	
+END_VAR                 									
+VAR_INPUT               									
+	FSOUT_Module_Output								AT %Q*	:	ARRAY[MIN_OUT_MODULE..MAX_OUT_MODULE] OF BOOL;	
+END_VAR
+VAR_OUTPUT
+	FSIN_Module_Fault								AT %I*	:	ARRAY[MIN_IN_MODULE..MAX_IN_MODULE] OF BOOL;
+	FSOUT_Module_Fault								AT %I*	:	ARRAY[MIN_OUT_MODULE..MAX_OUT_MODULE] OF BOOL;
+
+END_VAR
+VAR 
+END_VAR
+VAR 
+(* Events/Blocks/Var internal *)
+	EventFSINModuleFault									:	EventHandling := (SourceId := DEFAULT_SOURCE_ID, MsgId:= 7);	
+	EventFSOUTModuleFault									:	EventHandling := (SourceId := DEFAULT_SOURCE_ID, MsgId:= 8);
+	
+{attribute 'displaymode':='binary'}
+	FSIN_Faults												:	DWORD; 
+{attribute 'displaymode':='binary'}
+	FSOUT_Faults											:	DWORD; 
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Extension to ELx9xx Safety Logic with local IO's Terminal Diag	*)
+(********************************************************************)
+
+(* call super *************************************************************)
+	SUPER^();
+	
+(* Event 7-8 *******************************************************************)
+	FOR i := MIN_IN_MODULE TO MAX_IN_MODULE
+	DO
+		FSIN_Faults											:= CSETBIT32(FSIN_Faults,TO_SINT(i-1),FSIN_Module_Fault[i]);
+	END_FOR
+		
+	EventFSINModuleFault(
+		Flag		:= FSIN_Faults <> 0 AND_THEN IO.InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP AND Enable,
+		ConfirmTrig	:= Quit OR NOT Enable,
+		MsgId		:= ,
+		SourceId	:= ,
+		eClass		:=,
+		format		:= ,
+		Text1		:= DWORD_TO_BINSTR_EXT(FSIN_Faults,MAX_IN_MODULE,3),
+		Text2		:= ,
+		pText3		:= ADR(IO.DevName),
+		State		=> ,
+		Status		=> );
+
+	FOR i := MIN_OUT_MODULE TO MAX_OUT_MODULE
+	DO
+		FSOUT_Faults											:= CSETBIT32(FSOUT_Faults,TO_SINT(i-1),FSOUT_Module_Fault[i]);
+	END_FOR
+			 	
+	EventFSOUTModuleFault(
+		Flag		:= FSOUT_Faults <> 0 AND_THEN IO.InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP AND Enable,
+		ConfirmTrig	:= Quit OR NOT Enable,
+		MsgId		:= ,
+		SourceId	:= ,
+		eClass		:=,
+		format		:= ,
+		Text1		:= DWORD_TO_BINSTR_EXT(FSIN_Faults,MAX_OUT_MODULE,3),
+		Text2		:= ,
+		pText3		:= ADR(IO.DevName),
+		State		=> ,
+		Status		=> );	
+				
+	Status													:= Status OR EventFSINModuleFault.Status OR EventFSOUTModuleFault.Status;
+(*****************************************************************)
+]]></ST>
+    </Implementation>
+    <Property Name="inputModuleFault" Id="{227992d4-79e7-4c3b-b16d-0b70a31a8473}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC inputModuleFault : bool]]></Declaration>
+      <Get Name="Get" Id="{fcf3e9ac-b25e-415c-bde0-194faf878559}">
+        <Declaration><![CDATA[VAR
+	i	: int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[inputModuleFault									:= FALSE;
+FOR i := MIN_IN_MODULE TO MAX_IN_MODULE
+DO
+	IF FSIN_Module_Fault[i]
+	THEN
+		inputModuleFault							:= TRUE;
+		EXIT;
+	END_IF
+	
+END_FOR
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="moduleInFault" Id="{1cb56927-8976-4dd0-8748-835f696cf583}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC moduleInFault : bool]]></Declaration>
+      <Get Name="Get" Id="{d5d900e2-4be7-4565-a4c3-4cd8d08b4a7e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[moduleInFault			:= inputModuleFault or outputModuleFault;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="outputModuleFault" Id="{3ee14013-1d2b-4cfe-8e9a-f62a0498c219}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC outputModuleFault : bool]]></Declaration>
+      <Get Name="Get" Id="{44fde923-8c7e-4a1a-9290-fc1c7c1c74df}">
+        <Declaration><![CDATA[VAR
+	i : int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[outputModuleFault									:= FALSE;
+FOR i := MIN_OUT_MODULE TO MAX_OUT_MODULE
+DO
+	IF FSOUT_Module_Fault[i]
+	THEN
+		outputModuleFault							:= TRUE;
+		EXIT;
+	END_IF
+	
+END_FOR
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="SafetyLogicAndIOTerminalDiag">
+      <LineId Id="3" Count="6" />
+      <LineId Id="387" Count="0" />
+      <LineId Id="392" Count="1" />
+      <LineId Id="390" Count="0" />
+      <LineId Id="394" Count="0" />
+      <LineId Id="236" Count="10" />
+      <LineId Id="235" Count="0" />
+      <LineId Id="397" Count="4" />
+      <LineId Id="247" Count="0" />
+      <LineId Id="174" Count="10" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="378" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyLogicAndIOTerminalDiag.inputModuleFault.Get">
+      <LineId Id="5" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyLogicAndIOTerminalDiag.moduleInFault.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyLogicAndIOTerminalDiag.outputModuleFault.Get">
+      <LineId Id="17" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

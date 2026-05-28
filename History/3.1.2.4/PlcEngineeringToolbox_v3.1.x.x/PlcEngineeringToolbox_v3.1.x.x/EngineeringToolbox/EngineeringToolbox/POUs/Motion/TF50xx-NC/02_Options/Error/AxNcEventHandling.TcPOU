@@ -1,0 +1,198 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="AxNcEventHandling" Id="{f9829cd1-d332-43fe-9c1c-5b6bec4d8e3a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK AxNcEventHandling
+VAR CONSTANT
+END_VAR     
+VAR_INPUT
+	Flag													:	BOOL := FALSE;  
+	ConfirmTrig													:	BOOL := FALSE;
+	MsgId													:	UDINT := 201; //Default
+	SourceId												:	UDINT := 101000; //TwinCat-NC axis default multisource Id + Ax id for detailed event message
+	AxisId													:	UDINT := 0;
+	ErrorID													:	UDINT := 0; (* NC Error Id Bsp 18000 -Drive Error *)
+	Name													: 	STRING(30) := '';
+END_VAR                         							
+VAR_OUTPUT                      							
+	State													:	UDINT := TCEVENTSTATE_INVALID;
+																		(* TCEVENTSTATE_INVALID  	: WORD := 16#0000; (* Ungültig, kommt auch wenn Event noch nicht gemeldet. *)
+																			TCEVENTSTATE_SIGNALED  	: WORD := 16#0001; (* Event ist gemeldet, aber weder gegangen noch quittiert. *)
+																			TCEVENTSTATE_RESET  		: WORD := 16#0002; (* Event ist abgemeldet ('gegangen'). *)
+																			TCEVENTSTATE_CONFIRMED  : WORD := 16#0010 (16); (* Event ist quittiert. *)
+																			TCEVENTSTATE_RESETCON  	: WORD := 16#0012 (17); (* Event ist abgemeldet und quittiert *) *)
+{attribute 'displaymode':='binary'}
+	Status													:	DWORD; (*	.0 - .8 = event <class id>  / .15 Quit required / .16 = Level 0 , .17 = Level 1 , .18 = Level 2, .......... / .31 active
+																			TCEVENTCLASS_NONE			:=0,	(* No class *)
+																			TCEVENTCLASS_MAINTENANCE	:=1,	(* Maintenance hint *)
+																			TCEVENTCLASS_MESSAGE		:=2,	(* Message *)
+																			TCEVENTCLASS_HINT			:=3,	(* Hint *)
+																			TCEVENTCLASS_STATEINFO		:=4,	(* State information *)
+																			TCEVENTCLASS_INSTRUCTION	:=5,	(* Instruction *)
+																			TCEVENTCLASS_WARNING		:=6,	(* Warning *)
+																			TCEVENTCLASS_ALARM			:=7,	(* Alarm *)
+																			TCEVENTCLASS_PARAMERROR		:=8		(* Parameter error *)  *)
+END_VAR
+VAR
+	AdsEvent												:		ADSLOGEVENT :=(
+																		Event			:= FALSE,
+																		NETID			:= '',
+																		PORT			:= AMSPORT_EVENTLOG,
+																		TMOUT 			:= DEFAULT_ADS_TIMEOUT,
+																		EventConfigData := (
+																					Class 			:= TC2_SYSTEM.TCEVENTCLASS_ALARM,
+																					Prio 			:= TCEVENTPRIO_IMPLICIT,
+																					ProgId 			:= 'TcEventFormatter.TcXmlFormatter',
+																					Flags 			:= 16#0140 (* TCEVENTFLAG_LOG OR TCEVENTFLAG_SRCID *),
+																					StreamType 		:= TCEVENTSTREAM_NORMAL (* TCEVENTSTREAM_SIMPLE *),
+																					bQuitRequired 	:= FALSE));
+                    										
+	FormatString 											: STRING(15) := '%s%d%s%s%d%s';
+                    										
+	pParaArray												: ARRAY [1..6] OF PVOID;
+                    										
+	Para1													: STRING(30);
+	Para2													: UDINT;
+	Para3													: STRING(70);
+	Para4													: STRING(70);
+	Para5													: UDINT;
+	Para6													: STRING(20);
+	SetClass												: E_TcEventClass := TC2_SYSTEM.TCEVENTCLASS_ALARM;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Send axis error text to EventLogger		 							*)
+(************************************************************************)
+
+(* Event Config ************************************************)
+	IF Status.31 //Message active
+	THEN (* work EventLogger *)
+
+		AdsEvent(
+			NETID			:= ,(* siehe deklaration *)
+			PORT			:= ,(* siehe deklaration *)
+			Event			:= NOT AdsEvent.FbCleanup AND(Flag AND Para2 = ErrorID OR AdsEvent.EventState = TCEVENTSTATE_INVALID AND NOT AdsEvent.Quit),
+			EventQuit		:= AdsEvent.EventState <> TCEVENTSTATE_INVALID
+								AND AdsEvent.EventConfigData.bQuitRequired
+								AND NOT AdsEvent.Eventstate.4
+								AND NOT AdsEvent.Quit
+								AND(
+								ConfirmTrig
+								OR Para2 <> ErrorID
+								OR AdsEvent.EventQuit), (* quit send *)
+			EventConfigData	:= ,(* siehe deklaration *)
+			EventDataAddress:= ADR(pParaArray),
+			EventDataLength	:= ,
+			FbCleanup		:= NOT AdsEvent.FbCleanup AND(AdsEvent.Err OR AdsEvent.EventState = TCEVENTSTATE_RESETCON),
+			TMOUT			:= ,(* siehe deklaration *)
+			EventState		=> ,
+			Err				=> ,
+			ErrId			=> ,
+			Quit			=> );
+
+		IF AdsEvent.Event
+			AND AdsEvent.EventState = TCEVENTSTATE_INVALID
+		THEN
+			State 											:= SEL(Flag, TCEVENTSTATE_RESET, TCEVENTSTATE_SIGNALED);
+		ELSIF AdsEvent.Quit
+			AND AdsEvent.EventState = TCEVENTSTATE_INVALID
+			AND AdsEvent.EventQuit
+			OR 
+			AdsEvent.FbCleanup		
+		THEN
+			State 											:= TCEVENTSTATE_RESETCON;
+		ELSIF(AdsEvent.Err OR NOT AdsEvent.Event AND AdsEvent.EventState = TCEVENTSTATE_INVALID)
+			AND_THEN Gvl.EventHandlingStatistic.CountOut(Status)
+		THEN
+			State											:= TCEVENTSTATE_INVALID;
+		ELSE
+			State											:= MAX(State, AdsEvent.EventState);
+		END_IF
+	
+	ELSIF flag AND SourceId > 0
+	THEN (* fire event *)
+	(*	Type : 2 - Axis Event 201
+		%1 User Name 
+		%2 	Unique error id (DINT)
+		%3	Error text (STRING) ) Bsp.: [S750E20392]
+		@V1:%4	Error description (STRING) Bsp.: [S751E20392]
+		%5	Logical axis id (DINT)
+		@V2:%6	Position OF axis (REAL) or Reserved text 
+	
+	*)
+		Para1 												:= Name;
+		Para2 												:= ErrorID;
+              												
+		Para3 												:= CONCAT('[S','700'); (* SOURCE_TEXT_PTPNCI = 701 *)
+		Para3 												:= CONCAT(Para3,'E');
+		Para3 												:= CONCAT(Para3,UDINT_TO_STRING(ErrorID));
+		Para3 												:= CONCAT(Para3,']');
+              												
+		Para4 												:= CONCAT('[S','701'); (* SOURCE_DESC_PTPNCI = 701 *)
+		Para4 												:= CONCAT(Para4,'E');
+		Para4 												:= CONCAT(Para4,UDINT_TO_STRING(ErrorID));
+		Para4 												:= CONCAT(Para4,']');
+              												
+		Para5 												:= AxisId;
+		Para6 												:= ''; (* Reserve *)
+
+		pParaArray[1] 										:= ADR(Para1);
+		pParaArray[2] 										:= ADR(Para2);
+		pParaArray[3] 										:= ADR(Para3);
+		pParaArray[4] 										:= ADR(Para4);
+		pParaArray[5] 										:= ADR(Para5);
+		pParaArray[6] 										:= ADR(Para6);
+
+		
+		AdsEvent.EventConfigData.Id 						:= MsgId; (* MSG_ID = 201 *)
+ 		AdsEvent.EventConfigData.DataFormatStrAddress 		:= ADR(FormatString);
+		AdsEvent.EventConfigData.SourceId 					:= SourceId + AxisId;
+		Status												:= Gvl.EventHandlingStatistic.InitEvent(SetClass , AdsEvent.EventConfigData);	
+
+		IF AdsEvent.Err AND NOT AdsEvent.FbCleanup
+		THEN
+			AdsEvent(
+				Event			:= FALSE,
+				EventQuit 		:= FALSE,
+				EventDataAddress:= ADR(pParaArray),
+				FbCleanup		:= TRUE,
+				EventState		=> );
+		
+		ELSE (* Fire Event *)
+			AdsEvent( 	Event			:= FALSE,
+						EventQuit 		:= FALSE, 
+						FbCleanup 		:= FALSE, 
+						EventDataAddress:= ADR(pParaArray));
+			AdsEvent( 	Event 	:= TRUE);			
+			IF NOT AdsEvent.Err AND_THEN Gvl.EventHandlingStatistic.CountIn(Status) //Add event to statistic and continue if added successfully
+			THEN			
+				State 										:= TCEVENTSTATE_SIGNALED;
+			END_IF
+		END_IF
+	END_IF
+
+(*****************************************************************)]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxNcEventHandling">
+      <LineId Id="3" Count="109" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

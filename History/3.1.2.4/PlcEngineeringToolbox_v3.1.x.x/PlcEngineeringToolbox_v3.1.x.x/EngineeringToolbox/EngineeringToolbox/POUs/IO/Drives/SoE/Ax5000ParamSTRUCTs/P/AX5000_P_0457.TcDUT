@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0457" Id="{d731bd02-d49d-40d3-92af-9bc5a488e36a}">
+    <Declaration><![CDATA[TYPE AX5000_P_0457 :
+STRUCT
+	Actual_motor_voltage_phase_V:UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

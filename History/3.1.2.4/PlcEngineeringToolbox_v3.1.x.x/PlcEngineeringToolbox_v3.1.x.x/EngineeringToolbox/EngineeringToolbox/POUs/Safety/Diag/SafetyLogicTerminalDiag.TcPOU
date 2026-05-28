@@ -1,0 +1,247 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="SafetyLogicTerminalDiag" Id="{5a24fb44-a157-4b2c-89d1-3e9c6bccad75}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK SafetyLogicTerminalDiag // EL6910, EL and EP devices with integrated TwinSAFE logic 
+VAR CONSTANT
+	MIN_FB													:	INT := 1;
+	MAX_FB													:	INT := PARAM.SAFETY_PLC_TERM_DIAG_MAX_FB;
+	
+	TIMEOUT_CYCLE_COUNTER									:	TIME := T#1S;
+	DEFAULT_SOURCE_ID										:	UDINT := 100300; //Multisource id 
+	INVALID_SAFETY_LOGIC_STATE								:	USINT := 255;
+END_VAR                 									
+VAR_INPUT               									
+	Enable													:	BOOL := TRUE;	//FB will be processed as long as enable is TRUE 
+	Quit													:	BOOL;			//Resets error with rising edge 
+	IO														:	Eyx9xx;			
+END_VAR
+VAR_OUTPUT
+	{attribute 'displaymode':='binary'}
+	Status													:	DWORD; 			//current sttus of all events
+	NoOfActiveEvents										:	INT;
+END_VAR
+VAR (* FunctionBlock Status *)
+	FBInfoDataDiag	 								AT %I*	:	ARRAY [MIN_FB..MAX_FB] OF UINT; //Safety FB diagnostic information
+END_VAR
+VAR (* Events/Blocks/Var internal *)
+//	EventInputSizeMism										: 	EventHandling := (MsgId:= 1); //Msg id 1 not used for logic terminals
+//	EventOutputSizeMism										: 	EventHandling := (MsgId:= 2); //Msg id 1 not used for logic terminals
+	EventInvalidCRC											:	EventHandling := (SourceId := DEFAULT_SOURCE_ID, MsgId:= 3);	
+	EventCycleCounter										:	EventHandling := (SourceId := DEFAULT_SOURCE_ID, MsgId:= 4);
+	EventLogicState											:	EventHandling := (SourceId := DEFAULT_SOURCE_ID, MsgId:= 5);
+//	EventDiagHist											:	EventHandling := (SourceId := DEFAULT_SOURCE_ID, MsgId:= 6);
+	
+//	ReadDiagHist											:	SafetyIODeviceDiagRead;
+		
+	TON_CycleCounter										:	TON := (PT := TIMEOUT_CYCLE_COUNTER);
+	MemCycleCounter											: 	USINT;
+	
+	EventFBError											:	ARRAY [MIN_FB..MAX_FB] OF EventHandling; //MsgId from 11 to MAX_FB + 10
+                        									                        	
+	i														:	INT := MIN_FB;
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* EL6910/ ELx9xx Safety Logic Terminal Diag	*)
+(************************************************)
+
+(* call IO *************************************************************)
+	IO();
+	
+(* Event 3-10 *******************************************************************)
+(* Events 1 and 2 only for EL6900 devices *)
+
+	EventInvalidCRC(
+		Flag		:= IO.ProjectCRC = 0 AND_THEN NOT IO.WcState AND IO.InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP AND Enable,
+		ConfirmTrig	:= Quit OR NOT Enable AND EventInvalidCRC.State <> TCEVENTSTATE_INVALID ,
+		MsgId		:= ,
+		SourceId	:= ,
+		eClass		:=,
+		format		:= ,
+		Text1		:= ,
+		Text2		:= ,
+		pText3		:= ADR(IO.DevName),
+		State		=> ,
+		Status		=> );
+			
+	TON_CycleCounter(In  := IO.CycleCounter = MemCycleCounter);
+	MemCycleCounter 										:= IO.CycleCounter;   	
+	EventCyclecounter(
+		Flag		:= TON_CycleCounter.Q AND_THEN NOT IO.WcState AND IO.InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP AND Enable,
+		ConfirmTrig	:= Quit OR NOT Enable AND EventCyclecounter.State <> TCEVENTSTATE_INVALID,
+		MsgId		:= ,
+		SourceId	:= ,
+		eClass		:=,
+		format		:= ,
+		Text1		:= ,
+		Text2		:= ,
+		pText3		:= ADR(IO.DevName),
+		State		=> ,
+		Status		=> );	
+		
+	EventLogicState(
+		Flag		:= IO.SafeLogicState = INVALID_SAFETY_LOGIC_STATE AND_THEN NOT IO.WcState AND IO.InfoDataState = Tc2_EtherCAT.EC_DEVICE_STATE_OP AND Enable,
+		ConfirmTrig	:= Quit OR NOT Enable AND EventLogicState.State <> TCEVENTSTATE_INVALID ,
+		MsgId		:= ,
+		SourceId	:= ,
+		eClass		:=,
+		format		:= ,
+		Text1		:= ,
+		Text2		:= ,
+		pText3		:= ADR(IO.DevName),
+		State		=> ,
+		Status		=> );
+		
+(* Read error history *********************************************)
+(*	ReadDiagHist(
+		Busy=> , 
+		Done=> , 
+		Error=> , 
+		ErrorId=> , 
+		Execute:= """TBD""" , 
+		EcMasterDevId:= , 
+		AdsAddr=> , 
+		MsgInfoDiag=> , 
+		DevType=> , 
+		Name=> , 
+		FSOEAddr=> , 
+		DiagMsgSeverity=> , 
+		DiagMsgTextId=> , 
+		pDebugData=> , 
+		DebugDataMaxId=> );	
+		
+	EventDiagHist(
+		Flag		:= Read.msgSevyIsError AND ReadDiagHist.Done,
+		ConfirmTrig	:= Quit OR NOT Enable,
+		MsgId		:= ,
+		SourceId	:= ,
+		Class		:=,
+		format		:= ,
+		Text1		:= ,
+		Text2		:= CONCAT('0x',DWORD_TO_HEXSTR(TO_DWORD(Read.DiagMsgTextId),4,FALSE)),
+		pText3		:= ADR(IO.Name),
+		State		=> ,
+		Status		=> );
+*)		
+(* Events 11-n FB Error *******************************************)
+	NoOfActiveEvents										:= 0;
+	Status													:= EventInvalidCRC.Status OR EventCyclecounter.Status OR EventLogicState.status; 
+
+	FOR i := MIN_FB TO MAX_FB 
+	DO
+		IF FBInfoDataDiag[i] <> 0 AND Enable
+			OR EventFBError[i].State <> TCEVENTSTATE_INVALID
+		THEN
+			EventFBError[i](
+				Flag		:= FBInfoDataDiag[i] <> 0 AND Enable,
+				ConfirmTrig	:= Quit OR NOT Enable AND EventFBError[i].State <> TCEVENTSTATE_INVALID ,
+				MsgId		:= ,
+				SourceId	:= ,
+				eClass		:= ,
+				format		:= ,
+				Text1		:= ,
+				Text2		:= DWORD_TO_BINSTR(TO_DWORD(FBInfoDataDiag[i]),16),
+				pText3		:= ADR(IO.DevName),
+				State		=> );
+			NoOfActiveEvents								:= NoOfActiveEvents + 1;
+		END_IF	
+		Status												:= Status OR EventFBError[i].Status;
+	END_FOR
+		
+
+(*********************************************************)
+]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{acdd57d7-2875-4170-99fc-3893d1ccd7b4}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	FOR i := MIN_FB TO MAX_FB 
+	DO
+		EventFBError[i].SourceId 	:= SEL(EventFBError[i].SourceId = 0, EventFBError[i].SourceId, DEFAULT_SOURCE_ID);
+		EventFBError[i].MsgId		:= TO_UINT(i + 10);
+		EventFBError[i].Text1		:= INT_TO_STRING(i);	
+	END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="sourceId" Id="{c33c33ed-b9d3-484a-9e03-d15db2a00de0}">
+      <Declaration><![CDATA[PROPERTY PUBLIC sourceId : UDINT]]></Declaration>
+      <Get Name="Get" Id="{65aa34e7-8aa2-4406-ab6e-978b9e478082}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SourceId := EventLogicState.SourceId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{846d8a32-b17e-4cb6-b058-ffea3950a049}">
+        <Declaration><![CDATA[VAR
+	i	: int;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF EventLogicState.SourceId <> SourceId THEN
+	EventLogicState.SourceId							:= SourceId;
+	EventCycleCounter.SourceId							:= SourceId;
+	EventInvalidCRC.SourceId							:= SourceId;
+	FOR i := MIN_FB TO MAX_FB 
+	DO
+		EventFBError[i].SourceId						:= SourceId;
+	END_FOR
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="SafetyLogicTerminalDiag">
+      <LineId Id="3" Count="6" />
+      <LineId Id="248" Count="1" />
+      <LineId Id="236" Count="10" />
+      <LineId Id="235" Count="0" />
+      <LineId Id="247" Count="0" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="174" Count="10" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="255" Count="10" />
+      <LineId Id="254" Count="0" />
+      <LineId Id="306" Count="1" />
+      <LineId Id="313" Count="14" />
+      <LineId Id="309" Count="0" />
+      <LineId Id="328" Count="0" />
+      <LineId Id="330" Count="10" />
+      <LineId Id="329" Count="0" />
+      <LineId Id="341" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="49" Count="14" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="64" Count="3" />
+      <LineId Id="304" Count="0" />
+      <LineId Id="68" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyLogicTerminalDiag.FB_init">
+      <LineId Id="16" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyLogicTerminalDiag.sourceId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyLogicTerminalDiag.sourceId.Set">
+      <LineId Id="5" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

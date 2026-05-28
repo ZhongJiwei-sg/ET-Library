@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0305" Id="{a91bd465-d9c7-4757-a6e7-5855f519b67d}">
+    <Declaration><![CDATA[TYPE AX5000_P_0305 :
+STRUCT
+	I2C_Bus_Lcd_Ext_ADC_Encoder_parameter_channel_String_KeyPad_Procedure_command_calls_Powermanagement_Feedback_Dsp_Device_state_machine_rsvd:UDINT;
+(*I2C_Bus 2 Bit; Lcd 2 Bit; Ext_ADC 2 Bit; Encoder 2 Bit; parameter_channel_String 2 Bit; KeyPad 2 Bit; Procedure_command_calls 2 Bit; Powermanagement 2 Bit; Feedback_Dsp 2 Bit; Device_state_machine 2 Bit; rsvd 12 Bit*)
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

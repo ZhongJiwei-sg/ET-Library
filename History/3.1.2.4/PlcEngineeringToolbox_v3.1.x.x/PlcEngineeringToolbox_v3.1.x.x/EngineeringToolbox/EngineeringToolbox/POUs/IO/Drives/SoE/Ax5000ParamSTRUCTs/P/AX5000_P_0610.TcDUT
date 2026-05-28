@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0610" Id="{9ee11667-917c-4145-b5f0-5eba64ad7de5}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}
+TYPE AX5000_P_0610 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Velocity_limit:DINT;
+	Velocity_condition:UINT;
+//	{attribute 'hide'}
+	Rsvd:UINT;
+	Torque_force_limit:UINT;
+//	{attribute 'hide'}
+	Rsvd1:UINT;
+	Torque_force_condition:UINT;
+//	{attribute 'hide'}
+	Rsvd2:UINT;
+//	{attribute 'hide'}
+	Rsvd3:UDINT;
+//	{attribute 'hide'}
+	Rsvd4:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

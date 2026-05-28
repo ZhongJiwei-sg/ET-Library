@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <DUT Name="SAFETY_CIRCUIT_STATUS" Id="{1d6336e3-04a9-4382-b83b-e84bb748b842}">
+    <Declaration><![CDATA[TYPE SAFETY_CIRCUIT_STATUS :
+STRUCT
+	State													:	eSTATE := eSTATE.ABORTED;
+
+	InAborting												:	BOOL; //MonOut switched to false, MonDelOut still true
+	InAborted												:	BOOL; //MonOut and MonDelOut = FALSE
+	InClearing												:	BOOL; //MonOut and MonDelOut = TRUE, OK delay time is running
+	InIdle													:	BOOL; //OK = TRUE
+	OK														:	BOOL; //On/Off Delay Signal
+	OK_2													:	BOOL; //On/Off Delay Signal 2 - between OK and MonDelOut delay time
+	RT														:	BOOL; //R trig based on OK
+	FT														:	BOOL; //F trig based on MonDelOut
+                            								
+//Hardwaresignal       								
+	ReadyToRestart											:	BOOL := FALSE; //TRUE when restart of safety circuit is executable 
+	MonOut													:	BOOL := FALSE; //output
+	MonDelOut												:	BOOL := FALSE; //output delayed
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

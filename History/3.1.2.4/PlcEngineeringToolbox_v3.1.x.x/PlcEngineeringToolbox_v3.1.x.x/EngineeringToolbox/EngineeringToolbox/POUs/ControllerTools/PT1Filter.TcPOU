@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="PT1Filter" Id="{108d112b-9710-4591-8d23-172ab8888049}" SpecialFunc="None">
+    <Declaration><![CDATA[//Low pass filter with a programmable time Tn and factor Kp.
+FUNCTION_BLOCK PT1Filter
+VAR_INPUT
+	Enable													:	BOOL ; 	// FB will be processed as long as enable is TRUE 
+	In														:	LREAL := 0.0;	// Actual value
+	ResetTrig												:	BOOL ; 	// The function block will be reset with a rising edge 
+	Sync													:	BOOL ; 	// Synchronise In to Q - equivalent to Synchronize method
+	Kp														:	LREAL := 1.0; 	// Gain
+	Tn														:	TIME := T#1S; 	// Integral time 
+	Cycletime 												:	TIME := T#10MS;	// cycletime 
+END_VAR	            										
+VAR_OUTPUT          										
+	Q														: LREAL;			// Output
+	Error													: BOOL;				// Rising edge of Error informs that an error occurred during the execution of the Function Block 
+END_VAR             										
+VAR                 	
+	Q_old													: LREAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(**************************************************************************************
+	formula: 
+	y(k) = [1-T/T1]	* y(k-1)
+			+ T/T1		* v 		* e(k) 
+*************************************************************************************)
+
+	Error 													:= Cycletime = T#0MS OR  tn = T#0MS OR Kp = 0.0;
+                            								
+	IF Enable               								
+		AND NOT Error       								
+	THEN                    								
+		Q 													:=  (1- TIME_TO_LREAL(Cycletime) / TIME_TO_LREAL(Tn))	* Q_old
+															 	+ TIME_TO_LREAL(Cycletime) / TIME_TO_LREAL(Tn)	* Kp		* In;
+		Q_Old 												:= Q;
+	ELSE //Hold
+		;
+	END_IF
+
+	IF ResetTrig
+	THEN
+		reset();
+	ELSIF Sync
+	THEN
+		Synchronize(IN);
+	END_IF
+
+(************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="reset" Id="{25a1b2b8-8f74-41af-915c-8ba67ee0f42a}">
+      <Declaration><![CDATA[METHOD reset : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q := Q_old 				:= 0.0;
+reset				:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="synchronize" Id="{0a7d2368-50f4-4e35-ace5-c12e38cda136}">
+      <Declaration><![CDATA[METHOD PUBLIC synchronize : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	IN						:	LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Q 	:= Q_Old 	 := IN;
+Synchronize		:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="PT1Filter">
+      <LineId Id="46" Count="25" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="PT1Filter.reset">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="PT1Filter.synchronize">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

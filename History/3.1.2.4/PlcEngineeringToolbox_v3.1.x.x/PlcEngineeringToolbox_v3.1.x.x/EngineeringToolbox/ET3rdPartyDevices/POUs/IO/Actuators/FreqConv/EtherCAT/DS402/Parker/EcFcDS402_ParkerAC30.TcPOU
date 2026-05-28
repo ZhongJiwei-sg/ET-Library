@@ -1,0 +1,256 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EcFcDS402_ParkerAC30" Id="{abc6ca9c-9164-4f6c-abfa-e70e794f6326}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EcFcDS402_ParkerAC30 EXTENDS EcFcDS402_ComBase IMPLEMENTS I_ActuatorFwdRev
+VAR_INPUT
+	RefVelo													: 	LREAL := 2000; 	//sets speed of rotation	
+	RampUp											AT  %Q*	:	TIME := T#10S;	//0486: Acceleration Time
+	RampDown										AT  %Q*	:	TIME := T#10S;	//0487: Deceleration Time
+END_VAR                     							
+VAR_OUTPUT               
+	CiA_Control												:	CiA_DS402Controlword_Parker;
+	CiA_Status												:	CiA_DS402Statusword_Parker;
+
+	{attribute 'displaymode':='hex'}   							
+	WarningCode										AT  %I*	:	UDINT;			//0829: Warnings  1 - 32
+	ActVelo											AT  %I* : 	REAL; 			//0395: Actual Speed Percent
+	Power											AT  %I*	: 	REAL; 			//0380: Power kW
+	Q_TargetVelo							 	AT  %Q* :	REAL;			//0681: Comms Reference
+END_VAR                 							
+VAR (* IO Internal *)   							
+END_VAR                 								
+VAR                     	
+END_VAR                 	]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Com Parker AC30 										V1.0   *)
+(***************************************************************)
+
+(* Protection Switch *******************************************)		
+	IF ResetTrig  
+	THEN 
+		REset(); 
+	END_IF
+	
+	ProtSwitchOK();	
+	FuseBrakeOK(); (* same parameter like ProtSwitch *)
+
+(* Contactor ***************************************************)
+	Q_Contactor 											:= Contactor AND ProtSwitchOK.Q AND FuseBrakeOK.Q;
+
+(* Read status *************************************************)
+	CiA_Status.readStatusword(Statusword);
+
+(* interpret status word ***************************************)
+	Ready													:= CiA_Status.ReadyToSwitchOn AND Q_Contactor;
+	Error													:= CiA_Status.Fault AND Q_Contactor;                       									
+	Busy													:= CiA_Status.OperationEnabled AND ActVelo <> 0; 
+	                                        
+// write contorlword DS 402  ****************************************
+	CiA_Control.SwitchOn									:= Enable AND Q_Contactor;
+	CiA_Control.EnableOperation								:= FeedBwd AND StartBwd AND NOT Start OR Feed AND Start AND NOT StartBwd;
+	CiA_Control.FaultReset									:= ResetIntern;
+	CiA_Control.EnableRevOp									:= CiA_Control.EnableOperation AND 	StartBwd;						
+
+(* setvalue ***************************************************)
+	IF CiA_Control.EnableOperation AND RefVelo <> 0.0
+	THEN
+		IF StartBwd
+		THEN
+			Q_TargetVelo 									:= TO_REAL(Velo/RefVelo * 100.0  * -1); (* 1 Digit = 1 rpm *)
+		ELSE	
+			Q_TargetVelo									:= TO_REAL(Velo/RefVelo * 100.0); (* 1 Digit = 1 rpm *)
+		END_IF	
+	ELSE
+		Q_TargetVelo										:= 0;
+	END_IF
+	
+// Reset FALSE ****************************************************
+	ResetIntern												:= FALSE;
+	
+(* HmiStatus **************************************************)
+	Status.0 												:= CiA_Status.OperationEnabled AND StartBwd; 	// counter-clockwise rotation
+	Status.1 												:= CiA_Status.OperationEnabled AND Start; 	// clockwise rotation
+	Status.2 												:= ActVelo < 0;
+	Status.3												:= ActVelo > 0;
+	Status.4 												:= FeedBwd;
+	Status.5 												:= Feed;
+	Status.6 												:= Ready;
+	Status.7 												:= Error;
+// ****************************************************************
+
+
+	
+                        									
+
+	
+]]></ST>
+    </Implementation>
+    <Folder Name="methods" Id="{0f7732c7-a54a-4f5a-87e1-4a2281ebcdf7}" />
+    <Folder Name="properties" Id="{f7668a6e-ebc6-4f42-8abb-8a3cc76a3f47}" />
+    <Property Name="forwardStarted" Id="{48f68d5b-e6ff-4256-8131-9767a5a70b6a}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public forwardStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4663d6b5-d645-4a69-ad6f-316b20700ff8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[forwardStarted := CiA_Control.EnableOperation and Q_TargetVelo > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isDisabled" Id="{28f0547b-3488-4ec8-8d8d-3a7360d602ac}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0a6d4449-7dfb-4cc6-bd54-3d8e6641a98a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isDisabled := not CiA_Status.SwitchedOn and not CiA_Status.OperationEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isEnabled" Id="{43ec42d4-f522-4731-9032-feeeb6841e18}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isEnabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3906fe97-a26b-44f8-9a83-900d44767882}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isEnabled := CiA_Status.SwitchedOn or CiA_Status.OperationEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOff" Id="{bbf0bec5-ff67-442b-b9bf-7634006874ce}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f26f5183-ff4c-4dc4-8f72-a594fb39d246}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOff := NOT CiA_Status.OperationEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isOn" Id="{83171d3e-a27e-4bb3-97b3-b7589faba185}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public isOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{52067bc2-5713-41fd-8e02-dd716d369a91}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isOn := CiA_Status.OperationEnabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="reverseStarted" Id="{6354b634-e07c-4dfd-af03-ee73ab16c05e}" FolderPath="properties\">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public reverseStarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{46549679-62f1-4b49-93bb-4335c73d1b4f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[reverseStarted := CiA_Control.EnableOperation and Q_TargetVelo < 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="setDisable" Id="{b3d78416-f239-48f5-b600-2631a3b1a421}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD setDisable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+SetDisable													:= Super^.setDisable() AND NOT CiA_Status.SwitchedOn;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setEnable" Id="{680a0364-3574-4b0c-807f-f3ab962005c1}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD setEnable : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+SetEnable													:= SUPER^.setEnable() AND CiA_Status.SwitchedOn;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startForward" Id="{d5776931-40b6-486e-a909-ce7346f307e1}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC startForward : bool //Return busy flag
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= TRUE; 
+StartBwd 													:= FALSE;
+startForward												:= Busy and Q_TargetVelo > 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startReverse" Id="{f15f9d8d-2fa3-42d5-afe6-e6879d25eb51}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC startReverse : bool //Return busy flag
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start 														:= FALSE; 
+StartBwd 													:= TRUE;
+startReverse												:= Busy and Q_TargetVelo < 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="switchOn" Id="{8d2376b2-b2a0-4e45-af2f-6ac0b157e4eb}" FolderPath="methods\">
+      <Declaration><![CDATA[METHOD PUBLIC switchOn : BOOL  //True if motor is switched on
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[switchOn := startForward();]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="EcFcDS402_ParkerAC30">
+      <LineId Id="804" Count="60" />
+      <LineId Id="57" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.forwardStarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.isDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.isEnabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.isOff.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.isOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.reverseStarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.setDisable">
+      <LineId Id="6" Count="0" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.setEnable">
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.startForward">
+      <LineId Id="23" Count="1" />
+      <LineId Id="34" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.startReverse">
+      <LineId Id="29" Count="1" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+    <LineIds Name="EcFcDS402_ParkerAC30.switchOn">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

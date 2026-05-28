@@ -1,0 +1,301 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="SafetyPlcBackupRestore" Id="{1b20d6c8-3a91-4ddd-8c3d-960b1ed2c6ce}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK SafetyPlcBackupRestore Extends FbBase
+VAR_OUTPUT CONSTANT
+	FNC_BACKUP_EXIST										:	INT := 0; //Check if backup file exists on hardware disk
+	FNC_BACKUP												:	INT := 1; //Safe project on hardware disk as hex file
+	FNC_RESTORE												:	INT := 2; //Write project back into EL69xx 
+END_VAR             										
+VAR_INPUT           										
+	Fnc														:	INT (FNC_BACKUP_EXIST..FNC_RESTORE) := FNC_BACKUP;
+	NetId													: 	T_AmsNetId := '';	//Net ID as text
+	EcMasterNetID											: 	T_AmsNetId; 		//AmsNetID of the EtherCAT device *)
+	EcMasterPort											: 	T_AmsPort; 			//Port Number of the EL6900 terminal (EtherCAT address) *)
+	FilePath												:	T_MaxString := 'C:\'; //path to backup file
+	FileName												:	STRING(20) := 'SafetyPlcFW.hex'; //name of backup file                      									
+	Timeout													: 	TIME := T#60S;		//time until timeout
+END_VAR
+VAR_OUTPUT
+	DataLength												:	UDINT := 0;
+	ErrorFnc												:	STRING(30) := '';
+END_VAR
+VAR
+(* Memory ***********************************************************)
+	MemFnc													:	INT := -1;
+	
+(* Trigger **********************************************************)
+
+(* Timer ************************************************************)
+	tonDelay												:	ton;
+
+(* blocks ***********************************************************)
+	EnumFindFileEntry										:	FB_EnumFindFileEntry;
+	BackupEL6900											:	FB_BackupEL6900;
+	RestoreEL6900											:	FB_RestoreEL6900;
+	
+(* Dummys ***********************************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(************************************************************************************)
+	(*																					*)
+	(*		B E C K H O F F   N E W   A U T O M A T I O N   T E C H N O L O G Y    		*)
+	(*																					*)
+	(*		Eiserstr.5	D-33415 Verl	Germany	phone:	+49-5246-0	www.Beckhoff.Com	*)
+    (*																					*)
+    (*		Bausteinbeschreibung	:	Restore/Backup plc project 						*)
+	(*		TwinCAT-Version			:	3.xx 											*)
+	(*		Version					:	V1.1/ 05/16										*)
+ 	(*		Autor					:	Daniel Schlingmann								*)
+	(*		Lib						:	tc2_backuprestoreel6900.compiled-library		*)
+	(*																					*)
+	(************************************************************************************)
+
+(* Execute ***************************************************************************************)
+	rtExecute(CLK := Execute);
+	
+	CASE state OF
+	0:
+		Busy												:= FALSE;
+		// init		                                	
+		IF NOT Execute                              	
+		THEN        
+			DataLength										:= 0;                                	
+			Done 											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorFnc										:= '';
+		END_IF                                      			                                            	
+		IF rtExecute.Q                             	
+		THEN                                        	
+			Done 											:= FALSE;
+			Busy											:= TRUE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorFnc										:= '';
+			DataLength										:= 0;
+			MemFnc											:= Fnc;
+			BackupEL6900(ReadProject := FALSE);
+			RestoreEL6900(writeProject := FALSE);
+			EnumFindFileEntry(bExecute := FALSE, sNetId := '', tTimeout := Timeout, sPathName := CONCAT(FilePath,FileName));
+			CASE Fnc OF
+			FNC_BACKUP_EXIST:state							:= 1;		
+			FNC_BACKUP		:state							:= 10;									
+			FNC_RESTORE		:state							:= 20;									
+			ELSE
+				Busy										:= FALSE;
+				Done										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_INVALIDPARM;	
+				ErrorFnc									:= 'SafetyPlcBackupRestore';					
+			END_CASE
+		END_IF
+	
+	(* Backup exists *****************************************************)
+	1: //first abort old command
+		EnumFindFileEntry(bExecute := TRUE ,eCmd := eEnumCmd_Abort );
+		IF NOT EnumFindFileEntry.bBusy
+		THEN
+			EnumFindFileEntry(bExecute := FALSE ,eCmd := eEnumCmd_Abort );
+			EnumFindFileEntry(bExecute := TRUE ,eCmd := eEnumCmd_First );
+			state											:= State + 1;
+		END_IF
+
+	2: //read entrys
+		EnumFindFileEntry(bExecute := TRUE);
+		IF NOT EnumFindFileEntry.bBusy
+		THEN
+			IF NOT EnumFindFileEntry.bError
+				AND EnumFindFileEntry.stFindFile.sFileName = FileName
+			THEN
+				Done										:= TRUE;
+				Busy										:= FALSE;
+				DataLength 									:= EnumFindFileEntry.stFindFile.fileSize.dwLowPart;
+				state										:= 0;
+			ELSE
+				Busy										:= FALSE;
+				Done										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= SEL(EnumFindFileEntry.bError , E_AdsErr.DEVICE_NOTFOUND ,EnumFindFileEntry.nErrID);
+				ErrorFnc									:= 'EnumFindFileEntry';
+				state										:= 0;
+			END_IF		
+		END_IF
+		
+	(* Backup (save project to disk) *************************************************************)
+	10:
+		IF NOT BackupEL6900.bBusy
+		THEN
+			BackupEL6900(
+				ReadProject		:= TRUE, 
+				EtherCATAmsNetID:= EcMasterNetID, 
+				Port			:= EcMasterPort, 
+				FileWriteAmsNetID:= '', 
+				FilePathname	:= CONCAT(FilePath,FileName), 
+				bBusy			=> , 
+				bError			=> , 
+				uErrID			=> , 
+				ReadDataLength	=> );
+			state											:= state + 1;	
+		ELSE
+			BackupEL6900(ReadProject := FALSE);
+		END_IF
+		
+	11:
+		BackupEL6900();
+		IF NOT BackupEL6900.bBusy
+		THEN
+			IF BackupEL6900.bError
+			THEN
+				Busy										:= FALSE;
+				Done										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= BackupEL6900.uErrID;
+				ErrorFnc									:= 'BackupEL6900';
+				state										:= 0;				
+			ELSE
+				Done										:= TRUE;
+				Busy										:= FALSE;
+				DataLength 									:= BackupEL6900.ReadDataLength;	
+				state										:= 0;			
+			END_IF
+		END_IF
+
+	(* Restore *************************************************************)
+	20:
+		IF NOT RestoreEL6900.bBusy
+		THEN
+			RestoreEL6900(
+				WriteProject	:= TRUE, 
+				EtherCATAmsNetID:= EcMasterNetID, 
+				Port			:= EcMasterPort, 
+				FileReadAmsNetID:= '', 
+				FilePathname	:= CONCAT(FilePath,FileName), 
+				bBusy			=> , 
+				bError			=> , 
+				uErrID			=> , 
+				WriteDataLength	=> );
+			state											:= state + 1;	
+		ELSE
+			RestoreEL6900(WriteProject := FALSE);
+		END_IF
+		
+	21:
+		RestoreEL6900();
+		IF NOT RestoreEL6900.bBusy
+		THEN
+			IF RestoreEL6900.bError
+			THEN
+				Busy										:= FALSE;
+				Done										:= FALSE;
+				Error										:= TRUE;
+				ErrorId										:= RestoreEL6900.uErrID;
+				ErrorFnc									:= 'RestoreEL6900';
+				state										:= 0;				
+			ELSE
+				Done										:= TRUE;
+				Busy										:= FALSE;
+				DataLength 									:= RestoreEL6900.WriteDataLength;	
+				state										:= 0;			
+			END_IF
+		END_IF
+		
+	END_CASE
+			
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="backup" Id="{4531e6a3-4378-452e-aa20-5aafbb95a952}">
+      <Declaration><![CDATA[METHOD PUBLIC backup : BOOL //Return value = TRUE if busy
+//required parameter
+//EcMasterNetID
+//EcMasterPort
+//FilePath
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE state OF
+0:	
+	Fnc 													:= FNC_BACKUP;
+	THIS^(Execute:=Execute);
+1: 
+	;
+
+END_CASE
+Backup 														:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="fileExists" Id="{d11972a4-6874-4afa-b525-78087c1edad3}">
+      <Declaration><![CDATA[METHOD PUBLIC fileExists : BOOL //Return value = TRUE if busy
+//required parameter
+//FilePath
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE state OF
+0:	
+	Fnc 													:= FNC_BACKUP_EXIST;
+	THIS^(Execute:=Execute);
+1: 
+	;
+
+END_CASE
+fileExists 														:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="restore" Id="{8f96e2d8-7d88-48bd-960a-54955e8ebcb5}">
+      <Declaration><![CDATA[METHOD PUBLIC restore : BOOL //Return value = TRUE if busy
+//required parameter
+//EcMasterNetID
+//EcMasterPort
+//FilePath
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE state OF
+0:	
+	Fnc 													:= FNC_RESTORE;
+	THIS^(Execute:=Execute);
+1: 
+	;
+
+END_CASE
+Restore 													:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="SafetyPlcBackupRestore">
+      <LineId Id="250" Count="166" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyPlcBackupRestore.backup">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyPlcBackupRestore.fileExists">
+      <LineId Id="26" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SafetyPlcBackupRestore.restore">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

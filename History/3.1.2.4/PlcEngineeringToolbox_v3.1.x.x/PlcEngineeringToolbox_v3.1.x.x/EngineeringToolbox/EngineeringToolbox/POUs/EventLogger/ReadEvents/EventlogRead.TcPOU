@@ -1,0 +1,446 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="EventlogRead" Id="{98f96eb0-b0c6-4bef-a3ae-a137616151f8}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Read TwinCat ADS evenlogger messages via ADS into PLC in Unicode format
+FUNCTION_BLOCK EventlogRead EXTENDS FbBase
+VAR CONSTANT
+	IGRP_ENUMEVENTS											: UDINT := 16#190;
+	IOFFS_ENUM_CONTINUE										: UDINT := 16#1020;
+	IOFFS_ENUM_CLOSE										: UDINT := 16#1030;
+                                        					
+	IGRP_GETTEXT											: UDINT := 16#1F4;
+	IOFFS_GETCOMPLETESTRING									: UDINT := 16#0;
+	IOFFS_GETSOURCENAME										: UDINT := 16#1;
+                                        					
+	IOFFS_BEGINENUMACTIVE									: UDINT := 16#0;
+	IOFFS_BEGINENUMLOGGED									: UDINT := 16#1;
+                                        	
+	IGRP_TCEVENTSTREAM_SIMPLE								: UDINT := 16#1;
+	IOFFS_TCEVENTCLASS_NONE 								: UDINT := 16#0;
+END_VAR
+VAR_OUTPUT CONSTANT
+	MIN_EVENT												: INT := 1; 
+	MAX_EVENT												: INT := PARAM.EVENT_HANDLING_CONFIG.EVENTLOG_READ_MAX_EVENTS ; //End index event list  - see library parameter to customize parameter
+	
+{attribute 'displaymode':='binary'}
+	OPTION_USE_STATE_FOR_TIMESTAMP							: 	BYTE :=2#0000_0001; //option to enable timestamp according to event state instead of only signaled timestamp
+{attribute 'displaymode':='binary'}
+	OPTION_GET_HOSTNAME_FOR_EACH_EVENT						: 	BYTE :=2#0000_0010; //option to read host name for each single event
+END_VAR                                 					
+VAR_INPUT                               					
+	LangId													: eLCID := eLCID.US; //See LCID 	
+	NetId													: T_AMSNetId := '';
+	TimeOut													: TIME := DEFAULT_ADS_TIMEOUT;
+	TimezoneBias											: DINT; //Timezone bias to UTC in minutes - As timestamp provided by Evetlogger is in UTC
+{attribute 'displaymode':='binary'}
+	Options													: BYTE := 2#0000_0000; 
+END_VAR                                 					
+VAR_OUTPUT                              					
+	Event													: ARRAY [MIN_EVENT..MAX_EVENT] OF EVENTLOG_READ_DATA; //Event list 
+	TotalNumberOfEvents										: INT := 0; //Number of events in list
+	QuitReqNumberOfEvents									: INT := 0; //Number of events in list where quit is required
+	CurrentEventCount										: INT := 0; //Count down the number of events need to read 
+	ExecutionTime											: TIME; //Total cycle time to read all events
+	ClassStatus												: DWORD; //Overview of active TC event classes - bit number is equivalent to TcEventClass count
+END_VAR
+VAR
+(* Local memory ********************************************)
+	MemLastErrorId											:	UDINT;
+	MemTargetNetId											: T_AMSNetId;
+	ReadBytes												: UDINT;
+	MemTimeStartCycle										: TIME;
+	MemClassStatus											: DWORD;
+	MemEventFiletime										: T_FILETIME;	                         					
+	MemADSEvent												: EVENTLOG_READ_DATA;
+	                                    					
+	EventStream												: EVENTLOG_READ_STREAM;
+	HandleInfo												: EVENTLOG_READ_HANDLEINFO;
+	PassHandleInfo											: EVENTLOG_READ_HANDLEINFO;
+
+	CopyLen													:	UDINT;
+(* Timer *******************************************************)
+
+(* Trigger *****************************************************)
+	
+(* function-blocks *********************************************)
+	fbAdsRead												: ADSREAD;
+	fbAdsReadWrite											: ADSRDWRTEX;
+	fbAdsWrite												: ADSWRITE;
+	fbGetHostName											: FB_GetHostName;
+	
+(* Error *******************************************************)
+
+(* internal used dummys *************************************)
+	i														: 	UINT := 0 ;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Read Eventlogger messages via ADS into the PLC  			 Unicode	*)
+	(************************************************************************)
+
+(* action **************************************************************************)
+rtExecute(CLK := Execute);
+CASE State OF
+	0: 	(* Begin *)
+		IF rtExecute.Q
+		THEN
+			Busy 											:= TRUE;
+			Done 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorId 										:= 0;
+			fbAdsRead(READ := FALSE);           			
+			fbAdsReadWrite(WRTRD := FALSE);     			
+			fbAdsWrite(WRITE := FALSE);         			
+			fbGetHostName(bExecute := FALSE);   			
+			MemTimeStartCycle								:= TIME();
+			MemClassStatus									:= 0;
+			State 											:= 1;
+                                                				
+		ELSIF NOT Execute                       				
+		THEN                                    				
+			Done											:= FALSE;
+			Busy 											:= FALSE;
+			Error 											:= FALSE;
+			ErrorId 										:= 0;
+		END_IF
+
+	1:	(* Get Handle*)
+		fbAdsRead(
+			NETID		:= NetId,
+			PORT		:= AMSPORT_EVENTLOG,
+			IDXGRP		:= IGRP_ENUMEVENTS,
+			IDXOFFS		:= 16#1000 + IOFFS_BEGINENUMACTIVE,
+			LEN			:= SIZEOF(HandleInfo),
+			DESTADDR	:= ADR(HandleInfo),
+			READ		:= TRUE,
+			TMOUT		:= Timeout,
+			BUSY		=> ,
+			ERR			=> ,
+			ErrId		=> );
+
+		IF NOT fbAdsRead.BUSY
+		THEN
+			IF NOT fbAdsRead.ERR
+			THEN
+				CurrentEventCount 							:= LIMIT(0,DWORD_TO_INT(HandleInfo.Count),MAX_EVENT);
+				TotalNumberOfEvents 						:= CurrentEventCount;
+				QuitReqNumberOfEvents						:= CurrentEventCount;
+				
+				IF CurrentEventCount < 1
+				THEN (* no actice event *)
+					MEMSET(ADR(Event),0,SIZEOF (Event)); (* alle Events loeschen *)
+					state 									:= 99;
+				ELSE (* start reading data - deleting rest of current list *)
+					MEMSET(ADR(Event[MIN(TotalNumberOfEvents + 1,MAX_EVENT)]),0, SIZEOF(Event[1]) * TO_UDINT((MAX_EVENT - TotalNumberOfEvents)));
+					
+					state 									:= 2;
+				END_IF
+				
+			ELSE
+				CurrentEventCount 							:= 1;
+				TotalNumberOfEvents 						:= 1;
+				QuitReqNumberOfEvents						:= 1;				
+				ErrorId										:= fbAdsRead.ERRID;
+				MEMSET(ADR(Event),0,SIZEOF (Event)); (* alle Events loeschen *)
+				Event[1].eClass								:= TCEVENTCLASS_ALARM;
+				Event[1].MsgText							:= WCONCAT("Error get event handle - Error ID: ", TO_WSTRING(ErrorId));
+				Event[1].MegLen								:= TO_DWORD(WLEN(Event[1].MsgText));
+				Event[1].Source								:= "<Unknown>";	
+				Event[1].Computer							:= '<Local>';	
+				
+				State 										:= 99;
+			END_IF
+			fbAdsRead(READ := FALSE);		
+		END_IF
+
+	(* Read Event Stream **************************************************************)
+	2: 
+		PassHandleInfo.Enum 								:= HandleInfo.Enum;
+		PassHandleInfo.Count 								:= 1;
+
+		fbAdsReadWrite(
+			NETID		:= NetId,
+			PORT		:= AMSPORT_EVENTLOG,
+			IDXGRP		:= IGRP_ENUMEVENTS,
+			IDXOFFS		:= IOFFS_ENUM_CONTINUE,
+			WRITELEN	:= SIZEOF(PassHandleInfo),
+			READLEN		:= SIZEOF(EventStream),
+			SRCADDR		:= ADR(PassHandleInfo),
+			DESTADDR	:= ADR(EventStream),
+			WRTRD		:= TRUE,
+			TMOUT		:= Timeout,
+			BUSY		=> ,
+			ERR			=> ,
+			ErrId		=> ,
+			COUNT_R		=> ReadBytes);
+			
+		IF NOT fbAdsReadWrite.BUSY
+		THEN
+			IF NOT fbAdsReadWrite.ERR
+			THEN
+				IF EventStream.data.zFmtProgId = '' THEN
+					EventStream.data.zFmtProgId 			:= 'TcEventFormatter.TcXmlFormatter';
+				END_IF
+				EventStream.cbStream 						:= EventStream.cbStream + 2;
+				EventStream.count 							:= TO_DWORD(LangId);
+				(* Target NetId from Event array *)
+				MemTargetNetId 								:= F_CreateAmsNetId(EventStream.data.AdsAddr);
+				
+				MEMSET(ADR(MemAdsEvent),0,SIZEOF(MemAdsEvent));
+					
+				MemADSEvent.eClass							:= DWORD_TO_UINT(EventStream.data.Class);
+				MemADSEvent.id 								:= EventStream.data.Id;
+				MemADSEvent.SourceId						:= EventStream.data.SrcId;
+				MemADSEvent.State							:= EventStream.data.State;
+				MemADSEvent.Flags							:= EventStream.data.Flags;
+						
+				IF NOT Options.0
+				THEN
+					MemADSEvent.Timestamp					:= FILETIME_TO_DCTIME64(EventStream.data.TimeSignaled);							
+				ELSE
+					CASE MemADSEvent.State OF
+					TCEVENTSTATE_SIGNALED:	
+						MemADSEvent.Timestamp				:= FILETIME_TO_DCTIME64(EventStream.data.TimeSignaled);							
+					TCEVENTSTATE_RESET:									
+						MemADSEvent.Timestamp				:= FILETIME_TO_DCTIME64(EventStream.data.TimeReseted);	
+					TCEVENTSTATE_CONFIRMED:					
+						MemADSEvent.Timestamp				:= FILETIME_TO_DCTIME64(EventStream.data.TimeConfirmed);	
+					TCEVENTSTATE_RESETCON:			
+						MemADSEvent.Timestamp				:= MAX(FILETIME_TO_DCTIME64(EventStream.data.TimeReseted),FILETIME_TO_DCTIME64(EventStream.data.TimeConfirmed));				
+					ELSE //TCEVENTSTATE_INVALID:
+						MemADSEvent.Timestamp				:= FILETIME_TO_DCTIME64(EventStream.data.TimeSignaled);	
+					END_CASE					
+				END_IF
+				IF TimezoneBias > 0
+				THEN
+					MemADSEvent.Timestamp					:= MemADSEvent.Timestamp + (60 * EC_DCTIME_TICKSPERSEC64 * TO_ULINT(TimezoneBias));
+				ELSIF TimezoneBias < 0
+				THEN
+					MemADSEvent.Timestamp					:=  MemADSEvent.Timestamp - (TO_ULINT(ABS(TimezoneBias)) * 60 * EC_DCTIME_TICKSPERSEC64);
+				END_IF
+				MemADSEvent.TimestampDT						:= FILETIME_TO_DT(DCTIME64_TO_FILETIME(MemADSEvent.Timestamp));	
+				MemClassStatus								:= SETBIT32(MemClassStatus, UINT_TO_SINT(Event[CurrentEventCount].eClass));
+				state 										:= 3;
+			ELSE
+				ErrorId 									:= fbAdsReadWrite.ErrId;
+				MEMSET(ADR(MemTargetNetId),0,SIZEOF(MemTargetNetId));
+				MEMSET(ADR(MemAdsEvent),0,SIZEOF(MemAdsEvent));	
+				MemADSEvent.eClass							:= TCEVENTCLASS_ALARM;				
+				MemADsEvent.MsgText							:= WCONCAT("Error read event stream - Error ID: ", TO_WSTRING(ErrorId));
+				MemADsEvent.MegLen							:= TO_DWORD(WLEN(MemADsEvent.MsgText));
+				EventStream.count 							:= TO_DWORD(LangId);
+				MemClassStatus								:= SETBIT32(MemClassStatus, UINT_TO_SINT(Event[CurrentEventCount].eClass));
+				state 										:= 4;				
+			END_IF
+			
+			fbAdsReadWrite(WRTRD := FALSE);		
+
+		END_IF
+
+	3:	(* Read Msg Text *)
+		fbAdsReadWrite(
+			NETID		:= NetId,
+			PORT		:= AMSPORT_EVENTLOG,
+			IDXGRP		:= IGRP_GETTEXT,
+			IDXOFFS		:= IOFFS_GETCOMPLETESTRING,
+			WRITELEN	:= EventStream.cbStream ,
+			READLEN		:= SIZEOF(EventStream.data.evtData.Temp),
+			SRCADDR		:= ADR(EventStream),
+			DESTADDR	:= ADR(EventStream.data.evtData.Temp),
+			WRTRD		:= TRUE,
+			TMOUT		:= Timeout,
+			BUSY		=> ,
+			ERR			=> ,
+			ErrId		=> ,
+			COUNT_R		=> ReadBytes);
+
+		IF NOT fbAdsReadWrite.BUSY
+		THEN
+			IF NOT fbAdsReadWrite.ERR
+			THEN
+				//Use unicode
+				CopyLen										:= MIN(ReadBytes, SIZEOF(MemADsEvent.MsgText) - 2);
+				MEMCPY(ADR(MemADsEvent.MsgText),ADR(EventStream.data.evtData.Temp),CopyLen);
+				MemADsEvent.MegLen							:= CopyLen;
+				MemADsEvent.MsgText[CopyLen]				:= 0; 
+				
+				state 										:= 4;
+			ELSE
+				ErrorId 									:= fbAdsReadWrite.ErrId;
+				MemADsEvent.MsgText							:= WCONCAT("Error read event message - Error ID: ", TO_WSTRING(ErrorId));
+				MemADsEvent.MegLen							:= TO_DWORD(WLEN(MemADsEvent.MsgText));
+				State 										:= 4;
+			END_IF
+			fbAdsReadWrite(WRTRD := FALSE);		
+
+		END_IF
+
+	4:	(* Read Source Name *)
+		PassHandleInfo.Enum 								:= HandleInfo.Enum;
+		PassHandleInfo.Count 								:= 1;
+
+		fbAdsReadWrite(
+			NETID		:= NetId,
+			PORT		:= AMSPORT_EVENTLOG,
+			IDXGRP		:= IGRP_GETTEXT,
+			IDXOFFS		:= IOFFS_GETSOURCENAME,
+			WRITELEN	:= EventStream.cbStream,
+			READLEN		:= SIZEOF(EventStream.data.evtData.Temp),
+			SRCADDR		:= ADR(EventStream),
+			DESTADDR	:= ADR(EventStream.data.evtData.Temp),
+			WRTRD		:= TRUE,
+			TMOUT		:= Timeout,
+			BUSY		=> ,
+			ERR			=> ,
+			ErrId		=> ,
+			COUNT_R		=> ReadBytes);
+
+		IF NOT fbAdsReadWrite.BUSY
+		THEN
+			IF NOT fbAdsReadWrite.ERR
+			THEN
+				CopyLen										:= MIN(ReadBytes, SIZEOF(MemADsEvent.Source) - 2);
+				MEMCPY(ADR(MemADsEvent.Source),ADR(EventStream.data.evtData.Temp),CopyLen);						
+		
+			ELSIF fbAdsReadWrite.ErrId = 16#80070057 OR  fbAdsReadWrite.ErrId = 16#80030002
+			THEN
+				MemAdsEvent.Source							:= WCONCAT("Name unknown id ", TO_WSTRING(EventStream.data.SrcId));
+			ELSE
+				ErrorId 									:= fbAdsReadWrite.ErrId;
+				MemAdsEvent.Source				 			:= "<Unknown>";
+			END_IF
+		
+			state											:= 5;
+			fbAdsReadWrite(WRTRD := FALSE);		
+
+		END_IF
+		
+	5: (* Read Host Name *)
+		fbGetHostName(
+			sNetID		:= MemTargetNetId ,
+			bExecute	:= fbGetHostName.sHostName <> '' OR Options.1,
+			tTimeout	:= Timeout,
+			bBusy		=> ,
+			bError		=> ,
+			nErrId		=> ,
+			sHostName	=> );
+
+		IF NOT fbGetHostName.bBusy
+		THEN
+			IF fbGetHostName.bError
+			THEN
+				MemAdsEvent.Computer						:= '<Unknown>';
+			ELSE
+				MemAdsEvent.Computer						:= fbGetHostName.sHostName;		
+			END_IF
+
+			//Copy event to 
+			Event[CurrentEventCount]						:= MemAdsEvent;	
+	
+			//Count quit required events 
+			IF NOT MemAdsEvent.Flags.1
+			THEN
+				QuitReqNumberOfEvents						:= QuitReqNumberOfEvents - 1;
+			END_IF
+					
+			(* other messages *)
+			CurrentEventCount 								:= CurrentEventCount - 1;
+			IF CurrentEventCount < 1 THEN
+				state 										:= 99;
+			ELSE
+				state 										:= 2;
+			END_IF
+			
+			fbGetHostName(bExecute := FALSE);
+		END_IF
+
+	99: 	(* Close *)				
+		fbAdsWrite(
+			NETID	:= NetId,
+			PORT	:= AMSPORT_EVENTLOG,
+			IDXGRP	:= IGRP_ENUMEVENTS,
+			IDXOFFS	:= IOFFS_ENUM_CLOSE,
+			LEN		:= SIZEOF(HandleInfo.Enum),
+			SRCADDR	:= ADR(HandleInfo),
+			WRITE	:= state = 99,
+			TMOUT	:= Timeout,
+			BUSY	=> ,
+			ERR		=> ,
+			ErrId	=> );
+
+		IF NOT fbAdsWrite.BUSY
+		THEN
+			ExecutionTime	 								:= TIME() - MemTimeStartCycle;
+			Done											:= ErrorId = 0 AND Busy;
+			Error 											:= NOT Done;
+			ErrorId 										:= SEL(fbAdsWrite.ERR, ErrorId,fbAdsWrite.ErrId);
+			MemLastErrorid									:= ErrorId;
+			ClassStatus										:= MemClassStatus;
+			Busy 											:= FALSE;
+			State 											:= 0;
+
+			fbAdsWrite(WRITE := FALSE);
+		END_IF
+
+	END_CASE
+	
+(*************************************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="optGetHostNameForEachEvent" Id="{f9567a91-7ccd-4728-875a-754f6d273081}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optGetHostNameForEachEvent : bool]]></Declaration>
+      <Get Name="Get" Id="{18cb755a-c770-44aa-b40d-2571ef93cde8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optGetHostNameForEachEvent := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{42bb0731-f5f8-4a73-b644-c41b878a93ff}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optGetHostNameForEachEvent;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optUseStateForTimestamp" Id="{ff5adfaf-8d65-4587-8249-caf1c53e12c0}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optUseStateForTimestamp : bool]]></Declaration>
+      <Get Name="Get" Id="{afb362d9-8009-4e00-8c9c-4c29f548e44f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optUseStateForTimestamp := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{01fd44fa-a06f-47cc-9e86-2bd23621b86f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optUseStateForTimestamp;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="EventlogRead">
+      <LineId Id="1819" Count="308" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventlogRead.optGetHostNameForEachEvent.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventlogRead.optGetHostNameForEachEvent.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventlogRead.optUseStateForTimestamp.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EventlogRead.optUseStateForTimestamp.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

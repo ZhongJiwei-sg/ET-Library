@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="KIN_CALCTRAFO_AXPOS_PARAM" Id="{8b73be1b-7e19-4cca-ba2f-e340d072801f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK KIN_CALCTRAFO_AXPOS_PARAM
+VAR_INPUT
+	In														: 	ARRAY[1..8] OF LREAL;
+	Out														: 	ARRAY[1..8] OF LREAL;
+	MetaInfoIn												:	U_KinMetaInfo;
+	MetaInfoOut												:	U_KinMetaInfo;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="delete" Id="{56d95162-190c-4093-b0d7-4b2962333dc7}">
+      <Declaration><![CDATA[METHOD delete : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(In),0,SIZEOF(In));
+MEMSET(ADR(Out),0,SIZEOF(Out));
+delete	:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="KIN_CALCTRAFO_AXPOS_PARAM">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_CALCTRAFO_AXPOS_PARAM.delete">
+      <LineId Id="6" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,431 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="DoubleBuffer" Id="{5c2ce038-0d05-4850-8161-dd9d81b32d4a}" SpecialFunc="None">
+    <Declaration><![CDATA[//Double buffer FB to fill one part of buffer while the other (filled) part can be read or processed meanwhile
+//Variable "ReadyToRead" signals that recorded data can be read consistent by pointer "pDataToRead" 
+//After the data are processed or copied, it is needed to call the method "setReadyToReady(Status := FALSE)" and release the buffer to be used if the other half is filled 
+//With setReadyToReady(Status := TRUE) you can mark the current write buffer as "ReadyToRead" on demand and accessible via "pDataToRead"  (e.g. if no more data need to be recorded)
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK DoubleBuffer
+VAR_OUTPUT CONSTANT 	
+END_VAR                     								
+VAR_INPUT
+	Overwrite												:	BOOL ; //Overwrite buffer read buffer if not released -> setReadyToRead(FALSE)        
+	SizeOfMemory											: 	UDINT := 5120;	//Total size of dynamic allocated buffer (will be splited in half)	   								
+END_VAR                     								
+VAR_IN_OUT                  								
+END_VAR                     								
+VAR_OUTPUT       
+	TimeFillBuffer											: 	TIME; //Last elapsed time to fill the buffer and set ReadyToRead=TRUE
+	MinTimeFillBuffer										:	TIME; //Min time to fill buffer
+	MaxTimeFillBuffer										:	TIME; //Max time to fill buffer
+	Full													:	BOOL; //Buffer is full
+	Empty													:	BOOL := TRUE; //Buffer is empty 
+	ReadyToRead												:	BOOL; //TRUE = Data are ready and can be read via "pDataToRead" to process 
+	pDataToRead												:	POINTER TO BYTE; //Pointer to recorded data/filled buffer	
+	SizeOfDataToRead										:	UDINT; //Count of bytes in filled buffer ready to ready 
+{attribute 'displaymode':='hex'}
+	hr														:	HRESULT; //Last result of method call
+END_VAR                     								
+VAR            
+//local ************************************************************************************
+	Interlock												:	BOOL; //Task interlock
+	Buffer2Active											:	BOOL; //Indicates active buffer pointer 
+	pBuffer1												: 	POINTER TO BYTE; //Pointer to start of allocated memory
+	pBuffer2												: 	POINTER TO BYTE; //Pointer to second half of allocated memory
+	StartTimeFillBuffer										:	TIME;
+	
+	MemSizeOfAllocatedMemory								: 	UDINT; //Total size of allocated memory
+	MemSizeOfBuffer											: 	UDINT; //Size of split buffer
+	MemSizeOfWriteBuffer									:	UDINT; //Actual size of recorded data
+
+
+//trigger *********************************************************************************
+
+//timer ***********************************************************************************
+
+//instances ***********************************************************************************             								
+
+//Dummys ****************************************************************************************
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+
+
+]]></ST>
+    </Implementation>
+    <Method Name="addData" Id="{adfed01a-8e8f-4583-9aa6-164b10254b7b}">
+      <Declaration><![CDATA[METHOD PUBLIC addData : HRESULT //Add data to write buffer and sets "ReadyToRead" if buffer is filled and data can be read to process 
+VAR_INPUT
+	pData													:	POINTER TO BYTE;
+	SizeofData												:	UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+IF pData <> 0 
+THEN		
+	//Allocate Memory to buffer messages
+	IF pBuffer1 = 0
+		OR SizeOfMemory > MemSizeOfAllocatedMemory 
+	THEN //Allocate full memory with first entry 		
+		IF NOT Allocate(SizeOfMemory)
+		THEN
+			addData := hr										:= E_HRESULTADSERR.NOMEMORY;
+			RETURN;														
+		END_IF					
+	END_IF	
+
+	IF MemSizeOfWriteBuffer = 0 THEN StartTimeFillBuffer := TIME(); END_IF
+	
+	//Change buffer if filled
+	IF SizeofData + MemSizeOfWriteBuffer >= MemSizeOfBuffer
+	THEN
+		IF setReadyToRead(TRUE) <> S_OK
+		THEN
+			addData 											:= hr;
+			RETURN;
+		END_IF
+	ELSE
+		Full													:= FALSE;
+		Empty													:= FALSE;
+	END_IF
+			
+	//Copy data to buffer
+	MEMCPY(SEL(Buffer2Active, pBuffer1, pBuffer2) + MemSizeOfWriteBuffer, pData, SizeofData);
+	MemSizeOfWriteBuffer										:= MemSizeOfWriteBuffer + SizeofData;
+	
+	addData := hr												:= S_OK;
+ELSE
+	addData := hr												:= E_HRESULTADSERR.INVALIDPARM;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="addString" Id="{5cdfed7f-d82d-4006-9a7f-8bea3b2edf31}">
+      <Declaration><![CDATA[METHOD PUBLIC addString : HRESULT //Add string to write buffer and sets "ReadyToRead" if buffer is filled and data can be read to process 
+VAR_INPUT
+	Data													:	T_MAXSTRING;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[addString := hr := addData(ADR(Data),TO_UDINT(LEN(Data)));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="allocate" Id="{4e9d998b-0fda-4293-8872-0beef8d31a72}">
+      <Declaration><![CDATA[METHOD PROTECTED FINAL allocate : BOOL //allocte buffer memory form router pool
+VAR_INPUT
+	SizeOfBuffer											:	UDINT;
+END_VAR
+VAR
+	pDummy													:	POINTER TO BYTE;	
+End_Var	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF SizeOfBuffer	= 0
+THEN
+	Allocate												:= FALSE;
+	
+ELSIF pBuffer1 = 0
+THEN
+	MemSizeOfAllocatedMemory								:= SizeOfBuffer;
+	pBuffer1												:= __NEW(BYTE,MemSizeOfAllocatedMemory );
+	MemSizeOfBuffer											:= MemSizeOfAllocatedMemory / 2;
+	pBuffer2												:= pBuffer1 + MemSizeOfBuffer; 
+	Buffer2Active											:= FALSE;
+	MemSizeOfWriteBuffer									:= 0;
+	
+	IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+	THEN
+		AdsLogHint('EngineeringToolbox | FB DoubleBuffer | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(MemSizeOfAllocatedMemory));
+	END_IF	
+	Allocate												:= TRUE;
+ELSIF SizeOfBuffer > MemSizeOfBuffer 
+THEN //Since increased, allocate new memory
+	
+	pDummy													:= __NEW(BYTE, SizeOfBuffer); 
+
+	IF SizeOfBuffer > MemSizeOfAllocatedMemory
+	THEN //Size increased rescue data from old memory
+		IF Buffer2Active
+		THEN
+			MEMCPY(pDummy,pBuffer2, MemSizeOfBuffer);
+		ELSE
+			MEMCPY(pDummy,pBuffer1, MemSizeOfBuffer);	
+		END_IF
+	END_IF
+
+	__DELETE(pBuffer1);  //Delete reference to old memory
+	
+	MemSizeOfAllocatedMemory								:= SizeOfBuffer;
+	pBuffer1												:= pDummy; //Take over new pointer to new memory
+	Buffer2Active											:= FALSE;
+	MemSizeOfBuffer											:= MemSizeOfAllocatedMemory / 2;
+	pBuffer2												:= pBuffer1 + MemSizeOfBuffer; 
+	MemSizeOfWriteBuffer										:= 0;
+	
+	IF PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+	THEN
+		AdsLogWarn('EngineeringToolbox | FB DoubleBuffer | Value of "SizeOfMemory" increased and an instance has an additional %s bytes allocated from the dynamic memory of the ADS router memory pool', TO_STRING(MemSizeOfAllocatedMemory));
+	END_IF
+	
+	Allocate												:= TRUE;
+	
+ELSE //Size decreased
+	Allocate												:= TRUE;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="copyData" Id="{a8a84f82-ee72-49d5-b82e-26fe76d7eb5a}">
+      <Declaration><![CDATA[METHOD PUBLIC copyData : HRESULT //Copy data from buffer (pDataToRead) into destination and reset "ReadyToReady" back to false if succeful executed 
+VAR_INPUT
+	pDest													:	POINTER TO BYTE; 
+	SizeOfDest												:	UDINT; //Size of destination/data to copy
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pDest <> 0 AND SizeOfDest > 0
+	AND pDataToRead <> 0 
+THEN
+	MEMCPY(pDest, pDataToRead, MIN(SizeOfDest,SizeOfDataToRead));										
+	hr		 												:= setReadyToRead(FALSE);	
+	
+ELSE
+	IF pDataToRead = 0
+	THEN
+		hr													:= E_HRESULTADSERR.NOTREADY;
+	ELSIF pDest = 0 
+	THEN 
+		hr													:= E_HRESULTADSERR.INVALIDPARM;
+	ELSIF SizeOfDest = 0
+	THEN
+		hr													:= E_HRESULTADSERR.INVALIDPARM;	
+	END_IF
+END_IF
+copyData													:= hr;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_exit" Id="{2b48e354-63a7-4dac-bb44-9604fd194ba5}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode AND pBuffer1 <> 0
+THEN //Release memory in case the PLC stopps
+	__DELETE(pBuffer1);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="fillLevel" Id="{6ff2470b-f73b-49ca-9dbd-8764344ecb63}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC fillLevel : INT //Buffer fill level 100% if both parts of buffer are filled]]></Declaration>
+      <Get Name="Get" Id="{f2cc7a0b-736c-4a4f-9239-b2cab10fcc8f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF MemSizeOfBuffer <> 0
+THEN
+	fillLevel												:= 	TO_INT((50.0 / TO_LREAL(MemSizeOfBuffer)) * TO_LREAL(MemSizeOfWriteBuffer))
+																+ SEL(ReadyToRead, 0, TO_INT((50.0 / TO_LREAL(MemSizeOfBuffer)) * TO_LREAL(SizeOfDataToRead)));
+ELSE
+	fillLevel												:= 0;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{d6e9aa43-64b2-47fb-83a7-3bae00d77b07}">
+      <Declaration><![CDATA[//Reset buffer 
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TimeFillBuffer												:= T#0MS;
+MinTimeFillBuffer											:= T#0MS;
+MaxTimeFillBuffer											:= T#0MS;
+Full														:= FALSE; //Buffer is full
+Empty														:= TRUE; //Buffer is empty 
+ReadyToRead													:= FALSE;
+SizeOfDataToRead											:= 0;
+hr															:= S_OK;
+MemSizeOfWriteBuffer										:= 0;
+reset														:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setReadyToRead" Id="{b1fac8c1-acaa-4a86-9154-ea7b7dad2d7a}">
+      <Declaration><![CDATA[METHOD PUBLIC setReadyToRead : HRESULT //Status = FALSE to reset "ReadyToRead" and unlock buffer / Status = TRUE to mark current write buffer as filled and "ReadyToRead", accessible via "pDataToRead"
+VAR_INPUT
+	Status								:	BOOL; //FALSE to reset "ReadyToRead" or TRUE to set "ReadyToRead" and swap buffer 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(Interlock)
+THEN
+	IF NOT Status
+	THEN
+		ReadyToRead									:= FALSE;
+		Full										:= FALSE;
+		Empty										:= MemSizeOfWriteBuffer = 0;
+		hr											:= S_OK;
+	ELSIF Overwrite 
+		OR NOT ReadyToRead
+	THEN //Set ready to ready and swap buffer
+		hr											:= SEL(swapBuffer(), E_HRESULTADSERR.ABORTED ,S_OK);
+		TimeFillBuffer								:= TIME() - StartTimeFillBuffer;
+		IF MinTimeFillBuffer = T#0MS THEN MinTimeFillBuffer := TimeFillBuffer; ELSE MinTimeFillBuffer := MIN(TimeFillBuffer,MinTimeFillBuffer); END_IF	
+		MaxTimeFillBuffer							:= MAX(TimeFillBuffer,MaxTimeFillBuffer);
+		StartTimeFillBuffer							:= TIME();
+		ReadyToRead									:= SizeOfDataToRead > 0;
+		Full										:= FALSE;
+		Empty										:= NOT ReadyToRead;
+	ELSE
+		TimeFillBuffer								:= TIME() - StartTimeFillBuffer;
+		IF MinTimeFillBuffer = T#0MS THEN MinTimeFillBuffer := TimeFillBuffer; ELSE MinTimeFillBuffer := MIN(TimeFillBuffer,MinTimeFillBuffer); END_IF
+		MaxTimeFillBuffer							:= MAX(TimeFillBuffer,MaxTimeFillBuffer);
+		StartTimeFillBuffer							:= TIME();		
+		Full										:= TRUE;
+		Empty										:= FALSE;
+		hr											:= E_HRESULTADSERR.ABORTED;	
+	END_IF
+		
+	setReadyToRead									:= hr;
+	Interlock										:= FALSE;
+ELSE
+	setReadyToRead									:= E_HRESULTADSERR.BUSY;
+END_IF	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="swapBuffer" Id="{2fdc506b-170e-44e9-9c6b-d273a1c17760}">
+      <Declaration><![CDATA[METHOD PROTECTED FINAL swapBuffer : BOOL //swap write and read buffer and asign filled buffer to pDataToRead
+VAR_INPUT
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pDataToRead													:= SEL(Buffer2Active, pBuffer1, pBuffer2);
+SizeOfDataToRead											:= MemSizeOfWriteBuffer;	
+
+Buffer2Active												:= NOT Buffer2Active;	
+
+MemSizeOfWriteBuffer										:= 0;
+swapBuffer													:= TRUE;		]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="DoubleBuffer">
+      <LineId Id="997" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.addData">
+      <LineId Id="212" Count="11" />
+      <LineId Id="225" Count="0" />
+      <LineId Id="275" Count="0" />
+      <LineId Id="226" Count="0" />
+      <LineId Id="276" Count="0" />
+      <LineId Id="227" Count="1" />
+      <LineId Id="256" Count="0" />
+      <LineId Id="260" Count="0" />
+      <LineId Id="262" Count="0" />
+      <LineId Id="268" Count="0" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="236" Count="0" />
+      <LineId Id="248" Count="2" />
+      <LineId Id="237" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.addString">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.allocate">
+      <LineId Id="78" Count="1" />
+      <LineId Id="76" Count="1" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="65" Count="9" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="17" Count="35" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.copyData">
+      <LineId Id="5" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="50" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.FB_exit">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.fillLevel.Get">
+      <LineId Id="13" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.reset">
+      <LineId Id="13" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="14" Count="2" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.setReadyToRead">
+      <LineId Id="36" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="23" Count="1" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="DoubleBuffer.swapBuffer">
+      <LineId Id="68" Count="1" />
+      <LineId Id="72" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="EcDiagBase" Id="{2cd4407f-31e4-4638-839b-f2057c5d6cb0}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EcDiagBase
+VAR_OUTPUT CONSTANT         								
+	MIN_SLAVES												: 	UINT := 1;
+	MAX_SLAVES												: 	UINT := PARAM.ETHERCAT_DIAG_MAX_SLAVES;	//EC_MAX_SLAVES = 65535 Slaves;
+END_VAR
+VAR_INPUT
+	Enable													:	BOOL := TRUE;//FB will be processed as long as enable is TRUE 
+	
+	DelReadSlavesDiag										:	TIME := T#2S; //Damping time to read diagnostic if error is detected 
+(* Components *)            								
+	IO														:	EcMasterIO;
+END_VAR                     								
+VAR_OUTPUT                  								
+	MasterOK												:	BOOL; 	//TRUE when Master/EtherCAT is OK
+	SlavesOK												:	BOOL;	//TRUE if no slave is in error state
+	NoOfSlavesNOK											:	UINT;
+	NoOfMissedSlaves										:	INT; //No of slaves missed incl. hot connect slaves 
+	NoOfHotConnectGroups									:	UINT;
+	NoOfHotConnectSlaves									:	UINT;
+	
+	pSlaveInfoData											:	POINTER TO ARRAY [MIN_SLAVES..MAX_SLAVES] OF EC_SLAVE_DIAG_INFO_DATA := ADR(SlavesDiag.InfoData); //configured slaves			
+	DiagBusy												:	BOOL;
+	ErrorReadDiag											:	BOOL;
+END_VAR
+VAR
+(* Local  ***********************************************************)
+	MemSlaveCount											:	UINT;
+	MemDevState												:	UINT;
+	InitDone												:	BOOL;
+	
+(* trigger ********************************************************)
+	rtReadDiag												: r_Trig;
+
+(* Timer **********************************************************)
+	tonDelTrigDiag											:	ton;
+
+(* events *********************************************************)
+
+(* function-block *************************************************)
+	SlavesDiag												:	EcSlavesDiag;
+	
+(* dummy **********************************************************)
+	idx,i													:	INT;											
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Base diagnostic of EtherCAT 					*)
+(************************************************)
+
+(* Work IO *************************************************)
+	IO();
+
+(* trigger slaves diag *************************************************************)
+	IF NOT tonDelTrigDiag.IN AND NOT SlavesDiag.Busy
+		AND( 
+		IO.FramesWcStateChanged
+		OR MemDevState <> IO.DevState
+		OR MemSlaveCount <> IO.SlaveCountTotal
+		OR NoOfSlavesNOK > 0 
+		OR NOT InitDone)
+	THEN
+		tonDelTrigDiag(IN := TRUE , PT := DelReadSlavesDiag);
+	END_IF
+	//Run delay	
+	tonDelTrigDiag();
+	
+	rtReadDiag(CLK := Enable AND tonDelTrigDiag.Q);
+	IF SlavesDiag.Error
+	THEN
+		adsLogError('Error in FB EcSlavesDiag: %s',  SlavesDiag.ErrorText);
+	ELSIF rtReadDiag.Q 
+	THEN 	
+		tonDelTrigDiag(IN := FALSE); //Restart timer
+		SlavesDiag.optReadScannedSlaves						:= MemSlaveCount <> IO.SlaveCountTotal OR NoOfMissedSlaves > 0 OR NoOfSlavesNOK > 0 OR SlavesDiag.InvalidVPRS; //Scan slaves if invalid VPRS or HC groups are configured
+	//	SlavesDiag.optSortInfoData 							:= ;
+	//	SlavesDiag.optUpdateTopoData						:= ;
+	//	SlavesDiag.optUpdateConfigData 						:= ;
+		
+	 	MemSlaveCount 										:= IO.SlaveCountTotal;
+		MemDevState 										:= IO.DevState;
+		InitDone											:= TRUE;
+	END_IF
+	SlavesDiag(Execute := rtReadDiag.Q ,MasterAmsNetId := IO.AmsNetIdStr, NoOfSlavesNOK => NoOfSlavesNOK, NoOfHCGroups => NoOfHotConnectGroups, NoOfHCSlaves => NoOfHotConnectSlaves, Busy => DiagBusy , Error => ErrorReadDiag);		
+	pSlaveInfoData											:= ADR(SlavesDiag.InfoData);
+		
+(***********************************************************************************)
+	MasterOK 												:= IO.DevStateBits.NoError;
+	SlavesOK												:= MasterOK AND SlavesDiag.NoOfSlavesNOK = 0;
+	NoOfMissedSlaves										:= TO_INT(IO.CfgSlaveCount) - TO_INT(IO.SlaveCountTotal);
+	
+(*********************************************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="EcDiagBase">
+      <LineId Id="1404" Count="11" />
+      <LineId Id="1489" Count="0" />
+      <LineId Id="1416" Count="7" />
+      <LineId Id="1592" Count="1" />
+      <LineId Id="1591" Count="0" />
+      <LineId Id="1424" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

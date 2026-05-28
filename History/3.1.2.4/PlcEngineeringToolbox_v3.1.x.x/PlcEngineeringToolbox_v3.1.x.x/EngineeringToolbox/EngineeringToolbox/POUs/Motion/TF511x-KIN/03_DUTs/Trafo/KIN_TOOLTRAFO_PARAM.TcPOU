@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="KIN_TOOLTRAFO_PARAM" Id="{c8bdc407-9856-4bb8-a532-b9581512dcba}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'hide'}
+FUNCTION_BLOCK KIN_TOOLTRAFO_PARAM
+VAR_INPUT
+	oid														:	UDINT := 0;
+	dx														: 	LREAL := 0.0;  (* Default Tooldata at WOS *)
+	dy														: 	LREAL := 0.0;  (* Default Tooldata at WOS *)
+	dz														:	LREAL := 0.0;  (* Default Tooldata at WOS *)
+
+END_VAR
+VAR_OUTPUT
+
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="delete" Id="{4693a5dd-7617-4acb-a5a6-2bca9a7f8458}">
+      <Declaration><![CDATA[METHOD delete : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	oid														:= 0;
+	dx														:= 0.0;  (* Default Tooldata at WOS *)
+	dy														:= 0.0;  (* Default Tooldata at WOS *)
+	dz														:= 0.0;  (* Default Tooldata at WOS *)
+delete	:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="KIN_TOOLTRAFO_PARAM">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_TOOLTRAFO_PARAM.delete">
+      <LineId Id="8" Count="2" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

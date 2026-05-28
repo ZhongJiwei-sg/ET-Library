@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="ADSERROR_TO_WIN32ERROR" Id="{fa071009-bb6e-4b2b-a1e5-f0583ecb2f41}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Read win 32 errorcode incl. win socket error from ADS error code (IDs >= 16#8007000)
+FUNCTION ADSERROR_TO_WIN32ERROR : UDINT
+VAR_INPUT
+{attribute 'displaymode':='hex'}
+	ErrorID													:	UDINT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF ErrorID >= TO_UDINT(16#80070000) AND ErrorID <= TO_UDINT(16#8007FFFF)
+THEN	
+	ADSERROR_TO_WIN32ERROR									:= ErrorID - TO_UDINT(16#80070000);
+ELSE
+	ADSERROR_TO_WIN32ERROR									:= ErrorID;
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="ADSERROR_TO_WIN32ERROR">
+      <LineId Id="27" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

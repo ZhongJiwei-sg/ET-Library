@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="REAL_TO_FMLREAL" Id="{8f188394-0e59-4578-9fa2-d9867ab5c2a6}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Limit the number of decimal places in a lreal variable   
+FUNCTION REAL_TO_FMLREAL : LREAL
+VAR_INPUT
+	 In														:	REAL;	//Input value
+	 Digits													:	INT;	//number of digits to be shown
+END_VAR     												
+VAR         												
+	 Faktor													:	LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Faktor														:=	EXPT(10,ABS(Digits));
+IF Faktor = 0.0
+THEN
+	REAL_TO_FMLREAL 										:= 0.0;
+ELSE
+	REAL_TO_FMLREAL 										:= LINT_TO_LREAL(LREAL_TO_LINT(IN * Faktor)) / Faktor;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="REAL_TO_FMLREAL">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

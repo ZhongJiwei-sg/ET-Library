@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="adsLogWarn" Id="{0394288d-04ba-46e2-b941-38c60e22c67f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+//Writes a string as a warining message into the TwinCAT AMS Logger and Windows Event Log with an possible argument
+//Please see Beckhoff information system "ADSLOGxxxx" for detailed information.
+//Intention of this function is to use the handy ADSLOGxxxx with a predefined msgCtrlMask of "ADSLOG_MSGTYPE_STRING OR ADSLOG_MSGTYPE_WARN OR ADSLOG_MSGTYPE_LOG"
+FUNCTION adsLogWarn : DINT//Write warning message into ADS log windows - Return value will be error code or 0 if OK
+VAR_INPUT               											
+	MsgFmtStr												:	T_MaxString; //Message text with %s as placeholder for StrArg
+(*	dintArg													:	DINT; //DINT argument for message - to be replaced by %d *) 
+	StrArg													:	T_MaxString; //String argument for message - to be replaced by %s
+(*	realArg													:	LREAL; //LREAL argument for message - to be replaced by %f *) 
+END_VAR
+VAR
+	msgCtrlMask												:	DWORD; (* 	ADSLOG_MSGTYPE_HINT Meldungstyp ist Hinweis.
+																				ADSLOG_MSGTYPE_WARN Meldungstyp ist Warnung.  
+																				ADSLOG_MSGTYPE_ERROR Meldungstyp ist Fehler.  
+																				ADSLOG_MSGTYPE_LOG Meldung wird in das Logbuch geschrieben.  
+																				ADSLOG_MSGTYPE_MSGBOX Meldung wird in einer Messagebox ausgegeben.  
+																				ADSLOG_MSGTYPE_RESOURCE Meldung wird aus einer Ressource-Datei geholt. (wird momentan nicht  unterstützt)  
+																				ADSLOG_MSGTYPE_STRING 	Meldung ist direkt angegebener String (default).  *)	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* create fixed message ctrl mask **********************************)
+	msgCtrlMask												:= ADSLOG_MSGTYPE_STRING OR ADSLOG_MSGTYPE_WARN OR ADSLOG_MSGTYPE_LOG;
+
+(* write string which includes a floating-number ******************)
+(*	AdsLogWarn 												:= ADSLOGLREAL(msgCtrlMask, msgFmtStr, realArg); *)
+	
+(* write string which includes a DINT-number *******************)
+(*	AdsLogWarn 												:= ADSLOGDINT(msgCtrlMask, msgFmtStr, dintArg); *)
+
+(* write string which includes an other string e.g. 'hallo: %s what's up' ***************)
+	adsLogWarn 												:= ADSLOGSTR(msgCtrlMask, msgFmtStr,strArg); 
+
+(*****************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="adsLogWarn">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0056" Id="{9c1b61cf-1a18-425a-b0cc-0c8aee608264}">
+    <Declaration><![CDATA[TYPE AX5000_P_0056 :
+STRUCT
+	Max_motor_speed_with_max_torque:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

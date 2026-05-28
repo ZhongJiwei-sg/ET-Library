@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="SYSTEMTIME_TO_TOD" Id="{6e49e465-43f3-4781-9c6e-05a9d6666ab0}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION SYSTEMTIME_TO_TOD : TIME_OF_DAY //Converts Systemtime (Timestruct) to TIME_OF_DAY (TOD#15:36:30.123)
+VAR_INPUT
+	IN													: TIMESTRUCT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SYSTEMTIME_TO_TOD											:= UDINT_TO_TOD(IN.wMilliseconds 
+																+ IN.wSecond * 1000
+																+ IN.wMinute * 60000
+																+ IN.wHour * 3600000);
+																
+																]]></ST>
+    </Implementation>
+    <LineIds Name="SYSTEMTIME_TO_TOD">
+      <LineId Id="26" Count="4" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

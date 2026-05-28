@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="TO_FMREAL" Id="{ce690925-88ab-47fe-a740-f8e1aa23a43c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Limits the number of decimal places in a floating point variable 
+//or converts an integer number into a LREAL variable with with corresponding decimal places 
+FUNCTION TO_FMREAL : LREAL
+VAR_INPUT
+	 In														:	ANY_NUM;	//Input value
+	 Digits													:	INT (1..32);	//number of digits to be shown
+END_VAR     												
+VAR         												
+	 Factor													:	REAL;
+	 Value													:	REAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+
+IF Digits <= 0
+THEN
+	TO_FMREAL												:= 0.0;	
+ELSIF In.TypeClass = __SYSTEM.TYPE_CLASS.TYPE_LREAL
+THEN
+	Factor													:= TO_REAL(EXPT(10,Digits));
+	TO_FMREAL												:= LINT_TO_LREAL(LREAL_TO_LINT(PLREAL_TO_LREAL(IN.pValue) * Factor)) / Factor;
+ELSIF In.TypeClass = __SYSTEM.TYPE_CLASS.TYPE_REAL
+THEN
+	Factor													:= TO_REAL(EXPT(10,Digits));
+	TO_FMREAL												:= LINT_TO_REAL(REAL_TO_LINT(PREAL_TO_REAL(IN.pValue) * Factor)) / Factor;
+ELSE // Integer
+	Factor													:= TO_REAL(EXPT(10,Digits));
+	CASE in.TypeClass OF		
+	__SYSTEM.TYPE_CLASS.TYPE_USINT:	Value					:= TO_REAL(PUSINT_TO_USINT(IN.pValue));								
+	__SYSTEM.TYPE_CLASS.TYPE_UINT:	Value					:= TO_REAL(PUINT_TO_UINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_UDINT:	Value					:= TO_REAL(PUDINT_TO_UDINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_ULINT:	Value					:= TO_REAL(PULINT_TO_ULINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_SINT:	Value					:= TO_REAL(PSINT_TO_SINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_INT:	Value					:= TO_REAL(PINT_TO_INT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_DINT:	Value					:= TO_REAL(PDINT_TO_DINT(IN.pValue));	
+	__SYSTEM.TYPE_CLASS.TYPE_LINT:	Value					:= TO_REAL(PLINT_TO_LINT(IN.pValue));	
+	ELSE
+		TO_FMREAL											:= 0.0;
+		RETURN;
+	END_CASE
+
+	TO_FMREAL												:= Value / Factor;
+END_IF
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="TO_FMREAL">
+      <LineId Id="3" Count="32" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

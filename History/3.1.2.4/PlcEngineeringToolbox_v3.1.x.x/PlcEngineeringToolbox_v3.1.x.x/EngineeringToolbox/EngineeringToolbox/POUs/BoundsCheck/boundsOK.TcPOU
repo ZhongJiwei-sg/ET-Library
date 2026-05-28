@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="boundsOK" Id="{5d8dc8ca-002c-4008-bf76-e645e3eaadec}" SpecialFunc="None">
+    <Declaration><![CDATA[//Result is TRUE if INT index is inside the range
+{attribute 'no_check'}
+FUNCTION boundsOK : BOOL
+VAR_INPUT
+	Index													: INT;
+	Lower													: INT;
+	Upper													: INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[BoundsOK:= index >= lower AND index <= upper;
+]]></ST>
+    </Implementation>
+    <LineIds Name="boundsOK">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

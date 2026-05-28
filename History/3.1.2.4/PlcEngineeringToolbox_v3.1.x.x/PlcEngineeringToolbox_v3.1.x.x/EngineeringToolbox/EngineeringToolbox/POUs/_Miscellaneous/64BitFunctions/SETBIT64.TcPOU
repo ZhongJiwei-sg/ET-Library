@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="SETBIT64" Id="{a0584908-ba86-4e65-95d1-3c79ffe44c12}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'displaymode':='binary'}	
+FUNCTION SETBIT64 : LWORD
+VAR_INPUT
+	inVal64													:	LWORD;
+	bitNo													:	INT;
+END_VAR
+VAR
+{attribute 'displaymode':='binary'}	
+	lwConst 												: 	LWORD := 1;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SETBIT64 															:= inVal64 OR SHL( lwConst,bitNo MOD 64 );]]></ST>
+    </Implementation>
+    <LineIds Name="SETBIT64">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

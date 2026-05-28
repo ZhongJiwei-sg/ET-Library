@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="EP9214_CHANNEL" Id="{9a366ba8-ce8a-427b-b70e-08b036fd0ad3}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EP9214_CHANNEL
+VAR_INPUT
+	EnableUs									AT  %Q* 	: 	BOOL := TRUE; 	//switches system voltage on with a rising edge
+	EnableUp									AT  %Q* 	: 	BOOL := TRUE; 	//switches peripheral voltage on with a rising edge
+	ResetTrigUs	                                AT  %Q* 	: 	BOOL := FALSE;  //resets system voltage with a rising edge                    
+	ResetTrigUp                                 AT  %Q* 	: 	BOOL := FALSE;	//resets peripheral voltage with a rising edge                                                                                           
+END_VAR     								                          
+VAR_OUTPUT  								                          
+	ErrorUs										AT  %I* 	: 	BOOL := FALSE;	//TRUE when system voltage error occurs 
+	ErrorUp										AT  %I* 	: 	BOOL := FALSE; 	//TRUE when peripheral voltage error occurs 
+	WarningUs									AT  %I* 	: 	BOOL := FALSE; 	//TRUE when system voltage warning occurs 
+	WarningUp									AT  %I* 	: 	BOOL := FALSE; 	//TRUE when peripheral voltage warning occurs 
+	StatusUs									AT  %I* 	: 	BOOL := FALSE; 	//TRUE when system voltage is on
+	StatusUp									AT  %I* 	: 	BOOL := FALSE; 	//TRUE when peripheral voltage is on 
+	ChannelError								AT  %I* 	: 	BOOL := FALSE; 	//TRUE when channel error occurs 
+	SyncError									AT  %I* 	: 	BOOL := FALSE; 	//TRUE when synchronization error occurs 
+	TxPDOState									AT  %I* 	: 	BOOL := FALSE; 
+	TxPDOToggle									AT  %I* 	: 	BOOL := FALSE; 
+END_VAR     								
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <LineIds Name="EP9214_CHANNEL">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

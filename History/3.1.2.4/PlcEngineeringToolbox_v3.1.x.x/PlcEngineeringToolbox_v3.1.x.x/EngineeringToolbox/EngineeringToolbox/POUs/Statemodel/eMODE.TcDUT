@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="eMODE" Id="{576a0362-d241-4de1-b7f6-20f3c6c9e499}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+//Default mode enum 0 - 10
+{attribute 'to_string'}
+TYPE eMODE :
+(
+	IDLE		 		:= 0,	
+	MANUAL				:= 1,
+	AUTO				:= 2,
+	SEMI_AUTO			:= 3,
+	SETUP				:= 4,
+	STEP				:= 5,
+	PRODUCTION			:= 6,
+	MAINTENANCE			:= 7,
+	SERVICE				:= 8,
+	INIT				:= 9
+				
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

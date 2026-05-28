@@ -1,0 +1,71 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="ProfinetControllerIO_wEvents" Id="{8bdd3bc3-39ad-471a-ae75-4d1b0ebf45d5}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//EL6631 Profinet Controller IOs via EtherCAT
+FUNCTION_BLOCK ProfinetControllerIO_wEvents EXTENDS ProfinetControllerIO
+VAR_OUTPUT CONSTANT
+
+END_VAR
+VAR_INPUT
+	Enable													:	BOOL := FALSE;
+	ResetTrig												:	BOOL := FALSE;
+	SourceId												:	UDINT := 103040; (* default *)	
+END_VAR
+VAR_OUTPUT
+
+END_VAR                     					             	
+VAR   
+(* trigger ********************************************************)
+	
+(* events *********************************************************)
+	EventControllerError									:	EventHandling;
+	EventBoxError											:	ARRAY[1..MAX_BOX] OF EventHandling;
+	
+(* function-block *************************************************)
+	
+(* dummy **********************************************************)	
+	i														:	INT;    
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Profinet controller diagnosis for EL6631	and boxes	V3.0*)
+	(************************************************************)
+
+(* Work super ***********************************************)
+SUPER^();
+	
+(* Master error *******************************************)
+	EventControllerError(
+		Flag				:= PnIoError <> 0 AND Enable,
+		ConfirmTrig			:= ResetTrig OR NOT Enable,
+		MsgId				:= 1,
+		SourceId			:= SourceId,
+		eClass				:= ,
+		Text1				:= TO_STRING(PnIoError),
+		Text2				:= ,
+		pText3				:= ADR(DevName),
+		State				=> );
+
+(* Box error *********************************************)
+	FOR i := MIN_BOX TO MAX_BOX DO
+		EventBoxError[i](
+			Flag			:= PnIoBoxDiag[i] <> 0 AND Enable,
+			ConfirmTrig		:= ResetTrig OR NOT Enable,
+			MsgId			:= TO_UINT(i + 1),
+			SourceId		:= SourceId,
+			eClass			:= ,
+			Text1			:= TO_STRING(PnIoBoxDiag[i]),
+			Text2			:= TO_STRING(i),
+			pText3			:= ADR(DevName),
+			State			=> );
+ 	END_FOR
+
+(*********************************************************)]]></ST>
+    </Implementation>
+    <LineIds Name="ProfinetControllerIO_wEvents">
+      <LineId Id="96" Count="31" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

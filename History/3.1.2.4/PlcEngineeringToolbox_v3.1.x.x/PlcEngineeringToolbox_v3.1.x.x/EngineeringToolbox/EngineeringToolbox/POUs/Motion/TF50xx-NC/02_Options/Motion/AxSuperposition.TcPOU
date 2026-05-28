@@ -1,0 +1,240 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="AxSuperposition" Id="{63a98483-e69c-4110-9fc9-2c0554ff8fa8}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK AxSuperposition EXTENDS AxFbBase
+VAR_OUTPUT CONSTANT 
+	FNC_MOVEIMPOSED											:	INT := 0;
+	FNC_MOVEABORT											:	INT := 1;
+END_VAR                     								
+VAR_INPUT                   								
+	Fnc														:	INT := FNC_MOVEIMPOSED;
+	Mode    												:	E_SuperpositionMode;
+	Distance      											:	LREAL;
+	VelocityDiff 											:	LREAL;
+	Acc			 											:	LREAL;
+	Dec			 											:	LREAL;
+	Jerk    												:	LREAL;
+	VelocityProcess   										:	LREAL;
+	Length    												:	LREAL;
+	Options    												:	ST_SuperpositionOptions;
+                            							
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR_OUTPUT
+	Warning													:	BOOL;
+	WarningId												:	UDINT;
+END_VAR
+VAR
+(* Zwischenspeicher ****************************************)
+	MemFnc													:	INT := -1;
+
+(* Timer ***************************************************)
+
+(* Trigger *************************************************)
+
+(* Instanzierung der MC Bausteine **************************)
+	MC_MoveImposed											:	MC_MoveSuperImposed;
+	MC_MoveAbort											:	MC_AbortSuperposition;
+
+(* Dummy Speicher ******************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(************************************************************************************)
+	(*																					*)
+	(*		B E C K H O F F   N E W   A U T O M A T I O N   T E C H N O L O G Y    		*)
+	(*																					*)
+	(*		Eiserstr.5	D-33415 Verl	Germany	phone:	+49-5246-0	www.Beckhoff.com	*)
+  	(*																					*)
+  	(*		Bausteinbeschreibung	:	Move Imposed Achs Baustein						*)
+	(*		TwinCAT-Version			:	3.1		 										*)
+	(*		Version					:	V1.0 / 04/16									*)
+ 	(*																					*)
+	(*																					*)
+	(************************************************************************************)
+
+(* Execute ******************************************************************************)
+	rtExecute(CLK := Execute);
+	IF rtExecute.Q
+		AND MemFnc < 0
+	THEN
+		MemFnc 												:= Fnc ;
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Active												:= FALSE;
+		Error												:= FALSE;
+		ErrorID												:= 0;
+		Warning												:= FALSE;
+		WarningId											:= 0;
+		CmdAborted											:= FALSE;
+		ErrorText											:= '';
+	END_IF
+
+(* Call Method ***********************************************************************************)
+	CASE MemFnc OF
+	FNC_MOVEIMPOSED:
+		MoveImposed(Execute);
+
+	FNC_MOVEABORT:
+		MoveAbort(Execute);
+
+	-1:
+		IF NOT Execute
+		THEN
+			Busy											:= FALSE;
+			Done											:= FALSE;
+			Active											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			Warning											:= FALSE;
+			WarningId										:= 0;
+			CmdAborted										:= FALSE;
+			ErrorText										:= '';
+		END_IF
+	ELSE
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Active												:= FALSE;
+		Error												:= Execute;
+		ErrorID												:= E_AdsErr.DEVICE_INVALIDPARM;
+		Warning												:= Execute;
+		WarningId											:= 0;
+		CmdAborted											:= FALSE;
+		ErrorText											:= CONCAT('invalid parameter value(s) Fnc no: ' , INT_TO_STRING(MemFnc));
+	END_CASE
+
+(*************************************************************************************************)]]></ST>
+    </Implementation>
+    <Method Name="moveAbort" Id="{3421cc55-a73b-484d-b709-fc693a1f8819}">
+      <Declaration><![CDATA[METHOD PUBLIC moveAbort : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc 													:= FNC_MOVEABORT;
+
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	Active													:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+
+MC_MoveAbort(
+	Execute													:= Execute,
+	Axis													:= rAxis,
+	Done													=> Done,
+	Busy													=> Busy,
+	Error													=> Error,
+	ErrorID													=> ErrorID);
+
+	IF Error THEN
+		LastErrorId											:= ErrorID;
+		ErrorText 											:= CONCAT('Error MC_MoveAbort ID:' , UDINT_TO_STRING(ErrorId));
+	ELSE
+		ErrorText 											:= '';
+	END_IF
+
+	IF NOT Execute AND NOT Busy
+	THEN
+		MemFnc												:=  -1;
+	END_IF
+
+	MoveAbort												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="moveImposed" Id="{6a269f18-8609-4300-9120-1e362f531570}">
+      <Declaration><![CDATA[METHOD PUBLIC moveImposed : BOOL //Return value = TRUE if busy
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MemFnc 													:= FNC_MOVEIMPOSED;
+	
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Busy													:= NOT Error;
+	Error													:= TRUE;
+	ErrorId													:= E_AdsErr.DEVICE_INVALIDPARM;
+	CmdAborted												:= FALSE;
+	Done													:= FALSE;
+	Active													:= FALSE;
+	ErrorText												:= 'Reference rAxis invalid (0)';
+	MemFnc													:= SEL(Execute , -1 ,MemFnc); 
+	RETURN;
+END_IF
+
+	MC_MoveImposed(
+		Execute												:= Execute,
+		Mode												:= Mode,
+		Distance											:= Distance,
+		VelocityDiff										:= VelocityDiff,
+		Acceleration										:= Acc,
+		Deceleration										:= Dec,
+		Jerk												:= Jerk,
+		VelocityProcess										:= VelocityProcess,
+		Length												:= Length,
+		Options												:= Options,
+		Axis												:= rAxis,
+		Done												=> Done,
+		Busy												=> Busy,
+		Active												=> Active,
+		CommandAborted										=> CmdAborted,
+		Error												=> Error,
+		ErrorID												=> ErrorID,
+		Warning												=> Warning,
+		WarningId											=> WarningID,
+		ActualVelocityDiff									=> ,
+		ActualDistance										=> ,
+		ActualLength										=> ,
+		ActualAcceleration									=> ,
+		ActualDeceleration									=> );
+
+
+	IF Error THEN
+		LastErrorId											:= ErrorID;
+		ErrorText 											:= CONCAT('Error MC_MoveSuperImposed ID:' , UDINT_TO_STRING(ErrorId));
+	ELSE                            					
+		ErrorText 											:= '';
+	END_IF
+
+	IF NOT Execute AND NOT Busy
+	THEN
+		MemFnc												:=  -1;
+	END_IF
+
+	MoveImposed												:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="AxSuperposition">
+      <LineId Id="58" Count="22" />
+      <LineId Id="116" Count="1" />
+      <LineId Id="81" Count="19" />
+      <LineId Id="118" Count="1" />
+      <LineId Id="101" Count="8" />
+      <LineId Id="120" Count="1" />
+      <LineId Id="110" Count="4" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="AxSuperposition.moveAbort">
+      <LineId Id="6" Count="24" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="31" Count="9" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="AxSuperposition.moveImposed">
+      <LineId Id="6" Count="42" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="49" Count="9" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

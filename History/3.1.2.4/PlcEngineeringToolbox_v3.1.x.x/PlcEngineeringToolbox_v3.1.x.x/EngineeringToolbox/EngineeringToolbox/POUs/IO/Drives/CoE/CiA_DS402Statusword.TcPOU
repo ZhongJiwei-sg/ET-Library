@@ -1,0 +1,144 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="CiA_DS402Statusword" Id="{81a3857e-c344-42a8-b584-43d521dee00b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK CiA_DS402Statusword
+VAR_INPUT
+END_VAR
+VAR_OUTPUT	
+	ReadyToSwitchOn			: BOOL; //Bit 0: Ready TO switch on	- - Controlled by state machine
+	SwitchedOn				: BOOL; //Bit 1: Switched on - Controlled by state machine
+	OperationEnabled		: BOOL; //Bit 2: Operation enabled - Controlled by state machine
+	Fault					: BOOL; //Bit 3: Drive fault active
+	VoltageEnabled			: BOOL; //Bit 4 - Manufacturer specific / Voltage enabled
+	QuickStopInverse		: BOOL; // Bit 5: False = Quick stop active (inverse signal)- Controlled by state machine
+	SwitchOnDisabled		: BOOL; // Bit 6: Switch in disabled - Controlled by state machine
+	Warning					: BOOL; // Bit 7: Warning active
+//Manufacturer specific_Bit8
+	RemoteActive			: BOOL;  // Bit 9: ManufacturerSpecific_Bit9, commonly used for control over network (EtherCAT) active
+//	TargetReached			: BOOL; // Bit 10 commonly used for in target position, velocity in pp or pv mode
+//	TxPDOToggle				: BOOL; // Bit 10: TxPDOToggle (An-/Abwahl über 0x8010:01)
+	InternalLimitActive		: BOOL; // Bit 11: Internal limit active
+//Operation mode specific_Bit12	- pp = Set-point acknowledge, pv = standstill, hm = Homing attained, csp = following set pos., csv following set velo
+//Operation mode specific_Bit13 - pp = Following error, pv = N/A, hm = Homing error, csp = Following error, csv = N/A
+//Manufacturer specific_Bit14
+//Manufacturer specific_Bit15
+
+	State					: eCiA_DS402_STATUS_STATE; // Device state
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="readStatusword" Id="{3cf230c2-c199-4695-9b07-935be7576482}">
+      <Declaration><![CDATA[METHOD PUBLIC readStatusword : BOOL
+VAR_INPUT
+	Statusword 					:	UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Status bits
+ReadyToSwitchOn												:= Statusword.0 ;
+SwitchedOn													:= Statusword.1 ;
+OperationEnabled											:= Statusword.2 ;
+Fault														:= Statusword.3 ;
+VoltageEnabled												:= Statusword.4 ;
+QuickStopInverse											:= Statusword.5 ;
+SwitchOnDisabled											:= Statusword.6 ;
+Warning														:= Statusword.7 ;
+
+RemoteActive												:= Statusword.9 ;
+
+InternalLimitActive											:= Statusword.11;
+
+
+//State
+IF NOT ReadyToSwitchOn 
+THEN
+	IF SwitchOnDisabled
+	THEN
+		state												:= eCiA_DS402_STATUS_STATE.SWITCH_ON_DISABLED;
+	ELSE
+		state												:= eCiA_DS402_STATUS_STATE.NOT_READY_TO_SWITCH_ON;
+	END_IF
+ELSIF Fault
+THEN
+	IF ReadyToSwitchOn AND SwitchedOn AND OperationEnabled
+	THEN
+		state												:= eCiA_DS402_STATUS_STATE.FAULT_REACTION_ACTIVE;
+	ELSE
+		state												:= eCiA_DS402_STATUS_STATE.FAULT_ACTIVE;
+	END_IF
+ELSE 
+	IF QuickStopInverse
+	THEN
+		state												:= eCiA_DS402_STATUS_STATE.READY_TO_SWITCH_ON;
+		IF SwitchedOn
+		THEN
+			state											:= eCiA_DS402_STATUS_STATE.SWITCHED_ON;
+			IF OperationEnabled
+			THEN
+				state										:= eCiA_DS402_STATUS_STATE.OPERATION_ENABLED;
+			END_IF
+		END_IF
+	ELSE //Quick stop active
+		IF SwitchedOn AND OperationEnabled
+		THEN
+			state											:= eCiA_DS402_STATUS_STATE.QUICK_STOP_ACTIVE;
+		ELSIF SwitchOnDisabled
+		THEN
+			state											:= eCiA_DS402_STATUS_STATE.SWITCH_ON_DISABLED;
+		ELSE
+			state 											:= eCiA_DS402_STATUS_STATE.NOT_READY_TO_SWITCH_ON;
+		END_IF
+	END_IF
+END_IF
+
+readStatusword												:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="CiA_DS402Statusword">
+      <LineId Id="110" Count="0" />
+    </LineIds>
+    <LineIds Name="CiA_DS402Statusword.readStatusword">
+      <LineId Id="48" Count="0" />
+      <LineId Id="25" Count="3" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="30" Count="2" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="111" Count="2" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="52" Count="3" />
+      <LineId Id="57" Count="2" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="83" Count="3" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="60" Count="1" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="104" Count="2" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="91" Count="2" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="95" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

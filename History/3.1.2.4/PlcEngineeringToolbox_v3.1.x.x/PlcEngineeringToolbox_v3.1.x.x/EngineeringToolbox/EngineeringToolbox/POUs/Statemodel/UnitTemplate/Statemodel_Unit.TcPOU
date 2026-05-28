@@ -1,0 +1,311 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="Statemodel_Unit" Id="{ebc3bf14-2e73-4603-a8d5-3e529b9caa55}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Generic Unit 
+FUNCTION_BLOCK Statemodel_Unit implements I_Statemodel_Unit
+VAR_OUTPUT CONSTANT
+END_VAR             										
+VAR_INPUT
+{attribute 'TcHmiSymbol.AddSymbol'}                      										
+	Unit																:	Statemodel;		
+END_VAR             										
+VAR_OUTPUT          										
+END_VAR             	
+VAR                 	
+(* Local variables ************************************************************)
+
+(* Trigger *****************************************************************)
+
+(* Timer ******************************************************************)
+
+(* Fcuntion blocks ***************************************************************)
+
+(* Dummys **********************************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Generic unit incl. state model										V1.0		*)
+	(************************************************************************************)
+
+(* work local sub ****************************************)
+	Unit();
+	IF Unit.RT_StateChanged THEN stateChanged(unit.Mode, Unit.State); END_IF
+	
+(* call methods ********************************************)
+	CASE Unit.state OF
+	eSTATE.STARTUP			:	startup();
+	eSTATE.IDLE				: 	idle();
+	eSTATE.STARTING			:	starting();		
+	eSTATE.STARTED			: 	started();	
+	eSTATE.EXECUTE			:	executing();
+	eSTATE.COMPLETING		:	completing();
+	eSTATE.COMPLETE			: 	complete();
+	eSTATE.ABORTING			:	aborting();
+	eSTATE.ABORTED			:  	aborted();
+	eSTATE.CLEARING			:	clearing();
+	eSTATE.STOPPING			:	stopping();
+	eSTATE.STOPPED			: 	stopped();
+	eSTATE.RESETTING		:	resetting();
+	ELSE
+		;
+	END_CASE
+
+(*********************************************************)
+
+
+]]></ST>
+    </Implementation>
+    <Method Name="aborted" Id="{82094b5b-6c33-4c21-8f74-3ef83fdda4b0}">
+      <Declaration><![CDATA[METHOD PROTECTED aborted : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Aborted														:= unit.InAborted;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="aborting" Id="{e8d115e6-dacd-49ec-aaf4-ce4634199a7e}">
+      <Declaration><![CDATA[METHOD PROTECTED aborting : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Unit.StateComplete();
+Aborting													:= Unit.InAborting;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="clearing" Id="{b645cd56-0f2c-40b6-9f98-6e3021eddf44}">
+      <Declaration><![CDATA[METHOD PROTECTED clearing : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Unit.StateComplete();
+Clearing													:= Unit.InClearing;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="complete" Id="{f49be510-fde6-4b8e-8472-ddd3432d34ad}">
+      <Declaration><![CDATA[METHOD PROTECTED complete : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Complete														:= unit.InComplete;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="completing" Id="{0f6bc1fe-5d74-45dc-ae55-bd8fc050dd90}">
+      <Declaration><![CDATA[METHOD PROTECTED completing : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Unit.StateComplete();
+Completing													:= Unit.InCompleting;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="executing" Id="{efff44cc-82de-4521-a0c8-89a79699f984}">
+      <Declaration><![CDATA[METHOD PROTECTED executing : booL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Executing 												:= Unit.InExecute;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_exit" Id="{df18465b-7f5d-45ef-a504-49d789b5e3ae}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FB_EXit															:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_init" Id="{9e160fa4-7328-4996-8c5d-105b3eb3659e}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* Example 
+	Unit.pSubRemoteData[1]												:= ADR(Infeed.unit.RemoteData);
+	Unit.pSubRemoteData[2]												:= ADR(Support_1.unit.RemoteData);
+	Unit.pSubRemoteData[3]												:= ADR(Support_2.RemoteData);	
+	Unit.pSubRemoteData[4]												:= ADR(Transport.unit.RemoteData);
+	Unit.pSubRemoteData[5]												:= ADR(Outfeed.unit.RemoteData);
+*)
+FB_init														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_reinit" Id="{793f5187-7f65-4e6f-9205-335d5e3901d8}">
+      <Declaration><![CDATA[METHOD FB_reinit : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FB_reinit											:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="idle" Id="{be30ccff-9ac6-4518-af4e-c31398a52757}">
+      <Declaration><![CDATA[METHOD PROTECTED idle : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Idle														:= unit.InIdle;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resetting" Id="{07d90871-ac01-4b0e-a034-21db6a2d45f2}">
+      <Declaration><![CDATA[METHOD PROTECTED Resetting : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Unit.StateComplete();
+Resetting													:= Unit.InResetting;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="rUnit" Id="{deb3908d-d327-41b8-afea-a807f10a2d4d}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY public rUnit : REFERENCE TO Statemodel]]></Declaration>
+      <Get Name="Get" Id="{6d48cdd0-6fc5-4986-98f2-40c49cd2e3c3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rUnit REF= Unit;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="started" Id="{2f6dcd2f-f0fb-475f-8015-19a506e88f5b}">
+      <Declaration><![CDATA[METHOD PROTECTED started : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Started													:= Unit.InStarted;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="starting" Id="{f4e5aa13-f5ca-4240-b851-6eb873bd50d1}">
+      <Declaration><![CDATA[METHOD PROTECTED starting : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Unit.StateComplete();
+Starting													:= Unit.InStarting;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="startup" Id="{d2518eb1-0622-42af-9c21-6e180208979e}">
+      <Declaration><![CDATA[METHOD PROTECTED startup : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Unit.StateComplete();
+Startup													:= Unit.InStartup;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="stateChanged" Id="{6665c611-5b14-4afd-9cb8-4b1ba0090389}">
+      <Declaration><![CDATA[METHOD PROTECTED stateChanged : BOOL 
+VAR_INPUT
+	mode											:	eMODE;
+	state											:	eSTATE;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="stopped" Id="{0d21fbd5-68a0-426c-98fc-91a6b3e502a4}">
+      <Declaration><![CDATA[METHOD PROTECTED stopped : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Stopped														:= unit.InStopped;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="stopping" Id="{cd9dce3e-ab88-4ce7-a46d-aedd1f84bb60}">
+      <Declaration><![CDATA[METHOD PROTECTED stopping : Bool
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Unit.StateComplete();
+Stopping													:= Unit.InStopping;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="Statemodel_Unit">
+      <LineId Id="3" Count="4" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="14" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.aborted">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.aborting">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.clearing">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.complete">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.completing">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.executing">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.FB_exit">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.FB_init">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.FB_reinit">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.idle">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.resetting">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.rUnit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.started">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.starting">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.startup">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.stateChanged">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.stopped">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="Statemodel_Unit.stopping">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

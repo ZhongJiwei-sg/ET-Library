@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="HRESULT_TO_ADSERROR" Id="{17e48205-2292-4183-a63d-1739f5eb0be6}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION HRESULT_TO_ADSERROR     : E_AdsErr //Returns ADS error code from HRESULT (HRESULT HighWord offset = 16#9811, values <0 = Error, ==0 = OK, >0 = OK with Info   
+VAR_INPUT
+{attribute 'displaymode':='hex'}
+	hr									:	HRESULT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF hr >= TO_DINT(16#98110000)
+	AND hr <= TO_DINT(16#9811FFFF) 
+THEN	
+	HRESULT_TO_ADSERROR				:= TO_UDINT(hr - TO_DINT(16#98110000));
+ELSE
+	HRESULT_TO_ADSERROR				:= E_AdsErr.NOERR; //No ADS Error
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="HRESULT_TO_ADSERROR">
+      <LineId Id="3" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="4" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

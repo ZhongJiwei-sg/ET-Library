@@ -1,0 +1,350 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="MDP_Mainboard" Id="{8a6ebc38-71a5-482e-887f-93648c71cae2}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK MDP_Mainboard  EXTENDS FbBase
+VAR_OUTPUT CONSTANT
+	MIN_VOLTAGE												:	INT := 1;
+	MAX_VOLTAGE												:	INT := 20;
+
+(* Voltage Location *)
+ 	VLOC_UNKNOWN											:	INT := 0;
+	VLOC_OTHER												:	INT := 1;
+ 	VLOC_PROCESSOR											:	INT := 2;
+ 	VLOC_DISK												:	INT := 3;
+ 	VLOC_SYSTEM_MANAGEMENT_MODULE							:	INT := 4;
+ 	VLOC_MOTHERBOARD										:	INT := 5;
+ 	VLOC_MEMORY_MODULE										:	INT := 6;
+ 	VLOC_POWER_SUPPLY										:	INT := 7;
+ 	VLOC_ADDIN_CARD											:	INT := 8;
+ 	VLOC_FRONT_PANEL_BOARD									:	INT := 9;
+ 	VLOC_BACK_PANEL_BOARD									:	INT := 10;
+ 	VLOC_PERIPHERIE											:	INT := 11;
+ 	VLOC_CHASSIS											:	INT := 12;
+ 	VLOC_BATTERY											:	INT := 13;
+ 	VLOC_UPS												:	INT := 14;
+	VLOC_GRAFFIC_BOARD										:	INT := 15;
+ 	VLOC_SUPERIO											:	INT := 16;
+	VLOC_CHIPSET											:	INT := 17;
+END_VAR                             						
+VAR_INPUT                           						
+	AmsNetId												: 	T_AmsNetId := '';				//AmsNetId as text
+	Timeout													:	TIME := DEFAULT_ADS_TIMEOUT;	//Ads timeout
+END_VAR
+VAR_OUTPUT
+	MB_Type													:	STRING(20);	//Type of Mainboard
+	SerielNo												:	STRING(20);	//Serial number of Mainboard
+	ProdDate												:	STRING(20);	//Production date of Mainboard
+	BootCount												:	UDINT;		//total number of boots
+	OpTime													:	UDINT; 		//Operating Time
+	MinBoardTemp											:	DINT;		//minimum board temperature
+	MaxBoardTemp											:	DINT;		//maximum board temperature
+	MinInputVolt											:	DINT;		//minimum board input voltage
+	MaxInputVolt											:	DINT;		//maximum board input voltage
+	MB_Temp													:	INT;		//current board temperature
+	IPC_SerielNo											:	STRING(20);	//industrial PC serial number
+                        									
+	VoltLocation											:  	ARRAY[MIN_VOLTAGE..MAX_VOLTAGE] OF INT;	//voltage location
+	VoltageValue											:	ARRAY[MIN_VOLTAGE..MAX_VOLTAGE] OF INT;	//voltage value
+	VoltageNominal											:	ARRAY[MIN_VOLTAGE..MAX_VOLTAGE] OF INT;	//nominal voltage
+	VoltCount												:	INT; 		//number of measuring points
+	ErrorGrp												:	E_MDP_ErrGroup := eMDP_Err_NoError;
+
+END_VAR                 									
+VAR                     									
+	idx														:	INT := 1;
+	MDP_ScanModules											:	FB_MDP_ScanModules := ( nModuleType 	:= eMDP_ModT_Mainboard , iModIdx		:= 0);
+	MDP_Read												: 	FB_MDP_Read;
+	SplitErrorId											:	FB_MDP_SplitErrorID;
+	DstBuf													:	ARRAY[0..21] OF BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* Read Mainboard Information 				V1.0	*)
+(****************************************************)
+
+(* Start Read *******************************************************)
+	IF Execute
+		AND state = 0
+	THEN
+		MB_Type												:= '';
+		SerielNo											:= '';
+		ProdDate											:= '';
+		BootCount											:= 0;
+		OpTime												:= 0;
+		MinBoardTemp										:= 0;
+		MaxBoardTemp										:= 0;
+		MinInputVolt										:= 0;
+		MaxInputVolt										:= 0;
+		MB_Temp												:= 0;
+		MEMSET(ADR(VoltLocation),0,SIZEOF(VoltLocation));
+		MEMSET(ADR(VoltageValue),0,SIZEOF(VoltageValue));
+		MEMSET(ADR(VoltageNominal),0,SIZEOF(VoltageNominal));
+		VoltCount											:= 0;
+
+		Busy												:= TRUE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+		MDP_Read(bExecute := FALSE);
+		MDP_ScanModules(
+			bExecute			:= FALSE,
+			nModuleType			:= eMDP_ModT_Mainboard,
+			iModIdx				:= 0,
+			tTimeout			:= timeout,
+			sAmsNetId			:= AmsNetId,
+			bBusy				=> ,
+			bError				=> ,
+			nErrID				=> ,
+			nDynModuleId		=> ,
+			iModuleTypeCount	=> ,
+			iModuleCount		=> );
+
+		MDP_ScanModules(bExecute:= TRUE);	
+		state												:= 1;
+		
+	ELSIF NOT Execute
+		AND State = 99
+	THEN
+		state												:= 0;
+		Busy												:= FALSE;
+		Done												:= FALSE;
+		Error												:= FALSE;
+		ErrorId												:= 0;
+		ErrorGrp											:= eMDP_Err_NoError;
+	END_IF
+
+
+	CASE state OF
+	0:
+		;
+
+	1:
+		MDP_ScanModules();
+		IF NOT MDP_ScanModules.bBusy
+		THEN
+			IF MDP_ScanModules.bError
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_ScanModules.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_ScanModules(bExecute := FALSE);
+			ELSE
+				MDP_Read(bExecute := FALSE);
+				MDP_Read.stMDP_DynAddr.nArea				:= 16#8;
+				MDP_Read.stMDP_DynAddr.nModuleId			:= MDP_ScanModules.nDynModuleId;
+				MDP_Read.stMDP_DynAddr.nTableId				:= 1;
+				MDP_Read.stMDP_DynAddr.nSubIdx				:= 0;
+				idx											:= 1;
+				state										:= 2;
+			END_IF                                  		
+
+		END_IF
+
+	2:
+		MDP_Read( pDstBuf	:= ADR(DstBuf), cbDstBufLen := SIZEOF(DstBuf));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;
+				MDP_Read(bExecute := FALSE);
+			ELSE
+				MDP_Read(bExecute := FALSE);
+				CASE MDP_Read.stMDP_DynAddr.nTableId OF
+				1:
+					CASE MDP_Read.stMDP_DynAddr.nSubIdx OF
+					0:
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 1;
+
+					1:
+						MEMCPY(ADR(MB_Type), ADR(DstBuf), MIN(MDP_Read.nCount, SIZEOF(MB_Type)) );
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 2;
+
+					2:
+						MEMCPY(ADR(SerielNo), ADR(DstBuf), MIN(MDP_Read.nCount, SIZEOF(SerielNo)) );
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 3;
+
+					3:
+						MEMCPY(ADR(ProdDate), ADR(DstBuf), MIN(MDP_Read.nCount, SIZEOF(ProdDate)) );
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 4;
+
+					4:
+						MEMCPY(ADR(BootCount), ADR(DstBuf), SIZEOF(BootCount));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 5;
+
+					5:
+						MEMCPY(ADR(OpTime), ADR(DstBuf), SIZEOF(OpTime));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 6;
+
+					6:
+						MEMCPY(ADR(MinBoardTemp), ADR(DstBuf), SIZEOF(MinBoardTemp));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 7;
+
+					7:
+						MEMCPY(ADR(MaxBoardTemp), ADR(DstBuf), SIZEOF(MaxBoardTemp));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 8;
+
+					8:
+						MEMCPY(ADR(MinInputVolt), ADR(DstBuf), SIZEOF(MinInputVolt));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 9;
+
+					9:
+						MEMCPY(ADR(MaxInputVolt), ADR(DstBuf), SIZEOF(MaxInputVolt));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 10;
+
+					10:
+						MEMCPY(ADR(MB_Temp), ADR(DstBuf), SIZEOF(MB_Temp));
+						MDP_Read.stMDP_DynAddr.nSubIdx		:= 0;
+						MDP_Read.stMDP_DynAddr.nTableId		:= 4;
+					END_CASE
+
+				4:
+					CASE MDP_Read.stMDP_DynAddr.nSubIdx OF
+					0:
+						MEMCPY(ADR(VoltCount), ADR(DstBuf), SIZEOF(VoltCount) );
+						IF VoltCount > 0 THEN
+							MDP_Read.stMDP_DynAddr.nSubIdx	:= 1;
+						ELSE						
+							state							:= 3;
+						END_IF
+
+					1..255:
+						MEMCPY(ADR(VoltLocation[MDP_Read.stMDP_DynAddr.nSubIdx]), ADR(DstBuf), SIZEOF(VoltLocation[MIN_VOLTAGE]));
+						MDP_Read.stMDP_DynAddr.nSubIdx	:= MDP_Read.stMDP_DynAddr.nSubIdx + 1;
+						
+						IF MDP_Read.stMDP_DynAddr.nSubIdx > VoltCount
+						THEN
+							MDP_Read.stMDP_DynAddr.nSubIdx	:= 1;
+							MDP_Read.stMDP_DynAddr.nTableId	:= 5;
+						END_IF
+					END_CASE
+
+				5:
+					CASE MDP_Read.stMDP_DynAddr.nSubIdx OF
+					1..255:
+						MEMCPY(ADR(VoltageValue[MDP_Read.stMDP_DynAddr.nSubIdx]), ADR(DstBuf), SIZEOF(VoltageValue[MIN_VOLTAGE]));
+						MDP_Read.stMDP_DynAddr.nSubIdx	:= MDP_Read.stMDP_DynAddr.nSubIdx + 1;
+						
+						IF MDP_Read.stMDP_DynAddr.nSubIdx > VoltCount
+						THEN
+							MDP_Read.stMDP_DynAddr.nSubIdx	:= 1;
+							MDP_Read.stMDP_DynAddr.nTableId	:= 6;
+						END_IF
+					END_CASE
+
+				6:
+					CASE MDP_Read.stMDP_DynAddr.nSubIdx OF
+					1..255:
+						MEMCPY(ADR(VoltageNominal[MDP_Read.stMDP_DynAddr.nSubIdx]), ADR(DstBuf), SIZEOF(VoltageNominal[MIN_VOLTAGE]));
+						MDP_Read.stMDP_DynAddr.nSubIdx	:= MDP_Read.stMDP_DynAddr.nSubIdx + 1;
+						
+						IF MDP_Read.stMDP_DynAddr.nSubIdx > VoltCount
+						THEN
+							state							:= 3;
+						END_IF
+					END_CASE
+				END_CASE
+
+				MDP_Read(
+					stMDP_DynAddr	:= ,		(* address to request subindex Count of AdressList *)
+					pDstBuf			:= ADR(DstBuf),
+					cbDstBufLen		:= SIZEOF(DstBuf),
+					bExecute		:= NOT MDP_Read.bBusy AND state = 2,
+					tTimeout		:= Timeout,
+					sAmsNetId		:= AmsNetId,
+					bBusy			=> ,
+					bError			=> ,
+					nErrId			=> );
+			END_IF
+		END_IF
+
+	3: //Start lesen der IPC Seriennummer 
+		MDP_Read.stMDP_DynAddr.nArea						:= INT_TO_BYTE(eMDP_Area_DeviceArea);
+		MDP_Read.stMDP_DynAddr.nModuleId					:= 16#9F;
+		MDP_Read.stMDP_DynAddr.nTableId						:= 16#00;
+		MDP_Read.stMDP_DynAddr.nSubIdx						:= 16#00;
+		
+		MDP_Read(
+			stMDP_DynAddr	:= ,		(* address to request subindex Count of AdressList *)
+			pDstBuf			:= ADR(IPC_SerielNo),
+			cbDstBufLen		:= SIZEOF(IPC_SerielNo),
+			bExecute		:= NOT MDP_Read.bBusy,
+			tTimeout		:= Timeout,
+			sAmsNetId		:= AmsNetId,
+			bBusy			=> ,
+			bError			=> ,
+			nErrId			=> );	
+			
+		state												:= 4;	
+	
+	4:
+		MDP_Read( pDstBuf	:= ADR(IPC_SerielNo), cbDstBufLen := SIZEOF(IPC_SerielNo));
+		IF NOT MDP_Read.bBusy
+		THEN
+			IF MDP_Read.bError AND MDP_Read.bExecute
+			THEN
+				Busy										:= FALSE;
+				Error										:= TRUE;
+				SplitErrorId(
+					nErrID		:= MDP_Read.nErrID,
+					eErrGroup	=> ErrorGrp ,
+					nErrCode	=> ErrorId);
+				state										:= 99;	
+			ELSE			                        		
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				state										:= 99;
+			END_IF
+			MDP_Read(bExecute := FALSE);
+			
+		END_IF
+
+	99: ;
+
+	ELSE
+		;
+	END_CASE
+
+
+	(* reset state for next start *)
+	IF NOT Execute
+		AND state = 99
+	THEN
+		state												:= 0;
+	END_IF
+
+(****************************************************************************************************)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="MDP_Mainboard">
+      <LineId Id="3" Count="280" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

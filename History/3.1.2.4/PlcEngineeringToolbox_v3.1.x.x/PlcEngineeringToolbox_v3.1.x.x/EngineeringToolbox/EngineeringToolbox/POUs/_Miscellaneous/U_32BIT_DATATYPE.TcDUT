@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="U_32BIT_DATATYPE" Id="{8d969118-bef5-4ef5-8180-f6a0472b9339}">
+    <Declaration><![CDATA[TYPE U_32BIT_DATATYPE :  //Union datatype of 32 bit size datatypes 
+UNION
+	_REAL				: REAL;  
+	{attribute 'displaymode':='hex'}	
+	_DWORD				: DWORD;
+	_DINT				: DINT;
+	_UDINT				: UDINT;
+	_TIME				: TIME;	
+	_SINTS				: ARRAY[0..3] OF SINT; //Array 0..3 of BYTE
+	{attribute 'displaymode':='hex'}	
+	_BYTES				: ARRAY[0..3] OF BYTE; //Array 0..3 of BYTE
+	{attribute 'displaymode':='hex'}	
+	_WORDS				: ARRAY[0..1] OF WORD;	//Array 0..1 of WORD
+	_INTS				: ARRAY[0..1] OF INT;	//Array 0..1 of INT
+	_UINTS				: ARRAY[0..1] OF UINT;	//Array 0..1 of UINT
+	
+END_UNION
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

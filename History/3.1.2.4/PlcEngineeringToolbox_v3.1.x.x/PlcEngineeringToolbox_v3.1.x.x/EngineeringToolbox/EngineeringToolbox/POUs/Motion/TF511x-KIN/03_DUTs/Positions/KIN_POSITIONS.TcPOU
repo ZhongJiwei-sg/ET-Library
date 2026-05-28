@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="KIN_POSITIONS" Id="{d94bfccd-20b9-450b-b175-f7064beccde0}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK KIN_POSITIONS 
+VAR_INPUT
+	Valid													:	BOOL ;
+	MCS														:	KIN_POSITIONS_MCS_DUT; //Values as union
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="copy" Id="{5062b61e-858d-4480-be50-3f0857229de0}">
+      <Declaration><![CDATA[METHOD PUBLIC copy : BOOL //Return value = TRUE if execution finished
+VAR_IN_OUT
+	Source													:	KIN_POSITIONS;
+END_VAR
+
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	Valid													:= Source.Valid;
+	MCS														:= Source.MCS;
+	copy													:= TRUE;
+	
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="delete" Id="{ad81258c-3da4-486f-932a-d37cc38cb2c1}">
+      <Declaration><![CDATA[METHOD PUBLIC delete : BOOL //Return value = TRUE if execution finished - Valid bit will not change
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	MCS.A													:= 0.0;
+	MCS.B													:= 0.0;
+	MCS.C													:= 0.0;
+	MCS.X													:= 0.0;
+	MCS.Y													:= 0.0;
+	MCS.Z													:= 0.0;
+	MCS.Q1													:= 0.0;
+	MCS.Q2													:= 0.0;
+	
+	delete													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isInPos" Id="{c88e8da5-fd81-4855-ac66-1f80e6cd7ccf}">
+      <Declaration><![CDATA[METHOD PUBLIC isInPos : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	KIN_POSITIONS_MCS_DUT;
+	Window													:	KIN_POSITIONS_MCS_DUT;
+END_VAR             										
+VAR CONSTANT        										
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsInPos 														:= IsInPosXYZ(CheckPos,Window) AND IsInPosABC(CheckPos,Window);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isInPosABC" Id="{d429fc13-7371-4d7a-a174-fb5fd4d76a9b}">
+      <Declaration><![CDATA[METHOD PUBLIC isInPosABC : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	KIN_POSITIONS_MCS_DUT;
+	Window													:	KIN_POSITIONS_MCS_DUT;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[isInPosABC												 	:= CAM(CheckPos.A, MCS.A ,Window.A)
+																AND CAM(CheckPos.B, MCS.B ,Window.B)
+																AND CAM(CheckPos.C, MCS.C ,Window.C);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isInPosByAxisNo" Id="{4dc3e266-4932-4e72-b5e7-08907986cbc5}">
+      <Declaration><![CDATA[METHOD PUBLIC isInPosByAxisNo : BOOL //Return value = TRUE selected axis is within window of checkPos values
+VAR_INPUT
+	No					:	INT;
+END_VAR
+VAR_IN_OUT
+	CheckPos			:	KIN_POSITIONS_MCS_DUT;
+	Window				:	KIN_POSITIONS_MCS_DUT;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[isInPosByAxisNo													:= (CAM(CheckPos.X, MCS.X ,Window.X) OR No <> 1)
+																AND (CAM(CheckPos.Y, MCS.Y ,Window.Y) OR No <> 2)
+																AND (CAM(CheckPos.Z, MCS.Z ,Window.Z) OR No <> 3)
+																AND (CAM(CheckPos.A, MCS.A ,Window.A) OR No <> 4)
+																AND (CAM(CheckPos.B, MCS.B ,Window.B) OR No <> 5)
+																AND (CAM(CheckPos.C, MCS.C ,Window.C) OR No <> 6)
+																AND (CAM(CheckPos.Q1, MCS.Q1 ,Window.Q1) OR No <> 7)
+																AND (CAM(CheckPos.Q2, MCS.Q2 ,Window.Q2) OR No <> 8);
+																
+																]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isInPosExt" Id="{250e81d3-bbca-4c50-9ef4-b9b2dae5ffe0}">
+      <Declaration><![CDATA[METHOD PUBLIC isInPosExt : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_INPUT
+{attribute 'displaymode':='binary'}
+	Config													:	DWORD; //Select value to be checked by bis mask .0=X or A1, .1=Y or A2, .3=Y or A3.....
+END_VAR
+VAR_IN_OUT
+	CheckPos												:	KIN_POSITIONS_MCS_DUT;
+	Window													:	KIN_POSITIONS_MCS_DUT;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[isInPosExt													:= (CAM(CheckPos.X, MCS.X ,Window.X) OR NOT Config.0)
+																AND (CAM(CheckPos.Y, MCS.Y ,Window.Y) OR NOT Config.1)
+																AND (CAM(CheckPos.Z, MCS.Z ,Window.Z) OR NOT Config.2)
+																AND (CAM(CheckPos.A, MCS.A ,Window.A) OR NOT Config.3)
+																AND (CAM(CheckPos.B, MCS.B ,Window.B) OR NOT Config.4)
+																AND (CAM(CheckPos.C, MCS.C ,Window.C) OR NOT Config.5)
+																AND (CAM(CheckPos.Q1, MCS.Q1 ,Window.Q1) OR NOT Config.6)
+																AND (CAM(CheckPos.Q2, MCS.Q2 ,Window.Q2) OR NOT Config.7);															]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isInPosXYZ" Id="{fe4f7b88-27f2-4261-bd37-4f357386ce4b}">
+      <Declaration><![CDATA[METHOD PUBLIC isInPosXYZ : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	KIN_POSITIONS_MCS_DUT;
+	Window													:	KIN_POSITIONS_MCS_DUT;
+END_VAR                 									
+VAR CONSTANT            									
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsInPosXYZ												 	:= CAM(CheckPos.X, MCS.X ,Window.X)
+																AND CAM(CheckPos.Y, MCS.Y ,Window.Y)
+																AND CAM(CheckPos.Z, MCS.Z ,Window.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{a8203276-8a72-445c-9423-865c716cd5b9}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Delete data and reset valid , TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Delete(); 
+Valid														:= FALSE;
+reset														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="KIN_POSITIONS">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_POSITIONS.copy">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_POSITIONS.delete">
+      <LineId Id="15" Count="7" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_POSITIONS.isInPos">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_POSITIONS.isInPosABC">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_POSITIONS.isInPosByAxisNo">
+      <LineId Id="3" Count="5" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_POSITIONS.isInPosExt">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_POSITIONS.isInPosXYZ">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_POSITIONS.reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

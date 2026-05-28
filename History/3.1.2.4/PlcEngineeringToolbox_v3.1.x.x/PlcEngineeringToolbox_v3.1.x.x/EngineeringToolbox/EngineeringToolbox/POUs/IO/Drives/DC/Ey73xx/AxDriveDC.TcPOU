@@ -1,0 +1,206 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AxDriveDC" Id="{a2314b3b-662b-4a31-a032-00a9f5b02552}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Beckhoff Stepper terminal status and diagnoses/ EP Box used with NC axis
+//EventHandling instance use inside
+FUNCTION_BLOCK AxDriveDC EXTENDS AxDriveBase
+VAR CONSTANT         	
+END_VAR  
+VAR_INPUT
+END_VAR                     					
+VAR_IN_OUT                  					
+END_VAR                     					
+VAR_OUTPUT                  					
+	Status_ReadyToEnable									: BOOL;
+	Status_Ready											: BOOL;
+	Status_Warning											: BOOL;
+	Status_Error											: BOOL;
+	Status_MovingPos										: BOOL;
+	Status_MovingNeg										: BOOL;
+	Status_TorqueReduced									: BOOL;
+	Status_DigInput1										: BOOL;
+	Status_DigInput2										: BOOL;
+	Status_SyncError										: BOOL;
+	Status_TxPDOToggle										: BOOL;
+	InfoData1										AT %I*	:	UINT;
+	InfoData2										AT %I*	:	UINT;
+END_VAR                     					                   					
+VAR                         					
+END_VAR
+VAR
+
+(* Cache *********************************************************************)
+	StatusTrig												:	BYTE;
+	MemStatusTrig											:	BYTE;
+	MemCoeCache												: 	ARRAY[0..5] OF BYTE; //Index A020/A030 with a lenght of 17 subindex	
+	
+//Diag read by CoE
+	Diag_Saturated											: BOOL; // Driver stage operates with maximum duty cycle
+	Diag_OverTemperature 									: BOOL; // Internal terminal temperature is higher than 80°C (see subindex 0xF80F:04)
+	Diag_TorqueOverloaded 									: BOOL; // Motor current is higher than the rated current
+	Diag_UnderVoltage 										: BOOL; // Motor supply voltage is 20% lower than the configured nominal voltage
+	Diag_OverVoltage 										: BOOL; // Motor supply voltage is 10% higher than the configured nominal voltage
+	Diag_ShortCircuit 										: BOOL; // Short circuit 
+	Diag_ShortCircuitB										: BOOL; // Short circuit
+	Diag_NoControlPower 									: BOOL; // Control voltage at the power contacts is less than 12 V
+	Diag_MiscError 											: BOOL; // Terminal initialization failed, or supply voltage is less than 8 V, or internal terminal temperature is higher than 100°C (see subindex 0xF80F:05)
+	Diag_Configuration 										: BOOL; // CoE change has not yet been adopted into the current configuration
+	Diag_MotorStall											: BOOL; // A loss of step has occurred
+	Diag_OpenLoadA											: BOOL; // Open load on coil A - e.g. no motor connected
+	Diag_OpenLoadB											: BOOL; // Open load on coil B - e.g. no motor connected
+
+	Diag_ActualMode											: BYTE; // Current operating mode (relevant for activated automatic mode, see 0x8012:01)
+	
+(* Timer ********************************************************************************)
+
+(* Trigger ******************************************************************************)
+
+(* Instance ****************************************************************************)
+	CoERead													:	FB_EcCoeSdoReadEx := (tTimeout := DEFAULT_ADS_TIMEOUT);	//Read data via CoE
+	
+(* Dummy Speicher **********************************************************)
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* DC Drive Control															*)
+	(************************************************************************************)
+
+(* abort function-call if the reference is invalid *****************************)
+IF NOT __ISVALIDREF(rAxis) 
+THEN
+	Fault													:= TRUE;
+	SwitchedOn												:= FALSE;
+	Ready													:= FALSE;
+	RETURN;
+END_IF
+
+(* Call super class ****************************************************)
+	SUPER^(); 
+
+(* Read Statusword ********************************************************)
+	Status_ReadyToEnable									:= StatusWord.0 OR rAxis.Status.OpMode.SimulationAxis ;
+	Status_Ready											:= StatusWord.1 OR rAxis.Status.OpMode.SimulationAxis;
+	Status_Warning											:= StatusWord.2;
+	Status_Error											:= StatusWord.3;
+	Status_MovingPos										:= StatusWord.4;
+	Status_MovingNeg										:= StatusWord.5;
+	Status_TorqueReduced									:= StatusWord.6;              
+             					   
+	Status_DigInput1										:= StatusWord.11;
+	Status_DigInput2										:= StatusWord.12;
+	Status_SyncError										:= StatusWord.13;
+//	_StatusWord.14;//6                                         
+	Status_TxPDOToggle										:= StatusWord.15;
+
+(* Read diag data ************************************************)
+	StatusTrig.0											:= NOT Status_ReadyToEnable;
+	StatusTrig.1											:= Status_Error;
+	StatusTrig.2											:= Status_Warning;
+	
+	CASE state OF
+	0:
+		IF StatusTrig <> MemStatusTrig AND NOT rAxis.Status.OpMode.SimulationAxis AND AdsAddr.port > 0 
+		THEN
+			CoERead(
+				sNetId		:= F_CreateAmsNetId(nIds :=AdsAddr.netId), 
+				nSlaveAddr	:= AdsAddr.port, 
+				nSubIndex	:= , 
+				nIndex		:= , 
+				pDstBuf		:= , 
+				cbBufLen	:= , 
+				bExecute	:= FALSE,
+				bCompleteAccess:= TRUE, 
+				tTimeout	:= , 
+				bBusy		=> , 
+				bError		=> , 
+				nErrId		=> );
+			IF NOT CoERead.bBusy
+			THEN
+				MemStatusTrig 								:= StatusTrig;			
+				state 										:= state + 1;
+			END_IF
+		END_IF
+	1: 
+		CoERead(
+			bExecute	:= TRUE, 
+			nIndex		:= SEL(Channel=0,16#A030,16#A020),
+			nSubIndex	:= 16#0, 
+			pDstBuf		:= ADR(MemCoeCache), 
+			cbBufLen	:= SIZEOF(MemCoeCache));
+		IF NOT CoERead.bBusy
+		THEN
+			IF CoERead.bError
+			THEN
+				state 										:= 0;
+			ELSE
+				//											:= MemCoeChache[0]; 	//Subindex 0x00 Maximal sub index
+				//											:= MemCoeChache[1];		//reserved				
+				Diag_Saturated								:= MemCoeCache[2].0; 	//Subindex 0x01 
+				Diag_OverTemperature 						:= MemCoeCache[2].1; 	//Subindex 0x02 
+				Diag_TorqueOverloaded 						:= MemCoeCache[2].2; 	//Subindex 0x03 
+				Diag_UnderVoltage 							:= MemCoeCache[2].3; 	//Subindex 0x04 
+				Diag_OverVoltage 							:= MemCoeCache[2].4; 	//Subindex 0x05 
+				Diag_ShortCircuit 							:= MemCoeCache[2].5; 	//Subindex 0x06   
+				Diag_NoControlPower 						:= MemCoeCache[2].7; 	//Subindex 0x08 
+				Diag_MiscError 								:= MemCoeCache[3].0; 	//Subindex 0x09
+				Diag_Configuration 							:= MemCoeCache[3].1; 	//Subindex 0x0A
+				//											:= MemCoeCache[3].2; 	//Subindex 0x0B 
+				//											:= MemCoeCache[3].3; 	//Subindex 0x0C 
+				//	 										:= MemCoeCache[3].4; 	//Subindex 0x0D 
+				//				 							:= MemCoeChache[3].5; 	//Subindex 0x0E 
+				//				 							:= MemCoeChache[3].6; 	//Subindex 0x0F 
+				//				 							:= MemCoeChache[3].7; 	//Subindex 0x10 								
+				Diag_ActualMode	 							:= MemCoeCache[4]; 	//Subindex 0x11 (e.g. 17) 
+				//				 							:= MemCoeChache[5];		//reserved
+	
+				state										:= 0;			
+			END_IF
+			CoERead(bExecute := False);		
+		END_IF
+	END_CASE
+	
+(* DriveStatusBits ***********************************************)
+	Fault													:= Status_Error
+															//	OR Status_MotorStall
+																OR Status_SyncError
+																OR rAxis.NcToPlc.StateDWord.28 (* DriveDeviceError *)
+																OR rAxis.NcToPlc.StateDWord.30; (* IODataInvalid *)
+         											
+													
+	Ready	 												:= NOT Fault
+																AND(Status_ReadyToEnable OR Status_Ready);
+	SwitchedOn												:= Status_Ready AND NOT Fault;
+	
+(*******************************************************************)
+	
+]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="AxDriveDC">
+      <LineId Id="3" Count="10" />
+      <LineId Id="174" Count="1" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="14" Count="96" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0512" Id="{4350b546-7d8d-4a80-a4f8-5e5e2cd8fa4d}">
+    <Declaration><![CDATA[TYPE AX5000_P_0512 :
+STRUCT
+	Velocity_filter_low_pass_damping:UDINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

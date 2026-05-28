@@ -1,0 +1,187 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="VALUE_3D" Id="{d18f07d9-db24-4f30-8146-8bcb639a75b7}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK VALUE_3D
+VAR_INPUT                                                            
+	Valid													:	BOOL ;
+	X														:	LREAL;
+	Y														:	LREAL;
+	Z														:	LREAL;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="copy" Id="{ddd0e79e-0c68-4b87-bbbb-03add5d3ec00}">
+      <Declaration><![CDATA[METHOD PUBLIC copy : BOOL //Return value = TRUE if execution finished
+VAR_IN_OUT
+	Source													:	VALUE_3D;
+END_VAR
+
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	Valid													:= Source.Valid;
+	X														:= Source.X;
+	Y														:= Source.Y;
+	Z														:= Source.Z;
+	copy													:= TRUE;
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="delete" Id="{e27f2f82-fa0e-415c-881f-2fdf55727c99}">
+      <Declaration><![CDATA[METHOD PUBLIC delete : BOOL //Return value = TRUE if execution finished - Valid bit will not change
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	X					 									:= 0.0;	
+	Y					 									:= 0.0;	
+	Z					 									:= 0.0;	
+	delete													:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InPos" Id="{3f819b1f-98c5-4273-9d49-dfed9f1e422a}">
+      <Declaration><![CDATA[METHOD PUBLIC InPos : BOOL //Return value = TRUE axes is within window of checkPos values
+VAR_IN_OUT
+	CheckPos												:	VALUE_3D;
+	Window													:	VALUE_3D;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPos														:= CAM(CheckPos.X, X ,Window.X)
+																AND CAM(CheckPos.Y, Y ,Window.Y)
+																AND CAM(CheckPos.Z, Z ,Window.Z);
+																	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InPosByAxisNo" Id="{10338d23-16a1-48a7-a3d8-ef9ded08fff4}">
+      <Declaration><![CDATA[METHOD PUBLIC InPosByAxisNo : BOOL //Return value = TRUE selected axis is within window of checkPos values
+VAR_INPUT
+	No					:	INT;
+END_VAR
+VAR_IN_OUT
+	CheckPos			:	VALUE_3D;
+	Window				:	VALUE_3D;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosByAxisNo													:= (CAM(CheckPos.X, X ,Window.X) OR No <> 1)
+																AND (CAM(CheckPos.Y, Y ,Window.Y) OR No <> 2)
+																AND (CAM(CheckPos.Z, Z ,Window.Z) OR No <> 3);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InPosXY" Id="{12a7a23b-9d0f-4dc7-9c9b-00152ab9608e}">
+      <Declaration><![CDATA[METHOD PUBLIC InPosXY : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos			:	VALUE_3D;
+	Window				:	VALUE_3D;
+END_VAR
+
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosXY 													:= CAM(CheckPos.X, X ,Window.X)
+																AND CAM(CheckPos.Y, Y ,Window.Y);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InPosXZ" Id="{fc0c51c6-84b1-4e1f-b81a-d008205f6885}">
+      <Declaration><![CDATA[METHOD PUBLIC InPosXZ : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos			:	VALUE_3D;
+	Window				:	VALUE_3D;
+	
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosXZ														:= CAM(CheckPos.X, X ,Window.X)
+																AND CAM(CheckPos.Z, Z ,Window.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InPosYZ" Id="{c0dabe89-f16a-4ceb-b0d9-82cdd222b3c8}">
+      <Declaration><![CDATA[METHOD PUBLIC InPosYZ : BOOL //Return value = TRUE if axes are within window of checkPos values
+VAR_IN_OUT
+	CheckPos			:	VALUE_3D;
+	Window				:	VALUE_3D;
+	
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InPosYZ													:= CAM(CheckPos.Y, Y ,Window.Y)
+																AND CAM(CheckPos.Z, Z ,Window.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{4ae238db-7ce2-42b7-84cb-75e2466bcb5b}">
+      <Declaration><![CDATA[METHOD PUBLIC reset : BOOL //Delete data and reset valid , TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Delete();
+Valid														:= FALSE;
+reset														:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="VALUE_3D">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_3D.copy">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_3D.delete">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_3D.InPos">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_3D.InPosByAxisNo">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_3D.InPosXY">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_3D.InPosXZ">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_3D.InPosYZ">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="VALUE_3D.reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

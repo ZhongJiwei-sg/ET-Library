@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="nextIdx" Id="{f2c2b8c3-3f2e-49b2-9abb-ba77d2b4f365}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION nextIdx : BOOL //TRUE if incremented index is still in range
+(* Example
+	IF nextIdx(ActiveData, MIN_DATA,MAX_DATA)
+	THEN
+		State			:= State + 1; //continue to process next data set
+	ELSE 
+		State 			:= 99; //Done, no more data to process idx value will be = MAX_DATA
+	END_IF
+	
+*)
+VAR_IN_OUT
+	idx					:	INT;
+END_VAR
+VAR_INPUT
+	MinIdx				:	INT;
+	MaxIdx				:	INT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Idx 					:= MAX(MinIdx,Idx + 1);
+IF Idx > MaxIdx
+THEN
+	idx					:= MaxIdx;
+	nextIdx				:= FALSE;
+ELSE
+	nextIdx				:= TRUE;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="nextIdx">
+      <LineId Id="7" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="17" Count="3" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

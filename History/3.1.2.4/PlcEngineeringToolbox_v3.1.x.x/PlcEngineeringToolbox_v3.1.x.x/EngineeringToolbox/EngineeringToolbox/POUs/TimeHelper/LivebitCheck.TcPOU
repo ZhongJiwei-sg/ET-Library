@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4018.5">
+  <POU Name="LivebitCheck" Id="{a26bb68c-adf8-475f-9665-e1703b051f23}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Livebit monitoring
+FUNCTION_BLOCK LivebitCheck
+VAR_INPUT
+	IN														: 	BOOL := FALSE;//Livebit signal
+	RST														:	BOOL := TRUE; //Reset error output Q
+	PT														: 	TIME := T#5S; //Livebit timeout
+END_VAR     												
+VAR_OUTPUT  												
+	Q														: 	BOOL := FALSE; //True if livebit is stable for longer then PT time
+END_VAR
+VAR
+	TON_TO 													: TON;
+	M														:	BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* watches the livebit toggle														*)
+(************************************************************************************)
+
+(* process ***************************************************************************)
+TON_TO(IN := (IN XOR NOT M), PT := PT);
+M 															:= IN;
+Q 															:= TON_TO.Q OR (Q AND NOT RST);
+
+(************************************************************************************)]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+  </POU>
+</TcPlcObject>

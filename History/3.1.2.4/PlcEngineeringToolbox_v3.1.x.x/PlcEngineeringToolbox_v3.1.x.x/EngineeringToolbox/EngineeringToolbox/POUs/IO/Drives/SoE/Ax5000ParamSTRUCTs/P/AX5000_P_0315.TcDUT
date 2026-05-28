@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <DUT Name="AX5000_P_0315" Id="{cf0de800-5b0f-4abc-b0e9-72f3bd43a460}">
+    <Declaration><![CDATA[TYPE AX5000_P_0315 :
+STRUCT
+	Configuration_Output_number_Set_output_error_Set_output_warning_rsvd:UINT;
+	(*Configuration 3 Bit; Output_number 5 Bit; Set_output_error 1 Bit; Set_output_warning 1 Bit; rsvd 6 Bit; *)
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

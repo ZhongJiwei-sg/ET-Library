@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="EC_SLAVE_DIAG_INFO_DATA" Id="{e444367e-8b3d-45b5-8225-b4b7b1a2d5d0}">
+    <Declaration><![CDATA[TYPE EC_SLAVE_DIAG_INFO_DATA :
+STRUCT
+	Addr									:	WORD; //Slaves own physical address e.g. 1004 
+	ConfigType								:	STRING(18); //Configured type e.g. EL1008 or EL7211 
+	ConfigName								:	STRING(31); //Name as configured in IO-tree (type removed)
+	ConfigTypeIdentity						:	STRING(18); //Configured type according identity e.g. AX5206-0000-0210
+	ScannedTypeIdentity						:	STRING(18); //Scanned type according identitiy e.g. EL7201-9014
+	
+//	{attribute 'displaymode':='hex'}  	
+//	DevType									:	DWORD; //EtherCAT device type of a slave
+	{attribute 'displaymode':='hex'}  
+	DevState								:	BYTE; //Device state constant e.g. 16#08=Tc2_EtherCAT.EC_DEVICE_STATE_OP
+	DevStateText							:	STRING(60); //e.g. OP, INIT etc...
+	DevStateBits							:	ST_EcSlaveStateBitsEx; //The structure contains bits showing the EtherCAT status (e.g. OP) and the link status )e.g. (EC_LINK_STATE_MISSING_LINK)
+
+	{attribute 'displaymode':='hex'}  
+	LinkState								:	BYTE; //Link state constant e.g. 0=Tc2_EtherCAT.EC_LINK_STATE_NOT_PRESENT
+	{attribute 'displaymode':='bin'}  
+	DataLinkStatusReg						:	WORD; //Data link status register status based on Topology of an EtherCAT slave from ESC register 0110/0111hex or 272/273dec. Status 0 is displayed if the slave cannot be reached or is offline	
+
+	//Error information	
+	CntOfCRCErrors							:	UDINT; //Total number of CRC-Errors on all four ports of the slave 
+	NoOfAbnormalStateChanges				:	UDINT; //Shows how many times the slave status changed from available to INIT_NO_COMM e.g. unpluged
+	
+	//Topology information
+	HotConnectNodeStart						:	BOOL; //Indicates that slaves is teh start of a hot-connect group (bit.3 of topology status)
+	HotConnectSlave							:	BOOL; //Indicates that the slave is a part of a hot-connect group (bit.4 of topology status)
+   	HCSlaveCountCfg  						:  UINT; //Shows number of attached slaves at HC node start
+ 	HCSlaveCountAct  						:  UINT; //Shows number of active slaves at HC node start
+	{attribute 'displaymode':='bin'}  
+	TopologyStatus					      	:  DWORD; (* Bits.0 = TRUE: Distributed clocks are supported
+														 Bits.1 = TRUE: Distributed clocks are supported (64 bit)
+														 Bits.2 = TRUE: Slave is present
+														 Bits.3 = TRUE: Slave is start node of a Hot Connect group
+														 Bits.4 = TRUE: Slave is in a Hot Connect group
+														 Bits.5 = TRUE: Hot-connect is invalid at port B
+														 Bits.6 = TRUE: Hot-connect is invalid at port C
+														 Bits.7 = TRUE: Hot-connect is invalid at port D *)
+
+   	TopoOwnPhysicalAddr  					:  UINT; //Can be different to "Addr" automatically assigned
+   	AutoIncAddr   							:  UINT; //Dedicated auto-increment address of slave
+   	PhysicalPortAddr    					:  ST_PortAddr; //Structure with phy. addr. information at port A…D
+   	AutoIncPortAddr    				 		:  ST_PortAddr; //Structure with Auto inc. addr. information at port A…D
+	ConfigIdentity							:	ST_EcSlaveIdentity; //EtherCAT identity data of an EtherCAT slave device, vendor Id, product code etc...
+	ScannedIdentity							:	ST_EcSlaveIdentity; //EtherCAT identity data of an EtherCAT slave device, vendor Id, product code etc...
+	
+	ScannedSeq								:	UINT; //Logical/scanned sequence which can be different to configured seq. if hot-connect groups are used 
+	{attribute 'displaymode':='bin'}   
+	ErrorIdentCode							:	WORD; //Interal error identefier (Not in OP, CRC error increased, etc...
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,625 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="SystemInfo64" Id="{6c1296fd-5537-4594-85ac-194a167d1817}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Provides all information of PlcAppSystemInfo plus addtional infos like time stamps from various source and in different formats
+//
+//PlcAppSystemInfo -> https://infosys.beckhoff.com/english.php?content=../content/1033/globaldatatypes/9007199969559691.html&id=7934476013631172214
+//TwimCAT time sources -> https://infosys.beckhoff.com/english.php?content=../content/1033/ethercatsystem/2469114379.html&id=
+//
+FUNCTION_BLOCK SystemInfo64
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}
+	OPTION_US_DATE_FORMAT									:	BYTE := 2#0000_0001; //Enable US date format in time stamp - mm/dd/yy
+{attribute 'displaymode':='binary'}
+	OPTION_US_TIME_FORMAT									:	BYTE := 2#0000_0010; //Enable time in US format - AM/PM vs 24h
+{attribute 'displaymode':='binary'} 
+	OPTION_TIME_STR_ADD_MS									:	BYTE := 2#0000_0100; //Add ms to time string 
+{attribute 'displaymode':='binary'} 
+	OPTION_DISABLE_DEV_IDENT								:	BYTE := 2#0000_1000; //Disable to read device identification during boot up (Call FB_GetDeviceIdentificationEx)
+END_VAR                     								
+VAR_INPUT                   						
+	Enable													:	BOOL := TRUE; //Enable function block
+	ResetTrig												:	BOOL := FALSE; //Reset Old boot data fault signal
+	RtcSyncCylce											:	DWORD := 60; //in seconds - see documentation for "FB_LocalSystemTime"
+	KeepOutputsOnBP 										: 	BOOL := FALSE; //The flag can be set to avoid that the outputs are zero-filled if a breakpoint is reached. The task keeps running. Only the execution of PLC code is interrupted.
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 2#0000_0000; //option constants are alreay predefined, so they can accordingly be passed symbolically to the block 
+	DateStrSeperator										:	STRING(1) := '/';
+END_VAR
+VAR_OUTPUT
+//PlcAppSystemInfo and cycle time inforamtion from caller task 
+	ObjId													: 	OTCID; //Object ID of the PLC project instance
+	AdsPort 												: 	UINT; //ADS port of PLC application 
+	TComSrvPtr 												: 	ITComObjectServer; // Pointer to TcCOM Object Server 
+	AppName													: 	STRING(63); //TwinCAT generated name containing the port number. 
+	ProjectName 											: 	STRING(63); //The name of the PLC project. 
+	AppTimestampDT											:	DT; //Date and time of application start 
+	AppTimestamp											:	STRING(25);	//Date and time of application start in string format
+	TaskIndex												:	INT ; //Task index of SysInfo caller
+	TaskCnt													: 	UDINT; //The number of tasks in the actual runtime system
+	
+	Flags 													: 	DWORD; //Boot flags
+	LicensesPending 										: 	BOOL;
+	BSODOccured 											: 	BOOL;										
+	BootDataLoaded											: 	BOOL;//PERSISTENT variables: LOADED (without error)
+	OldBootData												: 	BOOL; //PERSISTENT variables: INVALID (the back-up copy was loaded, since no valid data was present)
+	NoBootDataLoaded										:	BOOL; //Error no boot data loaded
+//	PersistentStatus 										: 	EPlcPersistentStatus;
+
+	LoggedIn												:	BOOL;
+	ShutdownInProgress 										: 	BOOL;	
+	OnlineChangeCount										: 	UDINT; //The number of online changes made since the last complete download.
+	OnlineChange											:	BOOL; //Online change count changed since last plc cycle
+
+{attribute 'displaymode':='hex'}
+	CpuCounter												:	ULINT;
+	CycleTime         										: 	UDINT;//Cylce time read from PlcAppSystemInfo in multiples of 100 ns.
+	CycleTimeNS         									: 	UDINT;//Cylce time in nanoseconds
+	CycleTimeT       										: 	TIME; //Cycle time in time format
+	CycleTimeLT       										: 	LTIME; //Cycle time in ltime format
+	CycleTimeFloat											:	LREAL;//Cycle time in float format <s.ms>
+
+	DevIdentValid											:	BOOL;
+	pDevIdent												:	POINTER TO ST_DeviceIdentificationEx := ADR(InstGetDevIdent.stDevIdent);
+	
+//General	
+	TimezoneId												: 	E_TimeZoneID;
+	TimeZoneInfo											:	ST_TimeZoneInformation;
+	MonthDays												:	WORD;
+	LeapYear												:	BOOL;
+	DayOfYear												:	WORD;
+	WeekOfYear												:	WORD;
+	UtcTimeFT												:	Tc2_Utilities.T_FILETIME64; //Current UTC System/TwinCAT time T_FILETIME format, structure representing a 64-bit value with the a number of 100-nanosecond intervals since January 1, 1601 (UTC) (dwLowDateTime : DWORD / dwHighDateTime : DWORD)
+	UtcTimeSTRUCT											:	Tc2_Utilities.TIMESTRUCT; //Current UTC System/TwinCAT time in TIMESTRUCT format
+	UtcTimezoneBias											:	DINT;   //Total timezone bias in minutes to UTC 
+	TimeDT													:	DATE_AND_TIME;	//Current time in DATE_AND_TIME format: DT#1970-01-01-00:00 -> DT#2106-02-06-06:28:15
+//	TimeLDT													:	LDATE_AND_TIME;	//Current time in 64bit LDATE_AND_TIME format: DT#1970-01-01-00:00 -> DT#2262-4-10-23:59:59.99999999
+	TimeTOD													:	TOD; //Current time in TOD format, range from TOD#00:00 -> TOD#1193:02:47.295
+	TimeFT													:	Tc2_Utilities.T_FILETIME64; //Current time in T_FILETIME format, structur representing a 64-bit value with the a number of 100-nanosecond intervals since January 1, 1601 (UTC) (dwLowDateTime : DWORD / dwHighDateTime : DWORD)
+	TimeSTRUCT												:	Tc2_Utilities.TIMESTRUCT; //Current time in TIMESTRUCT format
+	Datestamp												:	DATE; //D#1970-01-01 -> D#2106-02-06
+	DateStr													:	STRING(15);	(* dd.mm.jj or mm.dd.jj *)	
+	TimeStr													:	STRING(15);	(* hh:mm:ss.xxx or hh:mm:ss.xxxPM/AM *)
+	TimeStamp												:	STRING(25); (* DateStr + TimeStr *)	
+	TimeStamp2												:	STRING(25); (* YYYY-MM-DDTHHMMSS for example YYYY-MM-DD_HHMMSS_Name.txt *)
+	TimeStamp3												:	STRING(25); (* YYYY-MM-DD-hh:mm:ss.xxx *)
+	DateStrISO												:	STRING(15);	(* jj-mm-dd *)
+	TimeStrISO												:	STRING(15);	(* hh:mm:ss *)
+	TimeStampISO											:	STRING(25);	(* jj-mm-dd'T'hh:mm:ss.xxms *)	
+	TimeStampStartup										:	DATE_AND_TIME; //Timestamp of startup
+	DCTime													:	Tc2_EtherCAT.T_DCTIME64; //Current TwinCAT distributed clock time in 64-bit T_DCTIME64 format. The smallest unit is a nanosecond.
+	DCTimeSTRUCT											:	Tc2_Utilities.TIMESTRUCT;//Current TwinCAT distributed clock time in TIMESTRUCT format
+	SysTimeFT												:	Tc2_Utilities.T_FILETIME64; //Current UTC System/TwinCAT time T_FILETIME format, structure representing a 64-bit value with the a number of 100-nanosecond intervals since January 1, 1601 (UTC) (dwLowDateTime : DWORD / dwHighDateTime : DWORD)
+	SysTimeSTRUCT											:	Tc2_Utilities.TIMESTRUCT; //Current UTC System/TwinCAT time in TIMESTRUCT format
+	
+END_VAR
+VAR
+	(* Inst. Get Taskindex *)
+	InstGETCURTASKINDEX										: 	GETCURTASKINDEX;
+	InstLocalSystemTime										:	FB_LocalSystemTime;
+	InstNtSetLocalTime										:	NT_SetLocalTime := (NETID := '', TMOUT := DEFAULT_ADS_TIMEOUT);
+	InstTimeZoneInfo										:	FB_GetTimeZoneInformation;
+	InstCpuCouter											:	GETCPUCOUNTER;
+	
+	InstGetDevIdent											:	FB_GetDeviceIdentificationEx;
+	_OnlineChangeCount										: 	UDINT; 
+	_sec													:	WORD;
+	_hour													:	WORD;
+	_day													:	WORD;
+	_Init													:	BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* Evaluate the PlcAppSystemInfo and and get sytstem timestamp					*)
+	(********************************************************************************)
+	
+(* Get Current Task Index ************************************************************************)
+	IF InstGETCURTASKINDEX.index = 0 then InstGETCURTASKINDEX(index => TaskIndex); END_IF
+
+(* Read System Info Current Task *****************************************************************)	
+	(* Get static information and boot error messages *)
+	IF TwinCAT_SystemInfoVarList._TaskInfo[InstGETCURTASKINDEX.Index].FirstCycle 
+	THEN
+		AppTimestampDT										:= TwinCAT_SystemInfoVarList._AppInfo.AppTimestamp;
+		AppTimestamp										:= DT_TO_STRING(AppTimestampDT);
+		AppTimestamp										:= DELETE(AppTimestamp,3,1);
+			
+		TaskIndex											:= InstGETCURTASKINDEX.Index;
+		TaskCnt 											:= TwinCAT_SystemInfoVarList._AppInfo.TaskCnt;
+		
+		ObjId												:= TwinCAT_SystemInfoVarList._AppInfo.ObjId;
+		AppName												:= TwinCAT_SystemInfoVarList._AppInfo.AppName;	
+		ProjectName											:= TwinCAT_SystemInfoVarList._AppInfo.ProjectName;	
+		AdsPort												:= TwinCAT_SystemInfoVarList._AppInfo.AdsPort;	
+			
+		Flags												:= TwinCAT_SystemInfoVarList._AppInfo.Flags;
+//		PersistentStatus									:= TwinCAT_SystemInfoVarList._AppInfo.PersistentStatus;
+		
+		BootDataLoaded										:= TwinCAT_SystemInfoVarList._AppInfo.BootDataLoaded;
+		OldBootData											:= TwinCAT_SystemInfoVarList._AppInfo.OldBootData;
+		NoBootDataLoaded									:= NOT BootDataLoaded AND NOT OldBootData;
+		BSODOccured 										:= TwinCAT_SystemInfoVarList._AppInfo.BSODOccured;
+		
+		CycleTime         									:= TwinCAT_SystemInfoVarList._TaskInfo[TaskIndex].CycleTime;
+		CycleTimeNS         								:= TwinCAT_SystemInfoVarList._TaskInfo[TaskIndex].CycleTime * 100;
+		CycleTimeT											:= LREAL_TO_TIME(UDINT_TO_LREAL(CycleTime) * 0.0001 );
+		CycleTimeLT											:= TO_LTIME(CycleTimeNS);	
+		CycleTimeFloat										:= (UDINT_TO_LREAL(CycleTime) * 0.0001 / 1000.0);	
+		
+	ELSIF ResetTrig
+	THEN
+		resetBootInfo();
+	ELSIF NOT Enable
+	THEN
+		RETURN;
+	END_IF
+	
+	OnlineChangeCount										:= TwinCAT_SystemInfoVarList._AppInfo.OnlineChangeCnt;
+	OnlineChange											:= _OnlineChangeCount <> OnlineChangeCount;
+	_OnlineChangeCount										:= OnlineChangeCount;
+	LoggedIn 												:= TwinCAT_SystemInfoVarList._AppInfo.LoggedIn;
+	ShutdownInProgress 										:= TwinCAT_SystemInfoVarList._AppInfo.ShutdownInProgress;
+	LicensesPending 										:= TwinCAT_SystemInfoVarList._AppInfo.LicensesPending;
+	TComSrvPtr												:= TwinCAT_SystemInfoVarList._AppInfo.TComSrvPtr;
+	TwinCAT_SystemInfoVarList._AppInfo.KeepOutputsOnBP		:= KeepOutputsOnBP;		
+
+(* CPU System counter ****************************************************************************)
+	InstCpuCouter(cpuCntLoDW => CpuCounter);	
+	MEMCPY(ADR(CpuCounter) + SIZEOF(InstCpuCouter.cpuCntHiDW),ADR(InstCpuCouter.cpuCntHiDW),SIZEOF(InstCpuCouter.cpuCntHiDW));
+	
+(* Get device identification structure ***********************************************************)
+	InstGetDevIdent(
+		bExecute	:= NOT Options.3, 
+		tTimeout	:= , 
+		sNetId		:= , 
+		bBusy		=> , 
+		bError		=> , 
+		nErrorID	=> , 
+		stDevIdent	=> );	
+	pDevIdent												:= ADR(InstGetDevIdent.stDevIdent);
+	IF NOT InstGetDevIdent.bBusy
+	THEN
+		DevIdentValid										:= NOT InstGetDevIdent.bError;
+		
+		IF InstGetDevIdent.bError AND ResetTrig
+		THEN
+			InstGetDevIdent(bExecute := FALSE);			
+		END_IF
+	ELSE	
+		DevIdentValid										:= FALSE;
+	END_IF
+	
+(* Read timezone information every day time ******************************************************)
+	IF Enable AND NOT InstTimeZoneInfo.bExecute
+		OR InstTimeZoneInfo.bBusy
+	THEN
+		InstTimeZoneInfo(
+			sNetID	:= , 
+			bExecute:= TRUE, 
+			tTimeout:= , 
+			bBusy	=> , 
+			bError	=> , 
+			nErrID	=> , 
+			tzID	=> TimeZoneId, 
+			tzInfo	=> TimeZoneInfo);
+		IF NOT InstTimeZoneInfo.bBusy 
+		THEN
+			CASE TimeZoneId OF 
+			eTimeZoneID_Invalid:	UtcTimezoneBias			:= 0;				
+			eTimeZoneID_Standard:	UtcTimezoneBias			:= -1 * (TimeZoneInfo.bias);
+			eTimeZoneID_Daylight:	UtcTimezoneBias			:= -1 * (TimeZoneInfo.bias + TimeZoneInfo.daylightBias);
+			ELSE //eTimeZoneID_Unknown:		
+				UtcTimezoneBias								:= 0;	
+			END_CASE
+		END_IF
+	ELSIF NOT Enable AND InstTimeZoneInfo.bExecute 
+		OR InstTimeZoneInfo.bError AND ResetTrig
+	THEN
+		InstTimeZoneInfo(bExecute:= FALSE);
+	END_IF
+		
+(* Actual EtherCAT DC time in DCTIME64 format ****************************************************************)
+	DCTime													:= F_GetActualDcTime64();
+	DCTimeSTRUCT											:= DCTIME64_TO_SYSTEMTIME(DCTime);
+
+(* Get TwinCAT/system time according to system time zone initialized during TC start ******************************************************)
+	SysTimeFT												:= F_GetSystemTime();	 
+	SysTimeSTRUCT											:= FILETIME64_TO_SYSTEMTIME(UTCTimeFT);	 
+	
+(* evalutate systemtime ************************************************************************)
+	InstLocalSystemTime(
+		sNetID		:= '',
+		bEnable		:= Enable,
+		dwCycle		:= SEL(InstNtSetLocalTime.START, RtcSyncCylce, 1), //Short update cylce to read windows time after it was set
+		dwopt		:= (* Default *),
+		tTimeout	:= (* Default *),
+		bValid		=> ,
+		systemTime	=> TimeSTRUCT,
+		tzID		=> );
+
+(* Get TwinCAT/system time in UTC Filetime format ******************************************************)
+	IF InstLocalSystemTime.bValid 
+	THEN				
+		//Update cyclic
+		TimeFT												:= SYSTEMTIME_TO_FILETIME64(TimeSTRUCT);
+		TimeDT 												:= SYSTEMTIME_TO_DT(TimeSTRUCT);
+//		TimeLDT												:= SYSTEMTIME_TO_LDT(TimeSTRUCT);	
+		TimeStamp3											:= SYSTEMTIME_TO_STRING(TimeSTRUCT);
+		TimeTOD												:= SEL(Options.2 ,TO_TOD(TimeDT)  , DWORD_TO_TOD(TO_DWORD(TO_TOD(TimeDT)) + TimeSTRUCT.wMilliseconds));  
+		TimeStrISO											:= DELETE(TO_STRING(TimeTOD),4,1);
+		TimeStampISO										:= CONCAT(DateStrISO , CONCAT('T',TimeStrISO));
+		
+		UtcTimeFT											:= F_TranslateFileTime64Bias(TimeFT,UtcTimezoneBias,TRUE);
+		UtcTimeSTRUCT										:= FILETIME64_TO_SYSTEMTIME(UTCTimeFT);	
+	
+		//Create time format
+		IF Options.1
+		THEN (* US time format hh.mm.ss AM/PM ***************)
+			IF TimeSTRUCT.wHour < 10 
+			THEN
+				TimeStr 									:= CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wHour));
+			ELSIF TimeSTRUCT.wHour > 12 
+			THEN
+				TimeStr 									:= WORD_TO_STRING(TimeSTRUCT.wHour - 12);
+				IF TimeSTRUCT.wHour - 12 < 10
+				THEN
+					TimeStr									:= CONCAT('0',TimeStr);
+				END_IF
+			ELSE         									
+				TimeStr 									:= WORD_TO_STRING(TimeSTRUCT.wHour);
+			END_IF		                                    
+		ELSE  (* Time hh.mm.ss.xxms ***************)          
+			IF TimeSTRUCT.wHour < 10                        
+			THEN                                            
+				TimeStr 									:= CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wHour));
+			ELSE        									
+				TimeStr 									:= WORD_TO_STRING(TimeSTRUCT.wHour);
+			END_IF			
+		END_IF
+		
+		TimeStr 											:= CONCAT(TimeStr,':');
+		
+		IF TimeSTRUCT.wMinute < 10 
+		THEN
+			TimeStr 										:= CONCAT(TimeStr,CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wMinute)));
+		ELSE
+			TimeStr 										:= CONCAT(TimeStr,WORD_TO_STRING(TimeSTRUCT.wMinute));
+		END_IF
+		
+		TimeStr 											:= CONCAT(TimeStr,':');
+		
+		IF TimeSTRUCT.wSecond < 10 
+		THEN
+			TimeStr 										:= CONCAT(TimeStr,CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wSecond)));
+		ELSE        										
+			TimeStr 										:= CONCAT(TimeStr,WORD_TO_STRING(TimeSTRUCT.wSecond));
+		END_IF  
+												
+		IF Options.2
+		THEN //add ms to timestamp
+			TimeStr 										:= CONCAT(TimeStr,'.');
+			TimeStr 										:= CONCAT(TimeStr,WORD_TO_STRING(TimeSTRUCT.wMilliseconds));
+		END_IF
+		
+		IF Options.1
+		THEN //US time format
+			TimeStr 										:= CONCAT(TimeStr,SEL(TimeSTRUCT.wHour > 12,' AM', ' PM'));
+		END_IF
+		
+		(* TimeStamp Format DE: DD.MM.YY-Stunde:Minute:Sekunde.xxx,*)
+		TimeStamp 											:= CONCAT(DateStr,'-');
+		TimeStamp 											:= CONCAT(TimeStamp,TimeStr);
+		
+		IF _hour <> TimeSTRUCT.wHour OR NOT _Init
+		THEN
+			_Hour											:= TimeSTRUCT.wHour;		
+			//Create date in US fromat with seperator / ************************************************
+			IF Options.0
+			THEN (* Date mm/dd/jj ********************)
+				IF TimeSTRUCT.wMonth < 10 
+				THEN
+					DateStr 								:= CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wMonth));
+				ELSE        								
+					DateStr 								:= WORD_TO_STRING(TimeSTRUCT.wMonth);
+				END_IF		                                
+				DateStr 									:= CONCAT(DateStr,DateStrSeperator);
+				IF TimeSTRUCT.wDay < 10                     
+				THEN                                        
+					DateStr 								:= CONCAT(DateStr,CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wDay)));
+				ELSE        								
+					DateStr 								:= CONCAT(DateStr,WORD_TO_STRING(TimeSTRUCT.wDay));
+				END_IF                                      
+															
+				DateStr 									:= CONCAT(DateStr,DateStrSeperator);
+				DateStr 									:= CONCAT(DateStr,RIGHT(WORD_TO_STRING(TimeSTRUCT.wYear),2));		
+		                                                    
+			ELSE (* Date dd.mm.jj ********************)	    
+				IF TimeSTRUCT.wDay < 10                     
+				THEN                                        
+					DateStr 								:= CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wDay));
+				ELSE        								
+					DateStr 								:= WORD_TO_STRING(TimeSTRUCT.wDay);
+				END_IF                                      
+				DateStr 									:= CONCAT(DateStr,DateStrSeperator);
+				IF TimeSTRUCT.wMonth < 10                   
+				THEN                                        
+					DateStr 								:= CONCAT(DateStr,CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wMonth)));
+				ELSE        								
+					DateStr 								:= CONCAT(DateStr,WORD_TO_STRING(TimeSTRUCT.wMonth));
+				END_IF                                      
+															
+				DateStr 									:= CONCAT(DateStr,DateStrSeperator);
+				DateStr 									:= CONCAT(DateStr,RIGHT(WORD_TO_STRING(TimeSTRUCT.wYear),2));	
+			END_IF      
+
+			DateStrISO										:= DELETE(TO_STRING(TO_DATE(TimeDT)),2,1);
+			
+			(* information of year *)                       
+			MonthDays										:= F_GetMaxMonthDays(TimeSTRUCT.wYear,TimeSTRUCT.wMonth);
+			LeapYear										:= F_YearIsLeapYear(TimeSTRUCT.wYear) ;
+			WeekOfYear										:= F_GetWeekOfTheYear(TimeDT);
+			DayOfYear										:= F_GetDOYOfYearMonthDay(TimeSTRUCT.wYear,TimeSTRUCT.wMonth,TimeSTRUCT.wDay);
+			DateStamp										:= TO_DATE(TimeDT);		
+			
+			IF NOT _INIT AND_THEN TO_DINT(TimeStampStartup) = 0  
+			THEN					
+				TimeStampStartup							:= SYSTEMTIME_TO_DT(TimeSTRUCT);
+			END_IF
+			
+			IF NOT InstTimeZoneInfo.bBusy THEN InstTimeZoneInfo(bExecute:= FALSE); END_IF
+
+            _INIT											:= TRUE;            
+		END_IF //hour
+		
+		IF _sec <> TimeSTRUCT.wSecond 
+		THEN	
+			_sec 											:= TimeSTRUCT.wSecond;
+														
+			(* TimeStamp2 FileName YYYY-MM-DD_HHMMSS *)
+			TimeStamp2										:= CONCAT(DateStrISO , '_');
+			IF TimeSTRUCT.wHour < 10                    	
+			THEN                                        	
+				TimeStamp2 									:= CONCAT(TimeStamp2,CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wHour)));
+			ELSE           									
+				TimeStamp2 									:= CONCAT(TimeStamp2,WORD_TO_STRING(TimeSTRUCT.wHour));
+			END_IF                                      	
+			IF TimeSTRUCT.wMinute < 10                  	
+			THEN                                        	
+				TimeStamp2 									:= CONCAT(TimeStamp2,CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wMinute)));
+			ELSE           									
+				TimeStamp2 									:= CONCAT(TimeStamp2,WORD_TO_STRING(TimeSTRUCT.wMinute));
+			END_IF                                      	
+			IF TimeSTRUCT.wSecond < 10                  	
+			THEN                                        	
+				TimeStamp2 									:= CONCAT(TimeStamp2,CONCAT('0',WORD_TO_STRING(TimeSTRUCT.wSecond)));
+			ELSE           									
+				TimeStamp2 									:= CONCAT(TimeStamp2,WORD_TO_STRING(TimeSTRUCT.wSecond));
+			END_IF
+		END_IF //second update
+													
+	END_IF
+
+(* set system time *****************************************************************************)
+	InstNtSetLocalTime(
+		NETID		:= , 
+		TIMESTR		:= , 
+		START		:= , // Start by Methode "SetSysTime" 
+		TMOUT		:= , 
+		BUSY		=> , 
+		ERR			=> ); 
+	
+	IF InstNtSetLocalTime.START AND NOT InstNtSetLocalTime.BUSY
+	THEN //Take care that all timestamp get updated after set a new time
+		InstNtSetLocalTime.START							:= FALSE;	
+		_Init												:= FALSE;								
+	END_IF
+	
+(**************************************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="actDCTimeWithTimezoneBias" Id="{26824f9c-37c0-4fce-84b8-aa91b2b4b8f2}">
+      <Declaration><![CDATA[PROPERTY PUBLIC actDCTimeWithTimezoneBias : T_DCTIME64]]></Declaration>
+      <Get Name="Get" Id="{f84de4f0-398a-4957-84e9-61591e880ae3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[actDCTimeWithTimezoneBias							:= F_GetActualDcTime64() + (TO_ULINT(UtcTimezoneBias) * 60 * EC_DCTIME_TICKSPERSEC64);
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="actSysTimeWithTimezoneBias" Id="{d7548399-3e6d-4ad3-92b2-1de5b461fda2}">
+      <Declaration><![CDATA[PROPERTY PUBLIC actSysTimeWithTimezoneBias : T_FILETIME64]]></Declaration>
+      <Get Name="Get" Id="{b7b3a7ae-f0c2-444a-a295-7e4268902869}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[actSysTimeWithTimezoneBias							:= F_GetSystemTime() + (TO_ULINT(UtcTimezoneBias) * 60 * EC_DCTIME_TICKSPERSEC64);
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="optAddmsToTimeString" Id="{687988ee-3594-48c8-9612-3d9c358af98c}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optAddmsToTimeString : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6da84485-92a4-4e60-a9d5-c78ffc13e6e7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optAddmsToTimeString := Options.2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d57e7b28-316f-4074-a539-ab80d5625dd5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.2 := optAddmsToTimeString;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optDisableReadDeviceIdentification" Id="{7dbadd17-6ab1-4cbf-b31d-4f61c8801f01}">
+      <Declaration><![CDATA[PROPERTY PUBLIC  optDisableReadDeviceIdentification : BOOL]]></Declaration>
+      <Get Name="Get" Id="{66c74b9d-5a49-43e2-8aec-0cd3fe5ba43c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optDisableReadDeviceIdentification := Options.3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2f516567-9836-41fb-82aa-c641cdab2d99}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.3 := optDisableReadDeviceIdentification;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableUSDateFormat" Id="{8f0052ff-6846-42d6-af55-0acc687102cd}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableUSDateFormat : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b286abc2-6295-4cbc-9a40-8cca21b3aa44}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableUSDateFormat := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3817db8b-fbc2-4b62-bcd3-064f7bf476ea}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableUSDateFormat;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableUSTimeFormat" Id="{0115ec5a-97fa-4851-82fe-1a8384f70ed7}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableUSTimeFormat : BOOL]]></Declaration>
+      <Get Name="Get" Id="{70ba1b49-c7e6-4bde-ac6f-3846565b80a8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableUSTimeFormat := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{13a221f4-0a44-46c9-934c-cbe12ed09ccd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optEnableUSTimeFormat;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="resetBootInfo" Id="{706a07a9-bd7c-4c33-b562-9167d78ce47c}">
+      <Declaration><![CDATA[METHOD PUBLIC resetBootInfo : BOOL  //Return value = TRUE if execution finished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[OldBootData 												:= FALSE;
+BSODOccured													:= FALSE;
+NoBootDataLoaded											:= FALSE;
+resetBootInfo												:= TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="setSysTime" Id="{4354ecb5-1364-47ce-ad43-a9ee56fd6374}">
+      <Declaration><![CDATA[METHOD PUBLIC setSysTime  : BOOL //Return value = TRUE if execution finished
+VAR_INPUT
+	TimeStruct		: TIMESTRUCT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InstNtSetLocalTime(
+		NETID		:= '', 
+		TIMESTR		:= TimeStruct, 
+		START		:= NOT InstNtSetLocalTime.START AND TimeStruct.wYear > 2000 
+						AND TimeStruct.wDay > 0 AND TimeStruct.wMonth	< 32	
+						AND TimeStruct.wMonth > 0 AND TimeStruct.wMonth	< 13	
+						AND TimeStruct.wHour >= 0 AND TimeStruct.wHour	< 24	
+						AND TimeStruct.wMinute >= 0 AND TimeStruct.wMinute < 60
+						AND TimeStruct.wSecond >= 0 AND TimeStruct.wSecond < 60				
+						OR InstNtSetLocalTime.BUSY, 
+		TMOUT		:= , 
+		BUSY		=> , 
+		ERR			=> , 
+		ERRID		=> );
+		
+setSysTime													:= InstNtSetLocalTime.BUSY;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="SystemInfo64">
+      <LineId Id="3" Count="110" />
+      <LineId Id="424" Count="0" />
+      <LineId Id="115" Count="19" />
+      <LineId Id="136" Count="5" />
+      <LineId Id="420" Count="0" />
+      <LineId Id="142" Count="164" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.actDCTimeWithTimezoneBias.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.actSysTimeWithTimezoneBias.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.optAddmsToTimeString.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.optAddmsToTimeString.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.optDisableReadDeviceIdentification.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.optDisableReadDeviceIdentification.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.optEnableUSDateFormat.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.optEnableUSDateFormat.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.optEnableUSTimeFormat.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.optEnableUSTimeFormat.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.resetBootInfo">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="SystemInfo64.setSysTime">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

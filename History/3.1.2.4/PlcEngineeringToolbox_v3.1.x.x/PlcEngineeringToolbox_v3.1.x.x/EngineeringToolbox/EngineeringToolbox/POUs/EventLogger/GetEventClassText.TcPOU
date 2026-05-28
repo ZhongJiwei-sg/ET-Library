@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="getEventClassText" Id="{ef91dd2c-bd04-4aa7-b3ee-f00c94f6a831}" SpecialFunc="None">
+    <Declaration><![CDATA[//Returns event class in english and upper case letters 
+FUNCTION getEventClassText : STRING(12)
+VAR_INPUT
+	TcEventClass													: E_TcEventClass;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[CASE TcEventClass OF
+TC2_SYSTEM.TCEVENTCLASS_NONE		: GetEventClassText 	:= 'NONE';	
+TC2_SYSTEM.TCEVENTCLASS_MESSAGE		: GetEventClassText 	:= 'MESSAGE';	
+TC2_SYSTEM.TCEVENTCLASS_HINT		: GetEventClassText 	:= 'HINT';	
+TC2_SYSTEM.TCEVENTCLASS_STATEINFO	: GetEventClassText 	:= 'STATEINFO';	
+TC2_SYSTEM.TCEVENTCLASS_INSTRUCTION	: GetEventClassText 	:= 'INSTRUCTION';			 										
+TC2_SYSTEM.TCEVENTCLASS_WARNING		: GetEventClassText 	:= 'WARNING';	
+TC2_SYSTEM.TCEVENTCLASS_MAINTENANCE	: GetEventClassText 	:= 'MAINTENANCE';		 														
+TC2_SYSTEM.TCEVENTCLASS_ALARM		: GetEventClassText 	:= 'ALARM';	
+TC2_SYSTEM.TCEVENTCLASS_PARAMERROR	: GetEventClassText 	:= 'PARAMERROR';		
+ELSE
+	GetEventClassText										:= 'UNKNOWN';
+END_CASE]]></ST>
+    </Implementation>
+    <LineIds Name="getEventClassText">
+      <LineId Id="54" Count="11" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

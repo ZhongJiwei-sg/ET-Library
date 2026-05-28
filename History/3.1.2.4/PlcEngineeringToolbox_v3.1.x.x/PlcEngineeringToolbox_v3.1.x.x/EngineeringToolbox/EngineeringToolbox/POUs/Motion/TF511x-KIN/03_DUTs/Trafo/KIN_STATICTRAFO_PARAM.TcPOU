@@ -1,0 +1,49 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="KIN_STATICTRAFO_PARAM" Id="{e2a14200-3ffd-44ab-8d0d-7c834ec0024c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'hide'}
+FUNCTION_BLOCK KIN_STATICTRAFO_PARAM
+VAR_INPUT
+	oid														:	UDINT := 0;
+	TranslationX											:	LREAL := 0.0;
+	TranslationY											:	LREAL := 0.0;
+	TranslationZ											:	LREAL := 0.0;
+                            								
+	Rotation												: LREAL := 0.0;
+	RotationAxis											: INT := 2;
+
+END_VAR
+VAR_OUTPUT
+
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="delete" Id="{0e2e4b82-4ed2-43ef-b2f7-5eac534e98d6}">
+      <Declaration><![CDATA[METHOD delete : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[	oid														:= 0;
+	TranslationX											:= 0.0;
+	TranslationY											:= 0.0;
+	TranslationZ											:= 0.0;
+                            								
+	Rotation												:= 0.0;
+	RotationAxis											:= 2;
+delete	:= TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="KIN_STATICTRAFO_PARAM">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="KIN_STATICTRAFO_PARAM.delete">
+      <LineId Id="8" Count="5" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,247 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="KinWriteToolTrafoParam" Id="{d56fb9ec-3290-42cc-a20a-7c2add8e8c83}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'hide'}
+(*==============================================================================*)
+(* Name:			KIN_WriteToolTrafoParam							  	 		*)
+(* Desc:			THIS IS NOT A RELEASED IMPLEMENTATION AND    				*)
+(*  	           	SUBJECT TO CHANGE                            				*)
+(*     			 															    *)
+(* Author:	 	DS																*)
+(* Date:							     										*)
+(*==============================================================================*)
+FUNCTION_BLOCK KinWriteToolTrafoParam
+VAR_INPUT
+	Execute													:	BOOL	:= FALSE;
+   	oidTrafo												:	UDINT;
+	ToolX													:	LREAL := 0.0;
+	ToolY													:	LREAL := 0.0;
+	ToolZ													:	LREAL := 0.0;
+END_VAR                     								
+VAR_OUTPUT                  								
+	Busy													:	BOOL	:= FALSE;
+	Done													:	BOOL	:= FALSE;
+	Error													:	BOOL	:= FALSE;
+	ErrorId													:	UDINT	:= 0;
+END_VAR
+VAR
+	State													:	UDINT	:= 0;
+	ADSWRITE												:ADSWRITE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[CASE State OF
+0:
+	Done													:= FALSE;
+	Busy 													:= FALSE;
+	Error													:= FALSE;
+	ErrorId													:= 0;
+	IF Execute 
+	THEN
+		AdsWrite(WRITE := FALSE);
+		AdsWrite(
+			NETID	:='',
+			PORT	:= 10,
+			IDXGRP	:=oidTrafo,
+			IDXOFFS	:=SEL(FALSE (* Lock *), 16#05030210, 16#0503020F),
+			LEN		:= 0,
+			SRCADDR	:=0 ,
+			WRITE	:= TRUE,
+			TMOUT	:= DEFAULT_ADS_TIMEOUT,
+			BUSY	=> ,
+			ERR		=> ,
+			ERRID	=> );
+
+		Busy												:= TRUE;
+		State												:= 1;
+	END_IF
+
+1:
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+		
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+			
+		IF NOT AdsWrite.ERR 
+		THEN
+			AdsWrite( (* Write Tool X *)
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo, 				(*OID 	Tool trafo*)
+				IDXOFFS	:= 16#05010020, 			(*PTCID	Tool Trafo Parameter*)
+				LEN		:= SIZEOF(ToolX),
+				SRCADDR	:= ADR(ToolX),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE 	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+	
+
+			State											:= 10;
+		ELSE
+			IF NOT Execute
+			THEN
+				State										:= 0;
+			ELSE
+				State										:= 99;
+			END_IF
+		END_IF
+	END_IF
+
+10:
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+		
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+		
+		IF NOT AdsWrite.ERR 
+		THEN
+			AdsWrite( 								(* Write Tool Y *)
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo, 				(*OID 	Tool trafo*)
+				IDXOFFS	:= 16#05010021, 			(*PTCID	Tool Trafo Parameter*)
+				LEN		:= SIZEOF(ToolY),
+				SRCADDR	:= ADR(ToolY),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+
+			State											:= 20;
+		ELSE
+			State											:= 90;
+		END_IF
+	END_IF
+
+20:
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		AdsWrite(WRITE:=FALSE);
+		
+	IF NOT AdsWrite.ERR 
+	THEN
+			AdsWrite( 								(* Write Tool Z *)
+				NETID	:= '',
+				PORT	:= 10,
+				IDXGRP	:= oidTrafo, 				(*OID 	Tool trafo*)
+				IDXOFFS	:= 16#05010022, 			(*PTCID	Tool Trafo Parameter*)
+				LEN		:= SIZEOF(ToolZ),
+				SRCADDR	:= ADR(ToolZ),
+				TMOUT	:= DEFAULT_ADS_TIMEOUT,
+				WRITE 	:= TRUE,
+				BUSY	=> ,
+				ERR		=> ,
+				ERRID	=> );
+
+			State											:= 60;
+		ELSE            									
+			State											:= 90;
+		END_IF
+	END_IF
+
+60:
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>Error,
+		ERRID	=>ErrorId);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		State												:= 90;
+		AdsWrite(WRITE:=FALSE);
+	END_IF
+
+
+90: (* Start Lock-Param *)
+	AdsWrite(
+		NETID	:='',
+		PORT	:= 10,
+		IDXGRP	:=oidTrafo,
+		IDXOFFS	:=SEL(TRUE (* Lock *), 16#05030210, 16#0503020F),
+		LEN		:= 0,
+		SRCADDR	:=0 ,
+		WRITE	:= TRUE,
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=> ,
+		ERR		=> ,
+		ERRID	=> );
+
+	State													:= 91;
+
+91:
+	AdsWrite(
+		TMOUT	:= DEFAULT_ADS_TIMEOUT,
+		BUSY	=>,
+		ERR		=>,
+		ERRID	=>);
+
+	IF NOT AdsWrite.BUSY 
+	THEN
+		Busy 												:= FALSE;
+		IF NOT AdsWrite.ERR 
+		THEN
+			Done											:= NOT Error;
+		ELSIF NOT Error
+		THEN
+			Error 											:= AdsWrite.ERR;
+			ErrorId 										:= AdsWrite.ERRID;
+		END_IF
+		IF NOT Execute 
+		THEN
+			State											:= 0;
+		ELSE        										
+			State											:= 99;
+		END_IF
+		AdsWrite(WRITE:=FALSE);
+	END_IF
+
+99:
+	Busy													:= FALSE;
+	IF NOT Execute THEN
+		State												:= 0;
+	END_IF
+
+END_CASE]]></ST>
+    </Implementation>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+    <LineIds Name="KinWriteToolTrafoParam">
+      <LineId Id="3" Count="190" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

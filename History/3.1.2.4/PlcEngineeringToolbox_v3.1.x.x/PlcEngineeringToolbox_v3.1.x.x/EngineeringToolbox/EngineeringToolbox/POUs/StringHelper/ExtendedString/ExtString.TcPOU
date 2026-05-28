@@ -1,0 +1,397 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="ExtString" Id="{6f93ab67-0c03-4876-bb79-bb3b68df3c8a}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check' := ''}
+FUNCTION_BLOCK ExtString //STRING functions for a string with a lenght > 255. Lenght is defined by PARAM.MAX_EXT_STRING_LENGTH
+VAR_OUTPUT CONSTANT
+	MAX_LENGTH												: UDINT := PARAM.MAX_EXT_STRING_LENGTH;
+END_VAR
+VAR_OUTPUT
+	ResultStr												: T_EXT_STRING;		
+END_VAR
+VAR									
+	str1Len													: UDINT;
+ 	str2Len													: UDINT; 
+	cpyLenght												: UDINT;
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="CONCAT" Id="{c669ba29-59c2-4d52-972d-7f701f561fe9}">
+      <Declaration><![CDATA[//Concatenation (combination) of two extended strings (lenght definded by ET.Param.EXT_STRING_MAX_LENGHT)
+METHOD CONCAT : UDINT //Returns the lenght of the new string
+VAR_INPUT
+	 rSTR1													:	REFERENCE TO T_EXT_STRING;
+	 STR2													:	T_EXT_STRING;
+	 rResult												:	REFERENCE TO T_EXT_STRING;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(ResultStr),0,SIZEOF(ResultStr));
+IF __ISVALIDREF(rSTR1) 
+THEN
+	str1Len 													:= LENGTH(rSTR1);
+	str2Len 													:= LENGTH(STR2);
+	MEMCPY(ADR(ResultStr), ADR(rSTR1), str1Len + 1);	 //Copy first string to result
+	cpyLenght													:= 1 + MIN(str2Len, MAX_LENGTH - str1Len);
+	MEMCPY(ADR(ResultStr) + str1Len, ADR(STR2), SEL(cpyLenght >  1, 0, cpyLenght)); //Add second string
+	CONCAT														:= MIN(str1Len + str2Len,MAX_LENGTH);
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMCPY(ADR(rResult), ADR(ResultStr), CONCAT + 1); 
+	END_IF
+ELSE
+	CONCAT														:= 0;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DELETE" Id="{9fabc0f2-5859-4946-b371-3696696b1758}">
+      <Declaration><![CDATA[//The function DELETE removes a partial STRING from a larger STRING at a defined position. 
+//The input variable rSTR is TYPE STRING with a lenght if ET.Param.EXT_STRING_MAX_LENGHT, LEN AND POS are TYPE UINT.
+//The new string will be written into the result reference, in case of invalid pos or len parameter, the input string will be copied to rResult
+//means: Delete LEN characters from rSTR beginning with the character in the POS
+METHOD PUBLIC DELETE : UDINT //Returns the new string lenght
+VAR_INPUT
+	 rSTR													:	REFERENCE TO T_EXT_STRING;
+	 LEN													:	UDINT (0..MAX_LENGTH) := 0;
+	 POS													:	UDINT (0..MAX_LENGTH) := 0;
+	 rResult												:	REFERENCE TO T_EXT_STRING;						
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(ResultStr),0,SIZEOF(ResultStr));
+IF NOT __ISVALIDREF(rSTR)  
+THEN
+	DELETE													:= 0;
+	RETURN;
+END_IF
+Str1Len 													:= THIS^.LENGTH(rSTR);
+IF pos > 0 AND pos <= str1Len
+THEN // Only executed if parameter within string limitation
+	MEMCPY(ADR(ResultStr), ADR(rStr), MAX(0, POS -1 )); //First part of string
+	cpyLenght 												:= Str1Len - MIN(Str1Len, MAX(0, POS -1 ) + LEN); 
+	MEMCPY(ADR(ResultStr) + MAX(0,POS-1), ADR(rStr) + MIN(Str1Len, POS -1 + LEN), cpyLenght + 1); //Second part of string
+	DELETE													:= (cpyLenght - 1) + pos; //New string length
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMCPY(ADR(rResult), ADR(ResultStr), DELETE + 1); 
+	END_IF
+ELSE
+	DELETE													:= Str1Len;
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMMOVE(ADR(rResult), ADR(rSTR), DELETE + 1); 
+	END_IF	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FIND" Id="{4cf7aafd-4c89-46d1-a34b-84a59640b8da}">
+      <Declaration><![CDATA[//FIND searches for a partial string within a string. FIND(STR1, STR2) 
+//means: Find the position of the first character where STR2 appears in STR1 for the first time. 
+//If STR2 is not found in STR1, then FIND:=0.
+METHOD PUBLIC FIND : UDINT //position of the first character where STR2 appears in STR1 for the first time.
+VAR_INPUT
+	 rSTR1													: REFERENCE TO T_EXT_STRING;
+	 STR2													: T_EXT_STRING;
+END_VAR
+VAR
+	 valid													: BOOL;
+	 i, j													: UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FIND														:= 0;
+IF NOT __ISVALIDREF(rSTR1)
+THEN
+	RETURN;
+END_IF
+
+str1Len 													:= LENGTH(rSTR1);
+str2Len 													:= LENGTH(STR2);
+FOR i:= 0 TO str1Len 
+DO
+	IF rSTR1[i] = STR2[0] 
+	THEN	// Wenn erstes Zeichen übereinstimmt
+		valid												:= TRUE;
+		FOR j := 1 TO str2Len - 1 DO // Alle zeichen von STR2 durchgehen
+			valid 											:= rSTR1[i + j] = STR2[j];
+			
+			IF NOT valid THEN // Wenn Zeichen ungleich abbrechen
+				RETURN;						
+			END_IF	
+		END_FOR
+		FIND 											:= i + 1;
+		RETURN;		
+	END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="INSERT" Id="{681b9d97-6e87-461b-b5bb-7c351995de43}">
+      <Declaration><![CDATA[//INSERT inserts a string into another string at a defined point.
+//means: insert STR2 into STR1 after position POS.
+METHOD PUBLIC INSERT : UDINT //Returns the lenght of the new string
+VAR_INPUT
+	 rSTR1													: REFERENCE TO T_EXT_STRING;
+	 STR2													: T_EXT_STRING;
+	 POS													: UDINT (0..MAX_LENGTH);  
+	 rResult												: REFERENCE TO T_EXT_STRING;	
+END_VAR
+VAR
+	 chkPos													: UDINT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(ResultStr),0,SIZEOF(ResultStr));
+IF NOT __ISVALIDREF(rSTR1) 
+THEN
+	INSERT														:= 0;
+	RETURN;
+END_IF
+str1Len 													:= LENGTH(rSTR1);
+str2Len 													:= LENGTH(STR2);
+IF Pos >= 0 AND Pos <= Str1Len
+THEN
+	MEMCPY(ADR(ResultStr), ADR(rStr1), str1Len + 1);  //Copy string to to result
+	chkPos 													:= LIMIT(0, POS, str1Len); //Limit insert pos to lenght string 1
+	cpyLenght												:= MAX(0,MIN(str1Len - chkPos  + 1, MAX_LENGTH - chkPos - str2Len));
+	MEMCPY(ADR(ResultStr) + chkPos + str2Len, ADR(rResult) + chkPos,SEL(cpyLenght > 1, 0,cpyLenght)); //move rest of string 1 to the end
+	cpyLenght												:= MIN(str2Len , MAX_LENGTH - chkPos);
+	MEMCPY(ADR(ResultStr) + chkPos, ADR(Str2) ,cpyLenght );
+	INSERT													:= MIN(MAX_LENGTH, str1Len + str2Len);
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMCPY(ADR(rResult), ADR(ResultStr), INSERT + 1); 
+	END_IF
+ELSE
+	INSERT													:= str1Len;
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMMOVE(ADR(rResult), ADR(rStr1), INSERT + 1); 
+	END_IF
+END_IF
+ ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LEFT" Id="{8e34eeb6-a2c7-41d8-8e47-bbc2b6476d20}">
+      <Declaration><![CDATA[//Left returns the left, initial string for a given string. LEFT (STR, SIZE) 
+//means: Take the first SIZE character from the right in the string STR.
+METHOD PUBLIC LEFT : UDINT
+VAR_INPUT
+	 rSTR													: REFERENCE TO T_EXT_STRING;
+	 SIZE													: UDINT (0..MAX_LENGTH);
+	 rResult												: REFERENCE TO T_EXT_STRING;
+END_VAR
+VAR_INPUT
+	 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(ResultStr),0,SIZEOF(ResultStr));
+IF __ISVALIDREF(rSTR)
+THEN
+	SIZE													:= LIMIT(0,SIZE,MAX_LENGTH); 
+	LEFT													:= MIN(LENGTH(rSTR), SIZE);
+	MEMCPY(ADR(ResultStr), ADR(rSTR), LEFT);	
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMCPY(ADR(rResult), ADR(ResultStr), LEFT + 1); 
+	END_IF
+ELSE
+	LEFT													:= 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LENGTH" Id="{eb945637-3ee5-4bfe-8cc2-f86404999bcc}">
+      <Declaration><![CDATA[//Returns the length of a string.
+METHOD PUBLIC LENGTH : UDINT
+VAR_INPUT
+	rSTR												:	REFERENCE TO T_EXT_STRING;
+END_VAR
+VAR
+	i													:	UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF __ISVALIDREF(rSTR) 
+THEN
+	LENGTH														:= 0;								
+	FOR i := 0 TO MAX_LENGTH 
+	DO
+		IF rSTR[i] = 0 
+		THEN
+			LENGTH 											:= i;
+			RETURN;
+		END_IF
+	END_FOR
+ELSE
+	LENGTH														:= 0;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MID" Id="{477aad99-0421-4cf8-a247-1b7097cf42f2}">
+      <Declaration><![CDATA[//Mid returns a partial string from within a string. MID (STR, LEN, POS) 
+//means: Retrieve LEN characters from the STR string beginning with the character at position POS.
+METHOD PUBLIC MID : UDINT //Returns the lenght if the new string (result)
+VAR_INPUT
+	 rSTR													:	REFERENCE TO T_EXT_STRING;
+	 LEN													:	UDINT (0..MAX_LENGTH) ;
+	 POS													:	UDINT (0..MAX_LENGTH) ;
+	 rResult												:	REFERENCE TO T_EXT_STRING;	
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(ResultStr),0,SIZEOF(ResultStr));
+IF NOT __ISVALIDREF(rSTR)
+THEN
+	MID														:= 0;
+	RETURN;	
+END_IF
+
+str1Len 													:= THIS^.LENGTH(rSTR);
+
+IF POS >= 0 AND POS <= str1Len 
+THEN	 
+	cpyLenght 												:= MIN(str1Len - POS + 1, MIN(LEN, str1Len));	
+	MEMCPY(ADR(ResultStr), ADR(rSTR) + MAX(0,POS -1), cpyLenght);
+	MID														:= cpyLenght;
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMCPY(ADR(rResult), ADR(ResultStr), MID + 1); 
+	END_IF
+ELSE
+	MID														:= str1Len;
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMMOVE(ADR(rResult), ADR(rStr), MID + 1); 
+	END_IF	
+END_IF
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="REPLACE" Id="{5da0f0e5-1d95-460a-93c9-ddf150377885}">
+      <Declaration><![CDATA[//REPLACE replaces a partial string from a larger string with a third string. REPLACE(STR1, STR2, L, P) 
+//means: Replace LEN characters from STR1 with STR2 beginning with the character in the position POS.
+METHOD PUBLIC REPLACE : UDINT
+VAR_INPUT
+	 rSTR1													:	REFERENCE TO T_EXT_STRING;
+	 STR2													:	T_EXT_STRING;
+	 LEN													:	UDINT (0..MAX_LENGTH);
+	 POS													:	UDINT (0..MAX_LENGTH);
+	 rResult												:	REFERENCE TO T_EXT_STRING;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(ResultStr),0,SIZEOF(ResultStr));
+IF __ISVALIDREF(rSTR1) 
+THEN	
+	str1Len 												:= THIS^.LENGTH(rSTR1);
+	str2Len 												:= THIS^.LENGTH(STR2);
+	
+	Pos														:= LIMIT(0,Pos -1, Str1Len);
+	Len														:= LIMIT(0,Len,str1Len);
+	MEMCPY(ADR(ResultStr), ADR(rSTR1), Pos); //Copy first part of string 
+	MEMCPY(ADR(ResultStr) + Pos , ADR(STR2), MIN(str2Len + 1, MAX_LENGTH - Pos )); //insert string two
+ 	cpyLenght 												:= MAX(0,MIN(str1Len - Pos - Len, MAX_LENGTH - str2Len - Pos));
+	MEMCPY(ADR(ResultStr) + Pos + str2Len, ADR(rSTR1) + Pos + Len, SEL(cpyLenght > 1, 0,cpyLenght));	//Add rest if string 1
+	REPLACE 												:= MIN(MAX_LENGTH, Str2Len + pos + MAX(0,Str1Len - Len - Pos));
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMCPY(ADR(rResult), ADR(ResultStr), REPLACE + 1); 
+	END_IF	
+ELSE
+	REPLACE 												:= 0;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RIGHT" Id="{1adba014-08b7-4643-b278-6672d76a64c2}">
+      <Declaration><![CDATA[//Right returns the right, initial string for a given string. RIGHT (STR, SIZE) 
+//means: Take the first SIZE character from the right in the string STR.
+METHOD PUBLIC RIGHT : UDINT
+VAR_INPUT
+	 rSTR													: REFERENCE TO T_EXT_STRING;
+	 SIZE													: UDINT (0..MAX_LENGTH);
+	 rResult												: REFERENCE TO T_EXT_STRING;
+END_VAR
+VAR
+	 chkSize												: UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(ADR(ResultStr),0,SIZEOF(ResultStr));
+IF __ISVALIDREF(rSTR)
+THEN
+	str1Len 												:= LENGTH(rSTR);
+	chkSize 												:= MIN(str1Len,MIN(MAX_LENGTH, SIZE));
+	MEMCPY(ADR(ResultStr), ADR(rSTR) + str1Len - chkSize, chkSize + 1);
+	RIGHT													:= chkSize;
+	IF __ISVALIDREF(rResult) 
+	THEN
+		MEMCPY(ADR(rResult), ADR(ResultStr), RIGHT + 1); 
+	END_IF	
+ELSE
+	RIGHT													:= 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ExtString">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.CONCAT">
+      <LineId Id="49" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.DELETE">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.FIND">
+      <LineId Id="3" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.INSERT">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.LEFT">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.LENGTH">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.MID">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.REPLACE">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="ExtString.RIGHT">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

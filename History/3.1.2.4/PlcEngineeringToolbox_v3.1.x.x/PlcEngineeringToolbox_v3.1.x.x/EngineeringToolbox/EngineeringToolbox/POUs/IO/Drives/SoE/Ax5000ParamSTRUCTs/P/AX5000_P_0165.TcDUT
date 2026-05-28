@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="AX5000_P_0165" Id="{a1f23869-5b04-41be-acbc-613f4f28ec7f}">
+    <Declaration><![CDATA[{attribute 'pack_mode' := '1'}//Ensures 1-byte-alignmend
+TYPE AX5000_P_0165 :
+STRUCT
+	Actual_lenght:UINT;
+	Max_lenght:UINT;
+	Command_mode:UINT;
+	Activation:UINT;
+	
+//{attribute 'hide'}
+	Rsvd1:ARRAY[0..1] OF UINT;
+	Current_level:UINT;
+	Duration:UINT;
+//{attribute 'hide'}
+	Rsvd2:ARRAY[0..3] OF UINT;
+	First_phase_current_level:UINT;
+	First_phase_ramp_up_time:UINT;
+	Second_phase_current_level:UINT;
+	Second_phase_ramp_up_time:UINT;
+	Commutation_pos_control_Kp:UINT;
+	First_phase_pos_monitoring_limit:UINT;
+	First_phase_step_width:UINT;
+	First_phase_wating_time_after_step:UINT;
+	Second_phase_duration:UINT;
+	Error_monitoring:UINT;
+//{attribute 'hide'}
+	Rsvd3:ARRAY[0..9] OF UINT;
+
+
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

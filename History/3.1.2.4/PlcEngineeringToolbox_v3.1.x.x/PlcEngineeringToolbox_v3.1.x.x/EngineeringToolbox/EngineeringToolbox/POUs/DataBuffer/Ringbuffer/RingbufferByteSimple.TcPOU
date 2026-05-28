@@ -1,0 +1,154 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="RingbufferByteSimple" Id="{e669926f-1b64-4efd-8cc6-9a616764a92e}" SpecialFunc="None">
+    <Declaration><![CDATA[//Ringbuffer with a internal Byte array for a simple data buffer implementation 
+FUNCTION_BLOCK RingbufferByteSimple EXTENDS RingbufferBase
+VAR_OUTPUT CONSTANT
+	MIN_BUFFER												:	UDINT := 1; //Ringbuffer start index 
+	MAX_BUFFER												:	uDINT := PARAM.RINGBUFFER_BYTE_SIMPLE_MAX_BUFFER; //Ringbuffer buffer end index - see library parameter to customize parameter
+END_VAR   
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	Buffer													:	ARRAY[MIN_BUFFER..MAX_BUFFER] OF BYTE; //Byte buffer 
+END_VAR
+VAR 
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="dequeue" Id="{a2da1788-5cf0-4e86-8d6c-8f13214721d0}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeue : BOOL //TRUE if method was successful
+VAR_IN_OUT
+	value													: BYTE;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(Interlock)
+THEN	
+	IF Count > 0
+	THEN 
+		(* copy dataset *)		
+		ReadIdx												:= ReadIdx + 1;
+		IF (ReadIdx) > MAX_BUFFER
+		THEN
+			ReadIdx											:= TO_UDINT(MIN_BUFFER);				
+		END_IF
+		
+		Value												:= Buffer[ReadIdx];
+		
+		Count 												:= MAX(0,Count - 1);
+		Empty 												:= Count = 0;
+		Full												:= FALSE;
+		Dequeue												:= TRUE;	
+	ELSE 
+		Dequeue												:= FALSE;
+	END_IF
+	
+	Interlock												:= FALSE;
+ELSE
+	Dequeue													:= FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeueStream" Id="{97feffa5-e9f6-432e-9476-9d3feafc015f}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO BYTE;
+	SizeOfStream											:	UDINT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[DequeueStream := super^._DequeueStream(pData, SizeOfStream,  ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueue" Id="{8aea63c7-c405-4347-9d21-bcf43809fc23}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	Value													:	BYTE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TestAndSet(Interlock)
+THEN			
+	Enqueue													:= FALSE;
+
+	IF Count < MAX_BUFFER OR Overwrite
+	THEN
+		IF MAX_BUFFER = Count 
+		THEN //Adapt read index if write index is in front of read index
+			ReadIdx											:= ReadIdx + 1;
+			IF ReadIdx > TO_UDINT(MAX_BUFFER)
+			THEN
+				ReadIdx										:= TO_UDINT(MIN_BUFFER);							
+			END_IF
+		END_IF		
+		WriteIdx											:= WriteIdx + 1;	
+		IF WriteIdx > TO_UDINT(MAX_BUFFER)
+		THEN
+			WriteIdx										:= TO_UDINT(MIN_BUFFER);
+		END_IF
+	
+		Buffer[WriteIdx]									:= Value;
+	
+		Count												:= MIN(Count + 1,  MAX_BUFFER);
+		Full												:= Count >= MAX_BUFFER;
+		Empty 												:= FALSE;	
+		Enqueue												:= TRUE;
+	END_IF
+	
+	Interlock												:= FALSE;
+ELSE
+	Enqueue													:= FALSE;
+END_IF
+
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueueStream" Id="{419beac3-9a04-4b75-851c-7a1e01682878}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO BYTE;
+	SizeOfStream											:	UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[EnqueueStream := SUPER^._EnqueueStream(pData, SIZEOF(BUFFER[MIN_BUFFER] ), SizeOfStream,ADR(Buffer),SIZEOF(Buffer));
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{157594c7-4a90-4aca-b90c-7e0e66b73a33}">
+      <Declaration><![CDATA[//Reset complete ring buffer
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset := SUPER^._reset(ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="RingbufferByteSimple">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferByteSimple.dequeue">
+      <LineId Id="3" Count="24" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferByteSimple.dequeueStream">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferByteSimple.enqueue">
+      <LineId Id="3" Count="32" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferByteSimple.enqueueStream">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferByteSimple.reset">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

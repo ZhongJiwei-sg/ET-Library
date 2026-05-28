@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="replaceUmlauts" Id="{d2eb142c-875b-4ede-bfb1-63a6557018b8}" SpecialFunc="None">
+    <Declaration><![CDATA[// ReplaceUmlauts replaces all "german" umlauts in an given string Ä-> ae | ä -> ae | Ö -> oe | ö -> oe | Ü -> ue | ü -> ue | ß -> ss 
+FUNCTION replaceUmlauts : INT // returns no of replaced umlauts
+VAR_IN_OUT
+	SearchStr		: T_MaxString;				
+END_VAR
+VAR
+	i			: INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FOR i := 0 TO LEN(SearchStr) DO
+	CASE SearchStr[i] OF
+	196:	// Ä
+		SearchStr 					:= REPLACE(SearchStr, 'Ae', 1, i+1); 
+		i 							:= i + 1;
+		ReplaceUmlauts 				:= ReplaceUmlauts + 1;
+	214:	// Ö
+		SearchStr 					:= REPLACE(SearchStr, 'Oe', 1, i+1);
+		i 							:= i + 1; 
+		ReplaceUmlauts 				:= ReplaceUmlauts + 1;
+	220:	// Ü
+		SearchStr 					:= REPLACE(SearchStr, 'Ue', 1, i+1);
+		i 							:= i + 1; 
+		ReplaceUmlauts 				:= ReplaceUmlauts + 1;
+	223:	// ß
+		SearchStr 					:= REPLACE(SearchStr, 'ss', 1, i+1);
+		i 							:= i + 1; 
+		ReplaceUmlauts 				:= ReplaceUmlauts + 1;	
+	228:	// ä
+		SearchStr 					:= REPLACE(SearchStr, 'ae', 1, i+1);
+		i 							:= i + 1; 
+		ReplaceUmlauts 				:= ReplaceUmlauts + 1;
+	246:	// ö
+		SearchStr 					:= REPLACE(SearchStr, 'oe', 1, i+1);
+		i 							:= i + 1; 
+		ReplaceUmlauts 				:= ReplaceUmlauts + 1;
+	252:	// ü
+		SearchStr 					:= REPLACE(SearchStr, 'ue', 1, i+1);
+		i 							:= i + 1; 
+		ReplaceUmlauts 				:= ReplaceUmlauts + 1;
+	ELSE	// nothing replaced in this cycle	
+		;
+	END_CASE
+END_FOR]]></ST>
+    </Implementation>
+    <LineIds Name="replaceUmlauts">
+      <LineId Id="3" Count="32" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

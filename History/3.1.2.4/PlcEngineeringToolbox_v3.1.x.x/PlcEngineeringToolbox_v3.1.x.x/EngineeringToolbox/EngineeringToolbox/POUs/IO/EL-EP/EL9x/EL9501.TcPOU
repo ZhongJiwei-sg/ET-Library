@@ -1,0 +1,125 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="EL9501" Id="{8f649e46-faa6-4e27-a631-bd6e3b3fcbec}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK EL9501 EXTENDS EcSlaveInfoDataExt
+VAR_INPUT
+	SetVoltage					AT %Q*		:	REAL; // 0.0 - 20.0 [V]
+END_VAR                 					 	
+VAR_OUTPUT    
+	{attribute 'displaymode':='binary'}             	
+	Status						AT  %I*		:	WORD; // Terminal status (2 bytes)
+          					 	
+	Voltage								 	: 	AnalogInREAL ; 
+	Current								 	: 	AnalogInREAL;
+END_VAR                                 
+VAR                                     
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* EL9501 Power supply terminal	 0-20V	*)
+	(****************************************)
+	SUPER^();
+	
+(* Work objects *****************************)
+	Voltage();
+	Current();
+
+(********************************************)
+
+ ]]></ST>
+    </Implementation>
+    <Property Name="error" Id="{bd08b3b0-654e-4a4e-a2bb-a3143e4f1dbc}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC error : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3aa29d87-b609-4102-85a0-cb20cf5fb8cc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Error				:= Status.6 OR Voltage.Error OR Current.Error;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="off" Id="{8c2763b7-c523-45b9-8c5c-4bae933d11ba}">
+      <Declaration><![CDATA[METHOD PUBLIC off : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Off := CAM(SetVoltage, Voltage.Q, 0.01);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="overload" Id="{60bf3492-b5ea-41ec-83a1-21c77d9d2eee}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC overload : BOOL]]></Declaration>
+      <Get Name="Get" Id="{aed54348-1260-46f1-be5a-4f206b2bdb1a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Overload 			:= Status.1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="overrange" Id="{caebd826-9cc8-4ad8-89f9-230a0ef316b9}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC overrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{55576c1b-637a-41cd-8d1b-a048a4ddc7b5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Overrange 			:= Status.3;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="underrange" Id="{5e811304-6f60-4196-8d15-24e30ce65c41}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC underrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{00997558-60b5-4468-acea-3237102b0d26}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Underrange 			:= Status.2;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="warning" Id="{482c8770-4405-4421-956e-d10385bd0d2f}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC warning : BOOL]]></Declaration>
+      <Get Name="Get" Id="{54bc5ab1-56da-417e-a913-e941e000b45b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Warning 			:= Status.5;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="EL9501">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL9501.error.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL9501.off">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL9501.overload.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL9501.overrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL9501.underrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="EL9501.warning.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

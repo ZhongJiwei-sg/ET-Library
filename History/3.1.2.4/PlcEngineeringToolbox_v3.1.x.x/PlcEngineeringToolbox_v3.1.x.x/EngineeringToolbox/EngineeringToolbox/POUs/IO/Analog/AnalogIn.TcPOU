@@ -1,0 +1,268 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="AnalogIn" Id="{dde11646-3149-4a70-b74f-55d9fab28ad0}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+FUNCTION_BLOCK AnalogIn
+VAR_INPUT
+	MinValue												: 	LREAL 	:= 0.0; //In case of extended range (107%), set Options.5 or MinValue accordingly e.g. -10.7V (instead of -10.0V as scaling is based on full 16bit)
+	MaxValue												: 	LREAL 	:= 0.0; //In case of extended range (107%), set Options.5 or MaxValue accordingly e.g. 10.7V (instead of 10.0V as scaling is based on full 16bit)
+	NoOfDigits												: 	INT 	(0..10)	:= 0; 	//number of decimal digits of scaled Q variable 
+	OutOnError												:	LREAL 	:= 0.000000000000000001;
+{attribute 'displaymode':='binary'}                     	
+	Options													:	BYTE  := 2#0000_0000; (* 	.0 = FALSE scale value from 0 <-> 32767 / TRUE scale value with sign -32768 <-> 32767
+																							.4 = Active only if .0 AND .5 =TRUE | FALSE scale value min -32768 / TRUE scale value changed from -30518 to -7629 -> Ext. Range Mode of e.g. 4-20mA where 0mA is equel -7629 
+																							.5 = FALSE legacy range with FSV OF 100%=+-32767 / TRUE TO enable extended range AND applying ~7% TO MIN/MaxValue (with ext. range act. measurement can be exceeded OR undershot BY approx. 7% setting FSV TO 100%=+/-30518 AND 107% representing full 16BIT) 
+																							For Scaling of 4-20mA according to NAMUR bit .0,.4 and .5 have to be set *)
+
+																							
+	Offset													:	LREAL := 0.0;
+END_VAR                 									
+VAR                                                     	
+END_VAR                                                 	
+VAR_OUTPUT                                              	
+	Q														:	LREAL;		//Scaled result value
+	In											AT  %I* 	: 	INT; 		//Hardware Input
+
+{attribute 'displaymode':='binary'}                     	
+	Status										AT  %I*		:	WORD := 2#0000_0000_0000_0000; //Terminal status word -> can also be linked with status byte 
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* read analog value 																					   *)
+(* resolution process image			e.g.							/ 0V = 0 / 10V = 32767 / -10V = -32768 *)
+(* or directly with NoOfDigits																	250 -> 25.0°*)
+(************************************************************************************************************)
+	
+(* Scaling ******************************************************************)
+	IF MaxValue <> MinValue 
+	THEN
+		Q 													:= Offset + scale2(In , SEL(Options.0, 0.0, SEL(Options.5 , -32768.0, SEL(Options.4, -30518.0,-7629.0) ) ), SEL(Options.5,32767.0,30518.0), MinValue, MaxValue);
+		IF NoOfDigits > 0
+		THEN
+			Q												:= TO_FMLREAL(Q,NoOfDigits);
+		END_IF
+	
+	ELSIF NoOfDigits > 0 (* Bsp PT100 *)
+	THEN
+		Q													:= Offset + TO_FMLREAL(In,NoOfDigits);
+		
+	ELSE  													
+		Q 													:= 0.0;
+	END_IF
+
+	IF 	Error AND OutOnError <> 0.000000000000000001
+	THEN
+		Q													:= OutOnError;
+	END_IF
+(**********************************************************************************************************************)]]></ST>
+    </Implementation>
+    <Property Name="Error" Id="{31470864-20ca-4d53-a541-6c9ddff36cc3}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Error : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4098ce75-4c4f-4cc1-924c-86477941e2de}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Error					:= Status.6 OR MinValue = MaxValue AND NoOfDigits = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Limit_1" Id="{20c7498c-260b-4a27-9ceb-0974490d21d5}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Limit_1 : BYTE]]></Declaration>
+      <Get Name="Get" Id="{32e3b45e-ff85-45f1-906c-ba0848ebbf4a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Limit_1.0					:= Status.2;
+Limit_1.1					:= Status.3;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Limit_2" Id="{a9cc8e21-4a81-40db-aea3-c10633c8dbcd}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Limit_2 : BYTE]]></Declaration>
+      <Get Name="Get" Id="{15ae6286-32ee-499c-b9fd-5184d9fc1100}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Limit_2.0					:= Status.4;
+Limit_2.1					:= Status.5;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="optEnableScaleExtRangeMode" Id="{f80202c2-77b7-4301-9c72-35cdec25263c}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableScaleExtRangeMode : bool]]></Declaration>
+      <Get Name="Get" Id="{ebb26774-963d-41fe-91b1-3ae35adc73cb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableScaleExtRangeMode := Options.5;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{63bab101-2643-4b9a-975e-012fb0869c58}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.5 := optEnableScaleExtRangeMode;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableScaleExtRangeModeNeg7629" Id="{e113c5fa-63ef-4144-9754-635bbae9d06c}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableScaleExtRangeModeNeg7629 : bool]]></Declaration>
+      <Get Name="Get" Id="{9b0248cb-7f26-4888-9d79-5dccc4b67361}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableScaleExtRangeModeNeg7629 := Options.4;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1476a9f2-aa27-4f4d-b934-769c0dfe1bee}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.4 := optEnableScaleExtRangeModeNeg7629;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableScaleSignedValue" Id="{3d04c02d-caa5-4b6b-9c84-63c0a3f425e9}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableScaleSignedValue : bool]]></Declaration>
+      <Get Name="Get" Id="{19f6e4ac-7636-407b-a83a-99210f706653}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableScaleSignedValue := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6472af38-88de-45a1-9991-a49c9740a648}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableScaleSignedValue;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="Overrange" Id="{a8762b0c-16e0-4662-8619-04f76f8daee4}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Overrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6c692a07-01c1-4499-9f0d-3f93de54c08c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Overrange					:= Status.1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="SyncError" Id="{7a3100ac-d584-4529-b93f-cd3cb78cd5b0}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC SyncError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d7b4720f-e2ad-499d-a202-d3f7a3c502c5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SyncError 			:= Status.13;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="TxPDOState" Id="{0d144e83-ae62-46b5-828d-274ae6f36b07}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC TxPDOState : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a3a57494-bfc2-4925-ac1f-90a64d5660c4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[TxPDOState					:= Status.14; //True if not valid]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="TxPDOToggle" Id="{cad01e06-5fc5-49c6-bb1e-e71e8e4e51a2}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC TxPDOToggle : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9d210938-627d-440f-bc44-b9e7c30e6e13}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[TxPDOToggle						:= Status.15;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Underrange" Id="{0ede74a4-9635-4354-99e2-58892ae26e7f}">
+      <Declaration><![CDATA[{attribute 'monitoring' := 'call'}
+PROPERTY PUBLIC Underrange : BOOL]]></Declaration>
+      <Get Name="Get" Id="{49227475-056d-4dfc-85d5-3df4995e9f7a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Underrange 					:= Status.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="AnalogIn">
+      <LineId Id="116" Count="3" />
+      <LineId Id="132" Count="6" />
+      <LineId Id="140" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.Error.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.Limit_1.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.Limit_2.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.optEnableScaleExtRangeMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.optEnableScaleExtRangeMode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.optEnableScaleExtRangeModeNeg7629.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.optEnableScaleExtRangeModeNeg7629.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.optEnableScaleSignedValue.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.optEnableScaleSignedValue.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.Overrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.SyncError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.TxPDOState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.TxPDOToggle.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="AnalogIn.Underrange.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

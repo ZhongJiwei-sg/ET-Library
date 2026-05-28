@@ -1,0 +1,441 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="XmlReadWriteWithBackupFile" Id="{1c04a76a-b44b-41e5-8ecf-1d9909f52501}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'no_check'}
+//Write xml files with a additonal backup file and auto save function if structure will be changed.
+//For the Backup functionality, a backup subfolder name "Backup" in the directory is needed! 
+//In case the xml could not read successfully after, the backup files will be used.
+//See Options to enable auto save and backup file functions.
+//based on TF6421 - required lib: Tc2_XmlDataSvr - see Beckhoff documentation for more information
+{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK XmlReadWriteWithBackupFile EXTENDS XmlReadWrite 
+VAR_OUTPUT CONSTANT
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_AUTO_SAVE									:	BYTE :=2#0000_0001;
+{attribute 'displaymode':='binary'}
+	OPTION_ENABLE_BACKUP_FILE								: 	BYTE :=2#0000_0010;
+END_VAR                 									
+VAR_INPUT               									                       		
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 2#0000_0000;			(* option constants are alreay predefined, so they can accordingly be passed symbolically to the block 
+																								Bit 0 = Enable auto save if data changed
+																								Bit 1 = Enable backup file 
+																								Bit 2 = 
+																								Bit 3 = 
+																								Bit 4 = 
+																								Bit 5 = 
+																								Bit 6 = 
+																								Bit 7 = 						
+																							*)     													
+END_VAR
+VAR_OUTPUT
+	Backup													:	BOOL := FALSE; 		// Backup file has been readed 
+	Loaded													:	BOOL:= FALSE;		// Data loaded
+	ErrorFnc												:	STRING(30) := ''; 	// Error source
+END_VAR
+VAR
+(* memory ************************************************************)
+	rtExecuteAutoSave										:	R_trig;
+	pCompareData											:	POINTER TO BYTE;
+	pMemSymAddr												: 	PVOID := 0;	
+	MemSymSize												:	UDINT;
+(* Trigger **********************************************************)
+
+(* timer ******************************************************************)
+	tonDelay												:	ton;
+
+(* function blocks ***************************************************************)
+
+(* Dummy **********************************************************)
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[	(* XML Read/Write with backup file and auto save						V2.2		*)
+	(************************************************************************************)
+
+(* reserver memeory for auto save ***************************************************************************************)
+	IF Options.0 AND pCompareData = 0 
+	THEN	
+		pCompareData 										:=  __NEW(BYTE, SymSize);
+		IF NOT PARAM.ENABLE_DEBUG_MSG_DYNAMIC_MEM_ALLOCATION
+		THEN 
+			;
+		ELSIF MemSymSize = 0 
+		THEN
+			AdsLogHint('EngineeringToolbox | FB XmlReadWriteWithBackupFile | An instance allocated %s bytes from the dynamic memory of the ADS router memory pool', TO_STRING(SymSize));	
+		ELSE //Allocation of additional memory space
+			AdsLogWarn('EngineeringToolbox | FB XmlReadWriteWithBackupFile | An instance allocated additional %s bytes from the dynamic memory of the ADS router memory pool because the size of the data increased (SymSize) ', TO_STRING(SymSize));
+		END_IF
+		MemSymSize											:= SymSize;
+	ELSIF pCompareData <> 0 
+	THEN
+		IF NOT Options.0 OR SymSize > MemSymSize
+		THEN //Delete pointer to allocated memory if no longer needed or size increase 
+			__DELETE(pCompareData);
+		ELSIF pMemSymAddr <> pSymAddr OR MemSymSize <> SymSize
+		THEN //Erease data and rewrite if pointer to data changed or size decreased 
+			MEMSET(pCompareData,0,MemSymSize); //Delete compare data if pointer to data changed to activate auto save
+			MemSymSize										:= SymSize;
+			pMemSymAddr 									:= pSymAddr;	
+		END_IF
+	END_IF
+	
+(* Execute sequence ***************************************************************************)	
+	rtExecuteAutoSave(CLK := Options.0 AND state = 0 AND Loaded AND pCompareData <> 0 AND_THEN MEMCMP(pSymAddr, pCompareData, SymSize) <> 0);
+	rtExecute(CLK := Execute );	
+	
+	CASE state OF
+	0:
+		Busy												:= FALSE;
+		// init		                                	
+		IF NOT Execute                              	
+		THEN                                        	
+			Backup											:= FALSE;			
+			Done 											:= FALSE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorFnc										:= '';
+		END_IF                                      	
+		                                            	
+		IF rtExecute.Q OR rtExecuteAutoSave.Q                       	
+		THEN                                        	
+			Backup											:= FALSE;
+			Done 											:= FALSE;
+			Busy											:= TRUE;
+			Error											:= FALSE;
+			ErrorID											:= 0;
+			ErrorFnc										:= '';
+			MemFnc											:= SEL(rtExecuteAutoSave.Q, Fnc, FNC_WRITE); // write has priority
+			                                        	
+			IF pSymAddr = 0                         	
+			THEN                                    	
+				Busy										:= NOT Error;
+				Error										:= TRUE;
+				ErrorId										:= E_AdsErr.DEVICE_INVALIDPARM;
+				Done										:= FALSE;
+				MemFnc										:= -1 ;
+				RETURN;                             	
+			ELSE
+				CASE MemFnc OF
+				FNC_READ:	
+					XmlSrvRead	(bExecute := FALSE,sFilePath	:= CONCAT(FilePath,FileName));
+					state 									:= 10;
+				FNC_WRITE:	
+					XmlSrvWrite	(bExecute := FALSE,sFilePath	:= CONCAT(FilePath,FileName));
+					state 									:= 20;				
+				ELSE
+					Error									:= TRUE;
+					ErrorID									:= E_AdsErr.DEVICE_INVALIDPARM;
+					ErrorFnc								:= CONCAT('Invalid Fnc,', INT_TO_STRING(MemFnc));
+					Busy									:= FALSE;			
+				END_CASE
+			END_IF
+		END_IF
+	
+	(* File read ************************************************)
+	10:
+		XmlSrvRead(                    	
+			sNetId		:= NetId,
+			ePath		:= ,(* Default *)
+			nMode		:= XMLSRV_SKIPMISSING, 
+			pSymAddr	:= pSymAddr,
+			cbSymSize	:= SymSize,
+			sFilePath	:= ,
+			sXPath		:= XPath,
+			bExecute	:=  TRUE,
+			tTimeout	:= Timeout,
+			bBusy		=> ,
+			bError		=> ,
+			nErrId		=> );
+			
+		IF NOT XmlSrvRead.bBusy
+		THEN
+			IF XmlSrvRead.bError
+			THEN
+				IF XmlSrvRead.nErrId = 1804 
+					AND Options.1
+				THEN
+					state									:= 11;
+				ELSE
+					Error									:= TRUE;
+					ErrorID									:= XmlSrvRead.nErrId;
+					ErrorFnc								:= CONCAT('XmlSvrRead State:',INT_TO_STRING(State));
+					Busy									:= FALSE;
+					State									:= 0;	
+				END_IF
+			ELSE
+				Loaded										:= TRUE;
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				MemFnc										:= -1;
+				state										:= 0;	
+				IF pCompareData <> 0 THEN MEMCPY(pCompareData,pSymAddr,SymSize); pMemSymAddr := pSymAddr; END_IF 	// refresh compare data after reading for initalisation
+			END_IF
+			XmlSrvRead(bExecute 							:= FALSE);
+		END_IF	
+				
+	11: // Read Backup file
+		XmlSrvRead.sFilePath								:= CONCAT(FilePath,'Backup\'); 				// subfolder
+		XmlSrvRead.sFilePath								:= CONCAT(XmlSrvRead.sFilePath,FileName);
+				
+		XmlSrvRead(                    	
+			sNetId		:= NetId,
+			ePath		:= ,(* Default *)
+			nMode		:= XMLSRV_SKIPMISSING, 
+			pSymAddr	:= pSymAddr,
+			cbSymSize	:= SymSize,
+			sFilePath	:= ,
+			sXPath		:= XPath,
+			bExecute	:=  TRUE,
+			tTimeout	:= Timeout,
+			bBusy		=> ,
+			bError		=> ,
+			nErrId		=> );
+			
+		IF NOT XmlSrvRead.bBusy
+		THEN
+			IF XmlSrvRead.bError
+			THEN
+				Error										:= TRUE;
+				ErrorID										:= XmlSrvRead.nErrId;
+				ErrorFnc									:= CONCAT('XmlSvrRead State:',INT_TO_STRING(State));
+				Busy										:= FALSE;
+				State										:= 0;	
+			ELSE                                        	
+				Loaded										:= TRUE;
+				Backup										:= TRUE;
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				MemFnc										:= -1;
+				state										:= 20; 							// Write original file	
+				IF pCompareData <> 0 THEN MEMCPY(pCompareData,pSymAddr,SymSize); pMemSymAddr := pSymAddr; END_IF 	// refresh compare data after reading of backup file for initalisation
+			END_IF
+			XmlSrvRead(bExecute 							:= FALSE);
+		END_IF	
+		
+	(* Write parameter ***********************************************************)
+	20:
+		XmlSrvWrite(
+			sNetId		:= NetId,
+			ePath		:= ,(* Default *)
+			nMode		:= Mode,
+			pSymAddr	:= pSymAddr,
+			cbSymSize	:= SymSize,
+			sFilePath	:= ,
+			sXPath		:= XPath,
+			bExecute	:= TRUE,
+			tTimeout	:= Timeout,
+			bBusy		=> ,
+			bError		=> ,
+			nErrId		=> );
+			
+		IF NOT XmlSrvWrite.bBusy
+		THEN
+			IF XmlSrvWrite.bError
+			THEN
+				Error										:= TRUE;
+				ErrorID										:= XmlSrvWrite.nErrId;
+				ErrorFnc									:= CONCAT('XmlSvrWrite State:',INT_TO_STRING(State));
+				Busy										:= FALSE;
+				State										:= 0;				
+			ELSE // Write backup file	
+				Loaded										:= TRUE;
+				State										:= SEL(Options.1, 0, 21); //
+				Done										:= State = 0; 				
+				Busy										:= State <> 0;
+				//Update compare memory
+				IF pCompareData <> 0 THEN MEMCPY(pCompareData,pSymAddr,SymSize); pMemSymAddr := pSymAddr; END_IF 	// refresh compare data after writing new data
+			END_IF
+			XmlSrvWrite(bExecute							:= FALSE);
+		END_IF
+
+	21://Write backup to sub folder	
+		XmlSrvWrite.sFilePath								:= CONCAT(FilePath,'Backup\'); 				// subfolder
+		XmlSrvWrite.sFilePath								:= CONCAT(XmlSrvWrite.sFilePath,FileName);
+		XmlSrvWrite(
+			sNetId		:= NetId,
+			ePath		:= ,(* Default *)
+			nMode		:= Mode,
+			pSymAddr	:= pSymAddr,
+			cbSymSize	:= SymSize,
+			sFilePath	:= ,
+			sXPath		:= XPath,
+			bExecute	:= TRUE,
+			tTimeout	:= Timeout,
+			bBusy		=> ,
+			bError		=> ,
+			nErrId		=> );
+			
+		IF NOT XmlSrvWrite.bBusy
+		THEN
+			IF XmlSrvWrite.bError
+			THEN
+				Error										:= TRUE;
+				ErrorID										:= XmlSrvWrite.nErrId;
+				ErrorFnc									:= CONCAT('XmlSvrWrite State:',INT_TO_STRING(State));
+				Busy										:= FALSE;
+				State										:= 0;				
+			ELSE 	
+				Busy										:= FALSE;
+				Done										:= TRUE;
+				State										:= 0;	
+				//Update compare memory
+				IF pCompareData <> 0 THEN MEMCPY(pCompareData,pSymAddr,SymSize); pMemSymAddr := pSymAddr; END_IF 	// refresh compare data after writing new data				
+			END_IF
+			XmlSrvWrite(bExecute							:= FALSE);
+		END_IF		
+	END_CASE
+		
+		
+	
+(*************************************************************************************************)
+
+]]></ST>
+    </Implementation>
+    <Method Name="FB_exit" Id="{7ba4320f-f7c7-4393-a372-40aefa782d74}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInCopyCode AND pCompareData <> 0
+THEN //Release memory in case the PLC stopps
+	__DELETE(pCompareData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="optEnableAutoSave" Id="{ae24941c-7c96-41f8-b161-8faa78102b76}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableAutoSave : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4b23febe-7676-4429-9e5d-a9648b458fcd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableAutoSave := Options.0;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3ddf2b93-626a-4d7b-ada2-7511629012b3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.0 := optEnableAutoSave;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="optEnableBackupFile" Id="{2be9f831-f2c6-4550-91ba-472875bd58b9}">
+      <Declaration><![CDATA[PROPERTY PUBLIC optEnableBackupFile : BOOL]]></Declaration>
+      <Get Name="Get" Id="{69dc505f-29de-4869-85d2-93f8858bb909}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[optEnableBackupFile := Options.1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{36c8cb6a-954c-4194-89df-abac9605be1d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Options.1 := optEnableBackupFile;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="read" Id="{4e5f6849-bbac-4a6d-a03e-3d0b61e5d8f2}">
+      <Declaration><![CDATA[METHOD PUBLIC read : BOOL //Return value = TRUE if busy
+//required parameter
+//pSymAddr
+//SymSize
+//FilePath
+//XPath
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR	
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE state OF
+0:	
+	Fnc 													:= FNC_READ;
+	THIS^(Execute:=Execute);
+1: 
+	;
+
+END_CASE
+Read 														:= Busy;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="write" Id="{18dd8be1-655a-45db-80b6-0f5ad36761c8}">
+      <Declaration><![CDATA[METHOD PUBLIC write : BOOL //Return value = TRUE if busy
+//required parameter
+//pSymAddr
+//SymSize
+//FilePath
+//XPath
+VAR_INPUT
+	Execute													:	BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE state OF
+0:	
+	Fnc 													:= FNC_WRITE;
+	THIS^(Execute:=Execute);
+1: 
+	;
+
+END_CASE
+Write 														:= Busy;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="XmlReadWriteWithBackupFile">
+      <LineId Id="3" Count="6" />
+      <LineId Id="437" Count="2" />
+      <LineId Id="431" Count="1" />
+      <LineId Id="434" Count="2" />
+      <LineId Id="433" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="272" Count="0" />
+      <LineId Id="440" Count="0" />
+      <LineId Id="12" Count="2" />
+      <LineId Id="375" Count="2" />
+      <LineId Id="382" Count="0" />
+      <LineId Id="381" Count="0" />
+      <LineId Id="446" Count="0" />
+      <LineId Id="15" Count="159" />
+      <LineId Id="321" Count="0" />
+      <LineId Id="175" Count="48" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="226" Count="0" />
+      <LineId Id="322" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWriteWithBackupFile.FB_exit">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWriteWithBackupFile.optEnableAutoSave.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWriteWithBackupFile.optEnableAutoSave.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWriteWithBackupFile.optEnableBackupFile.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWriteWithBackupFile.optEnableBackupFile.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWriteWithBackupFile.read">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="XmlReadWriteWithBackupFile.write">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
