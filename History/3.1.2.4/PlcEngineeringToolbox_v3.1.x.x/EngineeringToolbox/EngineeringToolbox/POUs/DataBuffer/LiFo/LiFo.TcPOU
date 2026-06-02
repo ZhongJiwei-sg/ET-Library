@@ -1,0 +1,158 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
+  <POU Name="LiFo" Id="{1e0907f6-129d-45cd-9859-6837cb3bf7d8}" SpecialFunc="None">
+    <Declaration><![CDATA[//LiFo base control template with external memory based of LifoBase
+FUNCTION_BLOCK LiFo EXTENDS LifoBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;
+
+]]></ST>
+    </Implementation>
+    <Method Name="dequeue" Id="{2209f842-1583-4f71-99c8-9b6367ebd84f}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Dequeue := SUPER^._Dequeue(pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeueStream" Id="{7a23ad44-001d-4bc3-976d-f7cb9d33ff7e}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfStream											: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[DequeueStream := SUPER^._DequeueStream(pData,SizeOfStream,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueue" Id="{f4c0666e-d8ce-4e50-ab2e-54c4c47e83a0}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enqueue := SUPER^._Enqueue(pData,SizeOfData,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueueStream" Id="{99106d12-f03b-4335-82ae-4ec7591db17c}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	SizeOfStream											: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[EnqueueStream := SUPER^._EnqueueStream(pData,SizeOfData,SizeOfStream,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isEnqueued" Id="{b81e883f-de8d-48a1-a1fc-c54a9187ba66}">
+      <Declaration><![CDATA[//Check wheter a value already exist
+METHOD PUBLIC isEnqueued : uDINT //data exist in Fifo if reurn value <> 0, returns index of entry in buffer 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR	
+VAR
+	i 														: 	DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsEnqueued := SUPER^._IsEnqueued(pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="isNextEntry" Id="{492555fd-dce0-4320-b2d9-ce272a286024}">
+      <Declaration><![CDATA[//Check wheter a value will be the next output of the buffer
+METHOD PUBLIC isNextEntry : BOOL //Inputs value is the next output 
+VAR_INPUT
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsNextEntry := SUPER^._IsNextEntry(pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="readEntry" Id="{98497419-7431-4f41-8573-11f0152d65c7}">
+      <Declaration><![CDATA[METHOD PUBLIC readEntry : BOOL //TRUE if method was successful
+VAR_INPUT
+	idx														:	UDINT;
+	pData													: 	POINTER TO BYTE := 0;
+	SizeOfData												: 	UDINT := 0;
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ReadEntry := SUPER^._ReadEntry(idx,pData,SizeOfEntry,pMemory,SizeOfMemory);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{00e86c81-d302-4642-ab2f-3d8525f5b4b7}">
+      <Declaration><![CDATA[//Reset complete Fifo
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+	pMemory													: 	POINTER TO BYTE := 0;
+	SizeOfMemory											: 	UDINT := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset := SUPER^._reset(pMemory,SizeOfMemory);	]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="LiFo">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LiFo.dequeue">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LiFo.dequeueStream">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LiFo.enqueue">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LiFo.enqueueStream">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LiFo.isEnqueued">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LiFo.isNextEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LiFo.readEntry">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="LiFo.reset">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

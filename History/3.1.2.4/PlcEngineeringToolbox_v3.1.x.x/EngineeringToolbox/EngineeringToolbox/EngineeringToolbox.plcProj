@@ -39,7 +39,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
         </Event>
       </Events>
     </DeploymentEvents>
-    <ProjectVersion>3.1.2.3</ProjectVersion>
+    <ProjectVersion>3.1.2.4</ProjectVersion>
     <CompilerVersion>
     </CompilerVersion>
     <!--    <OutputType>Exe</OutputType>
@@ -68,7 +68,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
     <Folder Include="POUs\Connectivity\TF6340-SerialCom\ComPortDeviceCom" />
     <Folder Include="POUs\Connectivity\TF6340-SerialCom\ComPortBasic" />
     <Folder Include="POUs\ControllerTools" />
-    <Folder Include="POUs\DataBuffer\Fifo" />
+    <Folder Include="POUs\DataBuffer\FiFo" />
+    <Folder Include="POUs\DataBuffer\LiFo" />
     <Folder Include="POUs\DataBuffer\Ringbuffer" />
     <Folder Include="POUs\EventLogger" />
     <Folder Include="POUs\EventLogger\ReadEvents" />
@@ -311,16 +312,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
     <Compile Include="POUs\DataBuffer\DoubleBuffer.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="POUs\DataBuffer\Fifo\Fifo.TcPOU">
+    <Compile Include="POUs\DataBuffer\FiFo\Fifo.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="POUs\DataBuffer\Fifo\FifoExt.TcPOU">
+    <Compile Include="POUs\DataBuffer\FiFo\FiFoExt.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="POUs\DataBuffer\Fifo\FifoLRealSimple.TcPOU">
+    <Compile Include="POUs\DataBuffer\FiFo\FiFoLRealSimple.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="POUs\DataBuffer\Fifo\FifoBase.TcPOU">
+    <Compile Include="POUs\DataBuffer\FiFo\FiFoBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\LiFo\LiFoBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\LiFo\LiFoExt.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\LiFo\LiFo.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\DataBuffer\Quicksort.TcPOU">
@@ -342,6 +352,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\DataBuffer\Ringbuffer\RingbufferLRealSimple.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\DataBuffer\Ringbuffer\RingbufferRealSimple.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\EventLogger\EventsWriteToLogbook.TcPOU">

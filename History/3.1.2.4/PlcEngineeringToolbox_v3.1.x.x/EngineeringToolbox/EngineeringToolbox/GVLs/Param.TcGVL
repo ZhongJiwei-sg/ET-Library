@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
   <GVL Name="PARAM" Id="{3217d121-f20f-43b1-8e87-5384c7f1f603}" ParameterList="True">
     <Declaration><![CDATA[{attribute 'qualified_only'}
 VAR_GLOBAL CONSTANT
@@ -16,9 +16,11 @@ VAR_GLOBAL CONSTANT
 //Data buffer settings
 	RINGBUFFER_BYTE_SIMPLE_MAX_BUFFER						:	UDINT := 1024;	//Max index byte ringbuffer array
 	RINGBUFFER_CHAR_SIMPLE_MAX_BUFFER						:	UDINT := 1024;	//Max index byte ringbuffer array for chars 	
-	RINGBUFFER_LREAL_SIMPLE_MAX_BUFFER						:	UDINT := 10;		//Max index lreal ringbuffer array
+	RINGBUFFER_LREAL_SIMPLE_MAX_BUFFER						:	UDINT := 10;	//Max index lreal ringbuffer array
+	RINGBUFFER_REAL_SIMPLE_MAX_BUFFER						:	UDINT := 10;	//Max index real ringbuffer array
 	
 	FIFO_LREAL_SIMPEL_MAX_BUFFER							:	INT := 10;		//Max index lreal fifo array
+	LIFO_LREAL_SIMPEL_MAX_BUFFER							:	INT := 10;		//Max index lreal lifo array	
 	
 //File handling 
 	READ_DIR_SIMPLE_MAX_ENTRYS								:	INT(1..1000) := 50;	//Max list size of founded files in directory

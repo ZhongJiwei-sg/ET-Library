@@ -3,7 +3,22 @@
 ## Unreleased
 - no unreleased features yet
 
-## [V3.1.2.3] - development 2026-02-12
+## [V3.1.2.4] - development 2026-05-20
+
+### Changed
+- Connectivity/TF625x-Modbus
+	- Added OPTIONS to all ModbusMaster FBs to disable error state and keep running even one or all slaves are in error
+	
+### Added
+- DataBuffer/Ringbuffer
+	- Added new RingbufferREALSimple FB
+	
+- DataBuffer/LiFo
+	- Added new FBs for Last In - First Out data stacking based on Ringbuffer principal  
+	
+### Fixed	
+
+## [V3.1.2.3] - development 2026-05-18
 
 ### Changed
 - IO/Analog/FB AnalogIn
@@ -16,10 +31,10 @@
 	
 - StringHelper/
 	Added new functions, CHR_TO_STR() , STR_TO_ASC() and stringCmp()
-	
+
 ### Fixed	
 - IO/FreqConv/Fb IOFcCom	
-	- Fixed swapped start forward/reverse when stared via FB input variabels 
+	- Fixed swapped start forward/reverse when stared via FB input variables 
 
 ## [V3.1.2.2] - development 2025-11-28
 
@@ -28,13 +43,13 @@
 	- Removed Eventlogger FB
 	
 - StringHelper/ExtendedString
-	FBs ExtString and ExtWString, renamed method LEN to LENGTH to avoid compiler msg C0508
+	- FBs ExtString and ExtWString, renamed method LEN to LENGTH to avoid compiler msg C0508
 	
 - Eventlogger/ReadEvents
-	EVENTLOG_READ_DATA renamed var Class to eClass of event calls to avoid compiler msg C0543
+	- EVENTLOG_READ_DATA renamed var Class to eClass of event calls to avoid compiler msg C0543
 
 - Logging/Logbook_wEventClass
-	Renamed var Class to eClass of event calls to avoid compiler msg C0543
+	- Renamed var Class to eClass of event calls to avoid compiler msg C0543
 	
 ### Added
 - Motion/TF5100-NCI/NciChannel_wEvents

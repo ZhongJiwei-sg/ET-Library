@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
   <POU Name="getOvrVelo" Id="{fdae079d-c334-47c4-bf89-4e30fa852178}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'no_check'}
-//Overwrite function - Returns velocity setpoint based on max velo and requested overwrite 
+//Override function - Returns velocity setpoint based on max velo and requested override 
 FUNCTION getOvrVelo : LREAL
 VAR_INPUT
 	SetVelo													:	LREAL;

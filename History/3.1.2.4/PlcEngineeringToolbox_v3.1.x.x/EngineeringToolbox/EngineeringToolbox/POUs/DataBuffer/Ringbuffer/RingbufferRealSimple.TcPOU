@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
+  <POU Name="RingbufferRealSimple" Id="{0b67e34d-9cc9-42f3-81d6-d9093c789097}" SpecialFunc="None">
+    <Declaration><![CDATA[//Ringbuffer with a internal Lreal array for a simple num list implementation 
+FUNCTION_BLOCK RingbufferRealSimple EXTENDS RingbufferBase
+VAR_OUTPUT CONSTANT
+	MIN_BUFFER												:	UDINT := 1; //Ringbuffer start index
+	MAX_BUFFER												:	UDINT := PARAM.RINGBUFFER_REAL_SIMPLE_MAX_BUFFER; //Ringbuffer buffer end index - see library parameter to customize parameter
+END_VAR   
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	Buffer													:	ARRAY[MIN_BUFFER..MAX_BUFFER] OF REAL; //Lreal buffer 
+END_VAR
+VAR 
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[;]]></ST>
+    </Implementation>
+    <Method Name="dequeue" Id="{2306e690-277f-4078-9103-d1c6037e2e3f}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeue : BOOL //TRUE if method was successful
+VAR_IN_OUT
+	value													: REAL;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Dequeue := SUPER^._Dequeue(ADR(Value),SizeOfEntry,ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="dequeueStream" Id="{4011741c-16b9-432a-8c22-7cb5792f8a96}">
+      <Declaration><![CDATA[METHOD PUBLIC dequeueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO REAL;
+	SizeOfStream											:	UDINT ; //Not greater than SizeOfMemory
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[DequeueStream := super^._DequeueStream(pData,SizeOfStream,  ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueue" Id="{ae49c898-82ca-40de-8536-0ba6fd0432ec}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueue : BOOL //TRUE if method was successful
+VAR_INPUT
+	Value													:	REAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Enqueue := SUPER^._Enqueue(ADR(Value),SIZEOF(Value),ADR(Buffer),SIZEOF(Buffer));	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enqueueStream" Id="{c65d1cd0-9235-4452-81fc-1d3b642c2683}">
+      <Declaration><![CDATA[METHOD PUBLIC enqueueStream : BOOL //TRUE if method was successful
+VAR_INPUT
+	pData													:	POINTER TO REAL;
+	SizeOfStream											:	UDINT ; //Not greater than SizeOfMemory
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[EnqueueStream := SUPER^._EnqueueStream(pData,SIZEOF(BUFFER[MIN_BUFFER]), SizeOfStream,ADR(Buffer),SIZEOF(Buffer));
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="reset" Id="{304976d6-b56a-458e-a6b9-6b9ca10db793}">
+      <Declaration><![CDATA[//Reset complete ring buffer
+METHOD PUBLIC reset : BOOL //TRUE if method is finnished
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[reset := SUPER^._reset(ADR(Buffer),SIZEOF(Buffer));]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="RingbufferRealSimple">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferRealSimple.dequeue">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferRealSimple.dequeueStream">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferRealSimple.enqueue">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferRealSimple.enqueueStream">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="RingbufferRealSimple.reset">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

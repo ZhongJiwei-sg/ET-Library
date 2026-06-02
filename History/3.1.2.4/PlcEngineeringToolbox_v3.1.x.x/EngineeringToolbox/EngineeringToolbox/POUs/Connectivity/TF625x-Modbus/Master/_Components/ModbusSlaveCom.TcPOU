@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
   <POU Name="ModbusSlaveCom" Id="{14dc25f6-a7fc-4724-9466-381033cdb946}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'no_check'}
 //communication struct between modbus master FB and Slave FB
@@ -12,7 +12,7 @@ VAR_OUTPUT CONSTANT
 END_VAR                 	
 VAR_INPUT               	
 	Enable					:	BOOL;
-	writeJobRequested		:	BOOL;
+	WriteJobRequested		:	BOOL;
 	IpAddr 					:	T_IPv4Addr;	// use only for TCP and UDP or ''		// use only for TCP and UDP 
 	Port 					:	UDINT;			// use only for TCP
 	Address					:	BYTE;

@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
   <POU Name="RingbufferBase" Id="{038bb044-845d-4f39-8c31-2e2c65ed4856}" SpecialFunc="None">
     <Declaration><![CDATA[//Ringbuffer basic template based on external memory
 FUNCTION_BLOCK RingbufferBase
@@ -10,8 +10,8 @@ VAR_OUTPUT
 	Count													:	UDINT := 0; 	// Number of entrys	
 	Full													:	BOOL ;		// TRUE when max number of entrys reached
 	Empty													:	BOOL := TRUE; // TRUE when no entrys present
-	ReadIdx													: 	UDINT := 0;	// Read data from adress 
-	WriteIdx												: 	UDINT := 0;	// Write data to adress
+	ReadIdx													: 	UDINT := 0;	// Read idx, starting from oldest entry
+	WriteIdx												: 	UDINT := 0;	// Write idx 
 END_VAR    
 VAR
 	Interlock												:	BOOL; 
@@ -25,7 +25,7 @@ END_VAR
       <ST><![CDATA[]]></ST>
     </Implementation>
     <Method Name="_dequeue" Id="{ee4c9f39-a77c-4d7a-b770-ed49d10c5278}">
-      <Declaration><![CDATA[METHOD PROTECTED _dequeue : BOOL //TRUE if method was successful
+      <Declaration><![CDATA[METHOD PROTECTED _dequeue : BOOL //TRUE if method was successful - copies oldest entry and set ReadIdx 
 VAR_INPUT
 	pData													: 	POINTER TO BYTE ;
 	SizeOfData												: 	UDINT ;
@@ -71,7 +71,7 @@ END_IF
       </Implementation>
     </Method>
     <Method Name="_dequeueStream" Id="{6b99fffe-6fba-4cc0-b6d2-2a625b048982}">
-      <Declaration><![CDATA[METHOD PROTECTED _dequeueStream : BOOL //TRUE if method was successful
+      <Declaration><![CDATA[METHOD PROTECTED _dequeueStream : BOOL //TRUE if method was successful - copies oldest data and set ready index 
 VAR_INPUT
 	pData													: 	POINTER TO BYTE ;
 	SizeOfStream											:	UDINT ; //n * Size of last entry and not greater than SizeOfMemory
@@ -170,6 +170,7 @@ THEN
 		END_IF
 	
 		MEMCPY(pMemory + ((MAX(0,WriteIdx) - 1) * SizeOfData) ,pData,SizeOfData);		
+	
 		Count												:= MIN(Count + 1,  MaxEntrys);
 		Full												:= Count >= MaxEntrys;
 		Empty 												:= FALSE;	
@@ -225,6 +226,7 @@ THEN
 		
 			MEMCPY(pMemory + (WriteIdx * SizeOfData) ,pData,SizeOfStream);		
 			WriteIdx										:= writeIdx + TO_UDINT(NoOfStreamEntrys);
+			
 			Count											:= MIN(Count + NoOfStreamEntrys, MaxEntrys);
 			Empty 											:= FALSE;	
 			_EnqueueStream									:= TRUE;
@@ -245,7 +247,7 @@ THEN
 		THEN //Adapt read index if write index is in front of read index
 			ReadIdx											:= WriteIdx;
 		END_IF	
-			
+		
 		Empty 												:= FALSE;	
 		_EnqueueStream										:= TRUE;	
 	ELSE
@@ -303,11 +305,17 @@ END_IF
     <LineIds Name="RingbufferBase._enqueue">
       <LineId Id="3" Count="11" />
       <LineId Id="52" Count="0" />
-      <LineId Id="16" Count="28" />
+      <LineId Id="16" Count="18" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="35" Count="9" />
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="RingbufferBase._enqueueStream">
-      <LineId Id="3" Count="59" />
+      <LineId Id="3" Count="28" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="32" Count="19" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="53" Count="9" />
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="RingbufferBase._reset">

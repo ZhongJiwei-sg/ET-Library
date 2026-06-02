@@ -1,21 +1,29 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
   <POU Name="ModbusUdpMaster" Id="{e85c5abd-3918-4b08-95f9-c4c66aa8cf36}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'no_check'}
 // ModBus comunication master to multible slaves useing UDP protocol
 // based on TF6250 - required lib: Tc2_ModbusTCP
 FUNCTION_BLOCK ModbusUdpMaster
-VAR CONSTANT
+VAR_OUTPUT CONSTANT
 	MIN_SLAVE												:	INT := 1;
 	MAX_SLAVE												:	INT := PARAM.MODBUS_MAX_SLAVES_OF_MASTER;
+{attribute 'displaymode':='binary'}
+	OPTION_DISABLE_ERROR_STATE								:	BYTE := 2#0000_0001; //FB will not go into error state and keeps running, even all slaves are in error state
 END_VAR
 VAR_INPUT
 	Enable													:	BOOL ; 		// FB will be processed as long as enable is TRUE 
 	ResetTrig												:	BOOL ;		// The function block will be reset with a rising edge 
+{attribute 'displaymode':='binary'}
+	Options													:	BYTE := 0; //FB options, see VAR_OUTPUT CONSTANT
 	SlaveCom												:	ARRAY[MIN_SLAVE..MAX_SLAVE] OF POINTER TO ModbusSlaveCom;
 	Timestamp												:	DT;
 END_VAR         	
-VAR_OUTPUT      	
+VAR_OUTPUT     
+	JobNo													:	INT := 0;
+	SlaveNo													:	INT := 0;
+{attribute 'displaymode':='binary'}
+	SlaveInErrorMask										:	DWORD; //Bit.1 indicates slave 1 in error 	
 	Error													:	BOOL;		// Rising edge of Error informs that an error occurred during the execution of the Function Block 
 {attribute 'displaymode':='hex'}
 	ErrorID													:	UDINT;		// Error identification - see ADS return codes at Beckhoff infosys for further information 
@@ -24,8 +32,7 @@ END_VAR
 VAR
 (* memory **************************************************)
 	state 													:	INT := 0;
-	JobNo													:	INT := 0;
-	SlaveNo													:	INT := 0;
+
 (* trigger *************************************************)
 
 (* timer ***************************************************)
@@ -46,7 +53,10 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[
+      <ST><![CDATA[	IF ResetTrig THEN
+		reset();
+	END_IF
+	
 	CASE state OF
 	0:	(* Idle *)
 		IF Enable 
@@ -84,13 +94,21 @@ END_VAR
 		END_IF
 
 	30: (* wait for com cycle *)
-		IF NOT StartJob(TRUE) THEN // Busy
-			IF Error 
+		IF NOT StartJob(TRUE) THEN // Not Busy, Execute set to True
+			IF Error
 			THEN
 				ErrorText									:= CONCAT('Error at SlaveNo: ',	CONCAT(INT_TO_STRING(SlaveNo), CONCAT(', JobNo: ', INT_TO_STRING(JobNo))));
 				SlaveCom[SlaveNo]^.countBad 				:= SlaveCom[SlaveNo]^.countBad +1;
-				state 										:= 98; 
+				SlaveInErrorMask							:= CSETBIT32(SlaveInErrorMask,TO_SINT(SlaveNo),TRUE);
+				IF Options.0
+				THEN
+					JobNo 									:= JobNo + 1;
+					state 									:= 10;	(* next job *)				
+				ELSE
+					state 									:= 98; 					
+				END_IF
 			ELSE
+				SlaveInErrorMask							:= CSETBIT32(SlaveInErrorMask,TO_SINT(SlaveNo),FALSE);
 				SlaveCom[SlaveNo]^.countGood 				:= SlaveCom[SlaveNo]^.countGood +1;
 				SlaveCom[SlaveNo]^.Jobs[JobNo].Valid 		:= TRUE;
 				SlaveCom[SlaveNo]^.Jobs[JobNo].TimeStamp 	:= Timestamp;
@@ -101,9 +119,9 @@ END_VAR
 		END_IF
 
 	98: (* wait for quit *)
-		IF ResetTrig THEN
-			reset();
-		END_IF
+		;
+
+
 
 	END_CASE]]></ST>
     </Implementation>
@@ -156,11 +174,11 @@ END_VAR
       <Implementation>
         <ST><![CDATA[IF State = 98 
 THEN
-	Error													:= FALSE;
-	ErrorID													:= 0;
-	ErrorText												:= '';
 	state													:= 0;
-END_IF	
+END_IF
+Error														:= FALSE;
+ErrorID														:= 0;
+ErrorText													:= '';
 reset														:= TRUE;]]></ST>
       </Implementation>
     </Method>
@@ -323,7 +341,13 @@ END_VAR
       </Implementation>
     </Method>
     <LineIds Name="ModbusUdpMaster">
-      <LineId Id="205" Count="58" />
+      <LineId Id="307" Count="1" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="309" Count="0" />
+      <LineId Id="206" Count="35" />
+      <LineId Id="380" Count="26" />
+      <LineId Id="335" Count="0" />
+      <LineId Id="262" Count="1" />
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="ModbusUdpMaster.getNextJob">
@@ -335,8 +359,7 @@ END_VAR
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="ModbusUdpMaster.reset">
-      <LineId Id="3" Count="5" />
-      <LineId Id="2" Count="0" />
+      <LineId Id="17" Count="6" />
       <LineId Id="13" Count="0" />
     </LineIds>
     <LineIds Name="ModbusUdpMaster.startJob">

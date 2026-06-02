@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
-  <POU Name="FifoLRealSimple" Id="{e1afd5da-1320-4e33-abe2-b86069564770}" SpecialFunc="None">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
+  <POU Name="FiFoLRealSimple" Id="{e1afd5da-1320-4e33-abe2-b86069564770}" SpecialFunc="None">
     <Declaration><![CDATA[//Fifo with a internal Lreal array for a simple num list implementation
-FUNCTION_BLOCK FifoLRealSimple EXTENDS FifoBase
+FUNCTION_BLOCK FiFoLRealSimple EXTENDS FifoBase
 VAR_OUTPUT CONSTANT
 	MIN_BUFFER												:	DINT := 1; //Fifo buffer start index 
 	MAX_BUFFER												:	DINT := PARAM.FIFO_LREAL_SIMPEL_MAX_BUFFER; //Fifo buffer end index - see library parameter to customize parameter
@@ -116,33 +116,33 @@ END_VAR
         <ST><![CDATA[reset := SUPER^._reset(ADR(Buffer),SIZEOF(Buffer));]]></ST>
       </Implementation>
     </Method>
-    <LineIds Name="FifoLRealSimple">
+    <LineIds Name="FiFoLRealSimple">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoLRealSimple.clear">
+    <LineIds Name="FiFoLRealSimple.clear">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoLRealSimple.clearByDataSet">
+    <LineIds Name="FiFoLRealSimple.clearByDataSet">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoLRealSimple.dequeue">
+    <LineIds Name="FiFoLRealSimple.dequeue">
       <LineId Id="3" Count="0" />
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoLRealSimple.enqueue">
+    <LineIds Name="FiFoLRealSimple.enqueue">
       <LineId Id="3" Count="0" />
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoLRealSimple.isEnqueued">
+    <LineIds Name="FiFoLRealSimple.isEnqueued">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoLRealSimple.isNextEntry">
+    <LineIds Name="FiFoLRealSimple.isNextEntry">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoLRealSimple.readEntry">
+    <LineIds Name="FiFoLRealSimple.readEntry">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoLRealSimple.reset">
+    <LineIds Name="FiFoLRealSimple.reset">
       <LineId Id="2" Count="0" />
     </LineIds>
   </POU>

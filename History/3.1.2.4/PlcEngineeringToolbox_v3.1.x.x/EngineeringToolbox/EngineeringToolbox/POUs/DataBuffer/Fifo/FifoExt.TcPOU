@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
-  <POU Name="FifoExt" Id="{3e639487-9f2c-492a-a34a-841083538feb}" SpecialFunc="None">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
+  <POU Name="FiFoExt" Id="{3e639487-9f2c-492a-a34a-841083538feb}" SpecialFunc="None">
     <Declaration><![CDATA[//FifoBase extended with dynamical memory allocation
  {attribute 'enable_dynamic_creation'}
-FUNCTION_BLOCK FifoExt EXTENDS FifoBase
+FUNCTION_BLOCK FiFoExt EXTENDS FifoBase
 VAR_OUTPUT CONSTANT
 END_VAR   
 VAR_INPUT
@@ -235,10 +235,10 @@ END_VAR
 ]]></ST>
       </Implementation>
     </Method>
-    <LineIds Name="FifoExt">
+    <LineIds Name="FiFoExt">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.allocate">
+    <LineIds Name="FiFoExt.allocate">
       <LineId Id="252" Count="11" />
       <LineId Id="308" Count="1" />
       <LineId Id="311" Count="0" />
@@ -250,20 +250,20 @@ END_VAR
       <LineId Id="291" Count="16" />
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.clear">
+    <LineIds Name="FiFoExt.clear">
       <LineId Id="15" Count="0" />
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.clearByDataSet">
+    <LineIds Name="FiFoExt.clearByDataSet">
       <LineId Id="19" Count="0" />
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.dequeue">
+    <LineIds Name="FiFoExt.dequeue">
       <LineId Id="3" Count="0" />
       <LineId Id="7" Count="0" />
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.enqueue">
+    <LineIds Name="FiFoExt.enqueue">
       <LineId Id="3" Count="1" />
       <LineId Id="48" Count="0" />
       <LineId Id="91" Count="0" />
@@ -273,7 +273,7 @@ END_VAR
       <LineId Id="30" Count="2" />
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.FB_exit">
+    <LineIds Name="FiFoExt.FB_exit">
       <LineId Id="3" Count="2" />
       <LineId Id="21" Count="1" />
       <LineId Id="20" Count="0" />
@@ -282,16 +282,16 @@ END_VAR
       <LineId Id="6" Count="0" />
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.isEnqueued">
+    <LineIds Name="FiFoExt.isEnqueued">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.isNextEntry">
+    <LineIds Name="FiFoExt.isNextEntry">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.readEntry">
+    <LineIds Name="FiFoExt.readEntry">
       <LineId Id="2" Count="0" />
     </LineIds>
-    <LineIds Name="FifoExt.reset">
+    <LineIds Name="FiFoExt.reset">
       <LineId Id="7" Count="0" />
       <LineId Id="9" Count="0" />
       <LineId Id="2" Count="0" />
