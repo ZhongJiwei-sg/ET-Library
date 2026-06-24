@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
   <POU Name="CylinderType4" Id="{7f600f9e-9a61-41ae-baae-dbe72733a48a}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'no_check'}
 //Cylinder with 2x inputs each for work and base position, extended from FB Cylinder
@@ -87,7 +87,7 @@ END_VAR
 (* Write error info ***************************************)
 	ErrInfo.0									:= TonErrBasePos.Q AND NOT SensorBasePos.Q;
 	ErrInfo.1									:= TonErrBasePos.Q AND NOT SensorBasePos2.Q;
-	ErrInfo.2									:= TonErrWorkPos.Q AND NOT SensorBasePos.Q;
+	ErrInfo.2									:= TonErrWorkPos.Q AND NOT SensorWorkPos.Q;
 	ErrInfo.3									:= TonErrWorkPos.Q AND NOT SensorWorkPos2.Q;
 
 	ErrInfo.6									:= SensorBasePos.Q AND SensorWorkPos.Q;

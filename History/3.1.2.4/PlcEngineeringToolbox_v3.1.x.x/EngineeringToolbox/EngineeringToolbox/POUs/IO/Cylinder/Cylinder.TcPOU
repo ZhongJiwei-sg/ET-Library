@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.16">
   <POU Name="Cylinder" Id="{c3fcaee2-da05-4234-9f2d-c86efbb08a63}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'no_check'}
 //Cylinder object with two outputs (Workpos./Basepos) and correlated inputs
@@ -540,9 +540,8 @@ END_VAR
       <LineId Id="32" Count="0" />
     </LineIds>
     <LineIds Name="Cylinder._runtimeChk">
-      <LineId Id="6" Count="7" />
-      <LineId Id="5" Count="0" />
-      <LineId Id="14" Count="2" />
+      <LineId Id="44" Count="10" />
+      <LineId Id="16" Count="0" />
     </LineIds>
     <LineIds Name="Cylinder._writeStatus">
       <LineId Id="36" Count="1" />

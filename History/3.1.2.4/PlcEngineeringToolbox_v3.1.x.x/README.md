@@ -17,6 +17,8 @@
 	- Added new FBs for Last In - First Out data stacking based on Ringbuffer principal  
 	
 ### Fixed	
+- IO/Cylinder/CylinderType4
+	- Fixed type for ErrInfo.2 timeout workpos 2
 
 ## [V3.1.2.3] - development 2026-05-18
 
